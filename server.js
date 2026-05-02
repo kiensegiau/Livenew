@@ -8,6 +8,47 @@ const { initBot, broadcast, updateProgress } = require('./telegramBot');
 
 const PORT = 3131;
 const streams = new Map();
+const BACKUP_FILE = path.join(__dirname, 'streams_backup.json');
+
+// --- Persistence Logic ---
+function saveStreams() {
+  const data = Array.from(streams.values()).map(s => ({
+    id: s.id, key: s.key, file: s.file, mode: s.mode, minutes: s.minutes, 
+    scheduledTime: s.scheduledTime, status: s.status === 'live' || s.status === 'reconnecting' ? 'live' : s.status
+  }));
+  fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
+}
+
+function loadStreams() {
+  if (fs.existsSync(BACKUP_FILE)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(BACKUP_FILE, 'utf-8'));
+      data.forEach(s => {
+        // Chỉ khôi phục các luồng đang chạy hoặc đang lịch
+        if (['live', 'scheduled', 'reconnecting', 'launching'].includes(s.status)) {
+          streams.set(s.id, { ...s, process: null, pid: null, retryCount: 0, lastLog: 'Đang khôi phục...' });
+          // Kích hoạt lại
+          if (s.status === 'scheduled') proceedStartStream(s.id);
+          else launchFFmpeg(s.id, s.key, s.file, s.mode, s.minutes);
+        }
+      });
+      console.log(`[System] ♻️ Đã khôi phục ${data.length} luồng từ bản sao lưu.`);
+    } catch (e) { console.error('[System] Lỗi đọc backup:', e.message); }
+  }
+}
+
+function cleanupOrphanedFiles() {
+  const tempDir = os.tmpdir();
+  fs.readdir(tempDir, (err, files) => {
+    if (err) return;
+    files.forEach(f => {
+      if (f.startsWith('drive_video_')) {
+        fs.unlink(path.join(tempDir, f), () => {});
+      }
+    });
+  });
+  console.log('[System] 🧹 Đã dọn dẹp các file rác mồ côi.');
+}
 let nextId = 1;
 
 // ─── File Browse Dialog (PowerShell → temp file) ────────────────────────────
@@ -87,10 +128,13 @@ function launchFFmpeg(id, key, file, mode, minutes) {
 
   let errBuf = '';
   proc.stderr.on('data', (d) => {
-    errBuf = (errBuf + d.toString()).slice(-2000); // keep last 2KB
+    updateStreamLog(id, d); // Ghi log chi tiết
+    errBuf = (errBuf + d.toString()).slice(-2000); 
     const s = streams.get(id);
     if (s) s.lastLog = errBuf.split('\n').filter(Boolean).pop() || '';
   });
+
+  saveStreams(); // Lưu backup khi luồng bắt đầu live
 
   proc.on('close', (code) => {
     const s = streams.get(id);
@@ -124,6 +168,7 @@ function launchFFmpeg(id, key, file, mode, minutes) {
       // Xóa file nếu luồng kết thúc (không phải đang reconnect)
       cleanupFile(s.file);
     }
+    saveStreams(); // Lưu backup khi trạng thái thay đổi
   });
 }
 
@@ -146,9 +191,11 @@ function proceedStartStream(id) {
     s.timer = setTimeout(() => {
       const s2 = streams.get(id);
       if (s2 && s2.status !== 'stopped') { 
-        s2.mode = 'loop'; 
+        // Giữ nguyên mode (once hoặc loop) khi kích hoạt lịch
+        const finalMode = s2.scheduledMode || 'loop';
+        s2.mode = finalMode; 
         s2.status = 'launching'; 
-        launchFFmpeg(id, s2.key, s2.file, 'loop', s2.minutes);
+        launchFFmpeg(id, s2.key, s2.file, finalMode, s2.minutes);
       }
     }, delay);
   } else {
@@ -213,6 +260,7 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
     
     return { id, status: 'downloading', scheduledTime };
   } else {
+    saveStreams(); // Lưu lại ngay khi tạo luồng mới
     proceedStartStream(id);
     return { id, status: info.status, scheduledTime };
   }
@@ -395,15 +443,29 @@ initBot({
         count++;
       }
     }
+    saveStreams();
     return count;
+  },
+  getLogs: (id) => {
+    const s = streams.get(id);
+    return s ? (s._fullLogs || 'Chưa có log chi tiết.') : 'Không tìm thấy luồng.';
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, '0.0.0.0', () => {
+  cleanupOrphanedFiles(); 
+  loadStreams();
   const addr = `http://localhost:${PORT}`;
   console.log('\n╔══════════════════════════════════════╗');
-  console.log(`║  🎬 YouTube Live Controller Ready     ║`);
+  console.log(`║  🎬 YouTube Live Controller PRO       ║`);
   console.log(`║  ${addr}              ║`);
   console.log('╚══════════════════════════════════════╝\n');
-  exec(`start ${addr}`);
 });
+
+// Ghi log chi tiết
+function updateStreamLog(id, data) {
+  const s = streams.get(id);
+  if (!s) return;
+  s._fullLogs = (s._fullLogs || '') + data.toString();
+  if (s._fullLogs.length > 5000) s._fullLogs = s._fullLogs.slice(-5000);
+}
