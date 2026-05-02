@@ -293,9 +293,9 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
   if (isDrive) {
     info.lastLog = 'Đang bắt đầu tải file từ Drive...';
     console.log(`\n[Stream #${id}] ⬇️ Bắt đầu tải video từ Google Drive...`);
-    console.log(`[Stream #${id}] 🔗 Link: ${opt.file}`);
+    console.log(`[Stream #${id}] 🔗 Link: ${file}`);
     
-    downloadGoogleDriveFile(opt.file, DOWNLOAD_DIR, (dl, total, pct) => {
+    downloadGoogleDriveFile(file, DOWNLOAD_DIR, (dl, total, pct) => {
       if (streams.has(id)) {
         if (pct !== null) {
           streams.get(id).lastLog = `Đang tải... ${pct}%`;
