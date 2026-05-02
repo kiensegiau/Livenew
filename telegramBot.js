@@ -140,7 +140,8 @@ function initBot(actions) {
           else buttons.push([{ text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` }]);
           bot.sendMessage(chatId, msgStr, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
         });
-      }
+      }, 1000);
+    }
 
       else if (text.startsWith('/live ') || text.startsWith('/once ')) {
         const isOnce = text.startsWith('/once ');
