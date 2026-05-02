@@ -103,13 +103,28 @@ function initBot(actions) {
       
       else if (text.startsWith('/status')) {
         const list = actions.getStreams();
-        if (list.length === 0) return bot.sendMessage(chatId, '📭 Trống.');
-        bot.sendMessage(chatId, '📊 *DANH SÁCH LUỒNG:*', { parse_mode: 'Markdown' });
+        if (list.length === 0) return bot.sendMessage(chatId, '📭 Hiện chưa có luồng nào.');
+        
+        const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
+        const uptime = Math.floor(process.uptime() / 60);
+        
         list.forEach(s => {
           const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
-          let msgStr = `${icon} *LUỒNG #${s.id}*\nStatus: \`${s.status}\`\n`;
+          
+          let msgStr = `${icon} *LUỒNG #${s.id}*\n`;
+          msgStr += `🖥 *Hệ thống:* \`RAM: ${mem}MB\` | \`Uptime: ${uptime}p\`\n`;
+          msgStr += `━━━━━━━━━━━━━━━━━━\n`;
+          msgStr += `Trạng thái: \`${s.status}\`\n`;
           if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
-          msgStr += `Log: \`${escapeMarkdown(s.lastLog)}\``;
+          
+          let logBrief = s.lastLog;
+          if (s.status === 'live') {
+            // Trích xuất bitrate và speed từ log FFmpeg để hiển thị gọn
+            const bitrate = s.lastLog.match(/bitrate=[^\s]*/);
+            const speed = s.lastLog.match(/speed=[^\s]*/);
+            if (bitrate && speed) logBrief = `${bitrate[0]} ${speed[0]}`;
+          }
+          msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
           const buttons = [];
           if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) buttons.push([{ text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` }]);
           else buttons.push([{ text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` }]);

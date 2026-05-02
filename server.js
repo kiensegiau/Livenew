@@ -195,11 +195,13 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   let errBuf = '';
   proc.stderr.on('data', (d) => {
     const dataStr = d.toString();
-    process.stdout.write(`[FFmpeg #${id}] ${dataStr}`); // In trực tiếp ra console
     updateStreamLog(id, d); 
     errBuf = (errBuf + dataStr).slice(-2000); 
     const s = streams.get(id);
-    if (s) s.lastLog = errBuf.split('\n').filter(Boolean).pop() || '';
+    if (s) {
+        const lines = errBuf.split('\n').filter(Boolean);
+        s.lastLog = lines.pop() || '';
+    }
   });
 
   saveStreams(); // Lưu backup khi luồng bắt đầu live
@@ -531,8 +533,8 @@ server.listen(PORT, '0.0.0.0', async () => {
   if (!ffmpegOk) {
     console.log('⚠️ Cảnh báo: Hệ thống có thể không hoạt động đúng do thiếu FFmpeg.');
   }
-  cleanupOrphanedFiles(); 
-  loadStreams();
+  loadStreams(); // Khôi phục danh sách luồng trước
+  cleanupOrphanedFiles(); // Sau đó mới dọn dẹp các file không nằm trong danh sách
   const addr = `http://localhost:${PORT}`;
   console.log('\n╔══════════════════════════════════════╗');
   console.log(`║  🎬 YouTube Live Controller PRO       ║`);
