@@ -17,6 +17,7 @@ try {
 
 let bot = null;
 const activeProgressMessages = new Map();
+const userStates = new Map(); // Lưu trạng thái nhập liệu của người dùng
 
 function saveConfig() {
   try {
@@ -107,6 +108,18 @@ function initBot(actions) {
         return;
       }
 
+      // HỦY LỆNH ĐANG NHẬP DỞ
+      if (text === '/cancel') {
+        userStates.delete(chatId);
+        return bot.sendMessage(chatId, '🚫 Đã hủy thao tác.');
+      }
+
+      // XỬ LÝ NHẬP LIỆU THEO BƯỚC (WIZARD MODE)
+      const state = userStates.get(chatId);
+      if (state && !text.startsWith('/')) {
+        return handleWizard(chatId, text, state, actions);
+      }
+
       // Xử lý lệnh
       if (text.startsWith('/help') || text === '/start') {
         const helpMsg = `🛠 *YouTube Live Controller*\n/status - Xem & Điều khiển luồng\n/live <key> <link> - Phát Loop\n/once <key> <link> - Phát 1 lần\n/schedule <key> <link> <HH:mm> [m] - Đặt lịch\n/scheduleonce <key> <link> <HH:mm> - Lịch phát 1 lần\n/log <id> - Xem log chi tiết\n/admins - Danh sách quản trị\n/reboot - Khởi động lại Server\n/clear - Dọn luồng rác`;
@@ -162,6 +175,22 @@ function initBot(actions) {
         });
       }, 1000);
     }
+
+      else if (text === '/live' || text === '/once') {
+        userStates.set(chatId, { cmd: text.substring(1), step: 'key', data: {} });
+        bot.sendMessage(chatId, `🚀 *CHẾ ĐỘ THIẾT LẬP NHANH*\nBước 1: Vui lòng dán **Stream Key** của bạn:`, { 
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]] }
+        });
+      }
+
+      else if (text === '/schedule' || text === '/scheduleonce') {
+        userStates.set(chatId, { cmd: text.substring(1), step: 'key', data: {} });
+        bot.sendMessage(chatId, `🕐 *CHẾ ĐỘ ĐẶT LỊCH NHANH*\nBước 1: Vui lòng dán **Stream Key** của bạn:`, { 
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]] }
+        });
+      }
 
       else if (text.startsWith('/live ') || text.startsWith('/once ')) {
         const isOnce = text.startsWith('/once ');
@@ -240,9 +269,89 @@ function initBot(actions) {
           bot.answerCallbackQuery(query.id, { text: `Đã xóa luồng #${id}` });
           bot.editMessageText(`🗑 *LUỒNG #${id}* Đã được gỡ bỏ khỏi danh sách.`, { chat_id: chatId, message_id: query.message.message_id, parse_mode: 'Markdown' });
         }
+      } 
+      // Xử lý Wizard Callbacks
+      else if (action === 'cancel') {
+        userStates.delete(chatId);
+        bot.answerCallbackQuery(query.id, { text: 'Đã hủy thao tác' });
+        bot.editMessageText('🚫 Thao tác thiết lập đã được hủy.', { chat_id: chatId, message_id: query.message.message_id });
+      }
+      else if (action === 'calnav') {
+        const [y, m] = idStr.split('_').map(Number);
+        const newDate = new Date(y, m, 1);
+        bot.answerCallbackQuery(query.id);
+        bot.editMessageReplyMarkup(generateCalendar(newDate.getFullYear(), newDate.getMonth()), { chat_id: chatId, message_id: query.message.message_id });
+      }
+      else if (action === 'wizdate') {
+        const date = idStr; // Lấy YYYY-MM-DD từ idStr
+        const state = userStates.get(chatId);
+        if (state) {
+          bot.answerCallbackQuery(query.id);
+          handleWizard(chatId, date, state, actions);
+        }
+      }
+      else if (action === 'wiztime') {
+        const time = idStr; // Lấy HH:mm từ idStr
+        const state = userStates.get(chatId);
+        if (state) {
+          bot.answerCallbackQuery(query.id);
+          handleWizard(chatId, time, state, actions);
+        }
+      }
+      else if (action === 'wizmin') {
+        const mins = idStr; // Lấy minutes từ idStr
+        const state = userStates.get(chatId);
+        if (state) {
+          bot.answerCallbackQuery(query.id);
+          handleWizard(chatId, mins, state, actions);
+        }
       }
     } catch (e) { console.error('Lỗi nút bấm:', e.message); }
   });
+}
+
+function generateCalendar(year, month) {
+  const labels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+  const rows = [];
+  
+  // Tiêu đề Tháng Năm
+  rows.push([{ text: `📅 Tháng ${month + 1} - ${year}`, callback_data: 'ignore' }]);
+  
+  // Thứ trong tuần
+  rows.push(labels.map(l => ({ text: l, callback_data: 'ignore' })));
+  
+  const firstDay = new Date(year, month, 1).getDay(); // 0 (CN) -> 6 (T7)
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  let currentDay = 1;
+  // Điều chỉnh firstDay cho phù hợp T2 là đầu tuần (T2=1, ..., CN=0)
+  const startOffset = firstDay === 0 ? 6 : firstDay - 1;
+
+  for (let i = 0; i < 6; i++) {
+    const row = [];
+    for (let j = 0; j < 7; j++) {
+      if (i === 0 && j < startOffset) {
+        row.push({ text: ' ', callback_data: 'ignore' });
+      } else if (currentDay > daysInMonth) {
+        row.push({ text: ' ', callback_data: 'ignore' });
+      } else {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+        row.push({ text: currentDay.toString(), callback_data: `wizdate_${dateStr}` });
+        currentDay++;
+      }
+    }
+    rows.push(row);
+    if (currentDay > daysInMonth) break;
+  }
+  
+  // Nút điều hướng tháng
+  rows.push([
+    { text: '◀️ Tháng trước', callback_data: `calnav_${year}_${month - 1}` },
+    { text: 'Tháng sau ▶️', callback_data: `calnav_${year}_${month + 1}` }
+  ]);
+  rows.push([{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]);
+  
+  return { inline_keyboard: rows };
 }
 
 function broadcast(message) {
@@ -250,6 +359,81 @@ function broadcast(message) {
     config.adminIds.forEach(id => {
       bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {});
     });
+  }
+}
+
+function handleWizard(chatId, text, state, actions) {
+  try {
+    if (state.step === 'key') {
+      state.data.key = text;
+      state.step = 'link';
+      bot.sendMessage(chatId, `🔗 Bước 2: Vui lòng dán **Link Google Drive**:`, { 
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [[{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]] }
+      });
+    } 
+    else if (state.step === 'link') {
+      state.data.link = text;
+      if (state.cmd.startsWith('schedule')) {
+        state.step = 'date';
+        const now = new Date();
+        bot.sendMessage(chatId, `📅 Bước 3: Chọn **Ngày phát** từ lịch dưới đây:`, { 
+          parse_mode: 'Markdown', 
+          reply_markup: generateCalendar(now.getFullYear(), now.getMonth())
+        });
+      } else {
+        const result = actions.startStream({ key: state.data.key, file: state.data.link, mode: state.cmd === 'once' ? 'once' : 'loop', minutes: 0 });
+        userStates.delete(chatId);
+        bot.sendMessage(chatId, result.error ? `❌ Lỗi: \`${escapeMarkdown(result.error)}\`` : `✅ Đã tạo luồng *#${result.id}* thành công!`, { parse_mode: 'Markdown' });
+      }
+    }
+    else if (state.step === 'date') {
+      state.data.date = text;
+      state.step = 'time';
+      const quickTimes = [
+        [{ text: '08:00', callback_data: 'wiztime_08:00' }, { text: '12:00', callback_data: 'wiztime_12:00' }, { text: '14:00', callback_data: 'wiztime_14:00' }],
+        [{ text: '20:00', callback_data: 'wiztime_20:00' }, { text: '22:00', callback_data: 'wiztime_22:00' }, { text: '00:00', callback_data: 'wiztime_00:00' }],
+        [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+      ];
+      bot.sendMessage(chatId, `⏰ Bước 4: Chọn **Giờ phát** hoặc tự nhập (VD: 14:30):`, { 
+        parse_mode: 'Markdown', 
+        reply_markup: { inline_keyboard: quickTimes } 
+      });
+    }
+    else if (state.step === 'time') {
+      state.data.time = text;
+      state.step = 'minutes';
+      const quickMins = [
+        [{ text: '🔄 Phát lặp (0)', callback_data: 'wizmin_0' }, { text: '30p', callback_data: 'wizmin_30' }],
+        [{ text: '60p (1h)', callback_data: 'wizmin_60' }, { text: '120p (2h)', callback_data: 'wizmin_120' }],
+        [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+      ];
+      bot.sendMessage(chatId, `⏱ Bước 5: Chọn **Thời lượng** (phút) hoặc tự nhập:`, { 
+        parse_mode: 'Markdown', 
+        reply_markup: { inline_keyboard: quickMins } 
+      });
+    }
+    else if (state.step === 'minutes') {
+      const minutes = parseInt(text) || 0;
+      const isOnce = state.cmd === 'scheduleonce';
+      const scheduledTime = `${state.data.date}T${state.data.time}`;
+      
+      const result = actions.startStream({ 
+        key: state.data.key, 
+        file: state.data.link, 
+        mode: 'scheduled', 
+        scheduledMode: isOnce ? 'once' : 'loop', 
+        minutes, 
+        scheduledTime 
+      });
+      
+      userStates.delete(chatId);
+      if (result.error) bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
+      else bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id}* thành công lúc \`${new Date(scheduledTime).toLocaleString('vi-VN')}\``, { parse_mode: 'Markdown' });
+    }
+  } catch (e) {
+    userStates.delete(chatId);
+    bot.sendMessage(chatId, `❌ Có lỗi xảy ra trong quá trình nhập: ${e.message}`);
   }
 }
 
@@ -267,7 +451,8 @@ function updateProgress(streamId, pct, text) {
           current.messageIds[chatId] = m.message_id;
         }).catch(() => {});
       } else {
-        if (pct === null || pct === 100 || (typeof pct === 'number' && pct - current.lastPct >= 10)) {
+        // Cập nhật khi tăng thêm 2% hoặc khi hoàn tất để tránh bị Telegram chặn (Rate Limit)
+        if (pct === null || pct === 100 || (typeof pct === 'number' && pct - current.lastPct >= 2)) {
           bot.editMessageText(text, { chat_id: chatId, message_id: current.messageIds[chatId], parse_mode: 'Markdown' }).catch(() => {});
         }
       }

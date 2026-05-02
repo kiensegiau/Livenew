@@ -169,11 +169,11 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   ];
 
   const localFF = path.join(__dirname, 'ffmpeg.exe');
-  const ffmpegCmd = fs.existsSync(localFF) ? `"${localFF}"` : 'ffmpeg';
+  const ffmpegCmd = fs.existsSync(localFF) ? localFF : 'ffmpeg';
   
   console.log(`[Stream #${id}] 🛠 Thực thi lệnh: ${ffmpegCmd} ${args.join(' ')}`);
 
-  const proc = spawn(ffmpegCmd, args, { stdio: ['pipe', 'pipe', 'pipe'], shell: true });
+  const proc = spawn(ffmpegCmd, args, { stdio: ['pipe', 'pipe', 'pipe'] });
   
   proc.on('error', (err) => {
     console.error(`[Stream #${id}] ❌ Lỗi khởi động FFmpeg:`, err.message);
