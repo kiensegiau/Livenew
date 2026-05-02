@@ -105,16 +105,26 @@ function initBot(actions) {
         const list = actions.getStreams();
         if (list.length === 0) return bot.sendMessage(chatId, '📭 Hiện chưa có luồng nào.');
         
-        const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
-        const uptime = Math.floor(process.uptime() / 60);
+        const startUsage = process.cpuUsage();
+        const startTime = process.hrtime();
         
-        list.forEach(s => {
-          const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
+        // Đợi 1 giây để đo CPU chính xác
+        setTimeout(() => {
+          const endUsage = process.cpuUsage(startUsage);
+          const endTime = process.hrtime(startTime);
+          const elapTimeMs = endTime[0] * 1000 + endTime[1] / 1000000;
+          const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
           
-          let msgStr = `${icon} *LUỒNG #${s.id}*\n`;
-          msgStr += `🖥 *Hệ thống:* \`RAM: ${mem}MB\` | \`Uptime: ${uptime}p\`\n`;
-          msgStr += `━━━━━━━━━━━━━━━━━━\n`;
-          msgStr += `Trạng thái: \`${s.status}\`\n`;
+          const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
+          const uptime = Math.floor(process.uptime() / 60);
+          
+          list.forEach(s => {
+            const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
+            
+            let msgStr = `${icon} *LUỒNG #${s.id}*\n`;
+            msgStr += `🖥 *Hệ thống:* \`RAM: ${mem}MB\` | \`CPU: ${cpuPercent}%\` | \`Uptime: ${uptime}p\`\n`;
+            msgStr += `━━━━━━━━━━━━━━━━━━\n`;
+            msgStr += `Trạng thái: \`${s.status}\`\n`;
           if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
           
           let logBrief = s.lastLog;
