@@ -45,13 +45,25 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
       let htmlBody = '';
       res.on('data', chunk => htmlBody += chunk);
       res.on('end', () => {
+        // Debug: In một đoạn HTML để kiểm tra nếu cần (chỉ 500 ký tự đầu)
+        console.log(`[Drive Debug] Phản hồi từ Google (500 ký tự đầu):\n${htmlBody.substring(0, 500)}...`);
+
+        if (htmlBody.includes("Quota exceeded")) {
+          return reject(new Error("File này đã vượt quá hạn mức tải xuống của Google Drive trong hôm nay. 👉 Cách sửa: Hãy 'Tạo bản sao' file này trên Drive và dùng link của bản sao đó."));
+        }
+
         const actionMatch = htmlBody.match(/action="([^"]+)"/i);
-        const confirmMatch = htmlBody.match(/name="confirm"\s+value="([^"]+)"/i) || htmlBody.match(/confirm=([a-zA-Z0-9_\-]+)/i);
+        const confirmMatch = htmlBody.match(/name="confirm"\s+value="([^"]+)"/i) 
+                          || htmlBody.match(/confirm=([a-zA-Z0-9_\-]+)/i)
+                          || htmlBody.match(/"confirm":"([a-zA-Z0-9_\-]+)"/i); // Tìm trong JSON/Script
+        
         const uuidMatch = htmlBody.match(/name="uuid"\s+value="([^"]+)"/i);
-        const idMatch = htmlBody.match(/name="id"\s+value="([^"]+)"/i) || htmlBody.match(/id=([a-zA-Z0-9_\-]+)/i);
+        const idMatch = htmlBody.match(/name="id"\s+value="([^"]+)"/i) 
+                     || htmlBody.match(/id=([a-zA-Z0-9_\-]+)/i);
 
         if (confirmMatch) {
           const confirmToken = confirmMatch[1];
+          console.log(`[Drive Debug] ✅ Đã tìm thấy mã xác nhận: ${confirmToken}`);
           const fileId = idMatch ? idMatch[1] : extractDriveId(url);
           const finalAction = actionMatch ? actionMatch[1].replace(/&amp;/g, '&') : "https://drive.google.com/uc";
           
@@ -63,7 +75,8 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
           
           return fetchUrl(bypassUrl, newCookieString, attempt + 1, destPath, onProgress, resolve, reject);
         } else {
-          return reject(new Error("Giải mã Bypass Virus thất bại. Hãy chắc chắn link Drive đã được bật 'Bất kỳ ai có đường liên kết'."));
+          console.error(`[Drive Debug] ❌ Thất bại: Không tìm thấy nút 'Xác nhận tải xuống' trong HTML.`);
+          return reject(new Error("Giải mã Bypass Virus thất bại. Google có thể đang yêu cầu đăng nhập hoặc link bị giới hạn."));
         }
       });
       return;
