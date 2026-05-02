@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { downloadGoogleDriveFile, extractDriveId } = require('./driveDownloader');
-const { initBot, broadcast } = require('./telegramBot');
+const { initBot, broadcast, updateProgress } = require('./telegramBot');
 
 const PORT = 3131;
 const streams = new Map();
@@ -171,10 +171,12 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
         if (pct !== null) {
           streams.get(id).lastLog = `Đang tải... ${pct}%`;
           console.log(`[Stream #${id}] ⏳ Tiến độ: ${pct}% (${(dl/1024/1024).toFixed(2)} MB / ${(total/1024/1024).toFixed(2)} MB)`);
+          updateProgress(id, pct, `⬇️ *Luồng #${id}* đang tải: \`${pct}%\` (${(dl/1024/1024).toFixed(1)}/${(total/1024/1024).toFixed(1)} MB)`);
         }
         else {
           streams.get(id).lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB`;
           console.log(`[Stream #${id}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB`);
+          updateProgress(id, null, `⬇️ *Luồng #${id}* đang tải: \`${(dl/1024/1024).toFixed(1)} MB\``);
         }
       }
     }).then(filePath => {
@@ -184,7 +186,7 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
       s.lastLog = 'Tải xong, chuẩn bị live...';
       console.log(`\n[Stream #${id}] ✅ TẢI XONG! File được lưu tạm tại: ${filePath}`);
       console.log(`[Stream #${id}] 🚀 Bắt đầu kích hoạt FFmpeg...`);
-      broadcast(`✅ *Tải Drive Xong!*\nChuẩn bị phát luồng #${id}...`);
+      updateProgress(id, 100, `✅ *Luồng #${id}* đã tải xong!\nChuẩn bị phát Live...`);
       proceedStartStream(id);
     }).catch(err => {
       const s = streams.get(id);
