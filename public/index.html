@@ -193,13 +193,28 @@
   .status-badge.ended, .status-badge.stopped { background: rgba(107,114,128,0.15); color: var(--text-muted); border: 1px solid rgba(107,114,128,0.2); }
   .status-badge.launching { background: rgba(59,130,246,0.15); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
 
-  .btn-stop {
+  .status-dot.reconnecting { background: var(--yellow); animation: pulse 0.5s infinite; }
+  .status-badge.reconnecting { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  
+  .status-dot.downloading { background: var(--accent); animation: pulse 0.8s infinite; box-shadow: 0 0 8px var(--accent); }
+  .status-badge.downloading { background: rgba(168,85,247,0.15); color: var(--accent); border: 1px solid rgba(168,85,247,0.3); }
+
+  .btn-stop, .btn-restart {
     padding: 5px 10px; font-size: 0.72rem; border-radius: 6px;
-    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
-    color: var(--red); cursor: pointer; font-family: inherit; font-weight: 600;
+    cursor: pointer; font-family: inherit; font-weight: 600;
     transition: all 0.15s;
   }
+  .btn-stop {
+    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
+    color: var(--red);
+  }
   .btn-stop:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.5); }
+  
+  .btn-restart {
+    background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25);
+    color: var(--blue);
+  }
+  .btn-restart:hover { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); }
 
   .empty-state { text-align: center; padding: 32px; color: var(--text-muted); font-size: 0.85rem; }
   .empty-state .icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.4; }
@@ -240,9 +255,9 @@
 
   <!-- Video File -->
   <div style="margin-bottom:18px">
-    <label>File Video</label>
+    <label>File Video (.mp4) hoặc Link Google Drive</label>
     <div class="file-row">
-      <input type="text" id="videoPath" placeholder="Chọn file hoặc paste đường dẫn vào đây..." />
+      <input type="text" id="videoPath" placeholder="D:\\Video\\phim.mp4 hoặc https://drive.google.com/..." />
       <button class="btn btn-ghost btn-sm" onclick="browse()">📂 Browse</button>
     </div>
   </div>
@@ -294,9 +309,12 @@
 
 <!-- Active Streams Card -->
 <div class="card">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
     <div class="card-title" style="margin-bottom:0">📋 Luồng đang chạy</div>
-    <span style="font-size:0.75rem;color:var(--text-muted)" id="streamCount">0 luồng</span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:0.75rem;color:var(--text-muted)" id="streamCount">0 luồng</span>
+      <button class="btn btn-ghost btn-sm" id="btnClear" onclick="clearDone()" style="padding:4px 10px;font-size:0.72rem">🗑 Dọn dẹp</button>
+    </div>
   </div>
   <div class="streams-list" id="streamsList">
     <div class="empty-state">
@@ -351,7 +369,7 @@ async function startStream() {
   const file = document.getElementById('videoPath').value.trim();
 
   if (!key) { showToast('Vui lòng nhập Stream Key!', 'error'); return; }
-  if (!file) { showToast('Vui lòng chọn file video!', 'error'); return; }
+  if (!file) { showToast('Vui lòng chọn file video hoặc dán link Google Drive!', 'error'); return; }
 
   const btn = document.getElementById('btnStart');
   btn.disabled = true;
@@ -401,6 +419,24 @@ async function stopStream(id) {
     body: JSON.stringify({ id })
   });
   showToast('Đã dừng luồng #' + id, 'info');
+  poll();
+}
+
+// ── Restart stream ──
+async function restartStream(id) {
+  try {
+    const r = await fetch('/api/restart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await r.json();
+    if (data.error) showToast(data.error, 'error');
+    else showToast('Đang khởi động lại luồng #' + id, 'success');
+  } catch(e) {
+    showToast('Lỗi kết nối server', 'error');
+  }
+  poll();
 }
 
 // ── Render streams ──
@@ -416,8 +452,9 @@ function renderStreams(list) {
   }
 
   el.innerHTML = list.map(s => {
-    const canStop = ['live', 'scheduled', 'launching'].includes(s.status);
-    const statusLabel = { live: 'LIVE', scheduled: 'ĐẶT LỊCH', ended: 'KẾT THÚC', stopped: 'ĐÃ DỪNG', launching: 'ĐANG BẬT' }[s.status] || s.status;
+    const canStop = ['live', 'scheduled', 'launching', 'reconnecting', 'downloading'].includes(s.status);
+    const canRestart = ['ended', 'stopped'].includes(s.status);
+    const statusLabel = { live: 'LIVE', scheduled: 'ĐẶT LỊCH', ended: 'KẾT THÚC', stopped: 'ĐÃ DỪNG', launching: 'ĐANG BẬT', reconnecting: 'ĐANG THỬ LẠI', downloading: 'ĐANG TẢI' }[s.status] || s.status;
 
     let meta = s.keyHint + ' · ' + s.file;
     if (s.status === 'live' && s.startTime) {
@@ -435,9 +472,10 @@ function renderStreams(list) {
         <div class="stream-info">
           <div class="stream-name">#${s.id} · ${modeLabel(s.mode)}</div>
           <div class="stream-meta">${meta}</div>
+          ${s.lastLog ? `<div style="font-size: 0.65rem; color: var(--yellow); margin-top: 2px;">⚠️ ${s.lastLog}</div>` : ''}
         </div>
         <span class="status-badge ${s.status}">${statusLabel}</span>
-        ${canStop ? `<button class="btn-stop" onclick="stopStream(${s.id})">■ Dừng</button>` : '<div></div>'}
+        ${canStop ? `<button class="btn-stop" onclick="stopStream(${s.id})">■ Dừng</button>` : canRestart ? `<button class="btn-restart" onclick="restartStream(${s.id})">↻ Bật lại</button>` : '<div></div>'}
       </div>`;
   }).join('');
 }
@@ -452,6 +490,15 @@ function formatDuration(secs) {
   const s = secs % 60;
   if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// ── Clear ended/stopped ──
+async function clearDone() {
+  const r = await fetch('/api/clear', { method: 'POST' });
+  const { cleared } = await r.json();
+  if (cleared > 0) showToast(`Đã xóa ${cleared} luồng đã dừng`, 'info');
+  else showToast('Không có luồng nào để dọn dẹp', 'info');
+  poll();
 }
 
 // ── Poll streams ──

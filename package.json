@@ -4,6 +4,10 @@
   "description": "YouTube Multi-Stream Live Controller",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.67.0"
   }
 }

@@ -1,0 +1,22 @@
+# Dependency directories
+node_modules/
+
+# Sensitive configuration (IMPORTANT: Protect your Bot Token)
+bot_config.json
+
+# Temporary video files
+drive_video_*
+*.mp4
+*.flv
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# IDE settings
+.vscode/
+.idea/

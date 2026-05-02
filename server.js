@@ -2,8 +2,9 @@ const http = require('http');
 const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const url = require('url');
 const os = require('os');
+const { downloadGoogleDriveFile, extractDriveId } = require('./driveDownloader');
+const { initBot, broadcast } = require('./telegramBot');
 
 const PORT = 3131;
 const streams = new Map();
@@ -42,8 +43,9 @@ function browseFile() {
 
 // ─── Launch FFmpeg ────────────────────────────────────────────────────────────
 function launchFFmpeg(id, key, file, mode, minutes) {
+  const mins = Math.max(0, parseInt(minutes) || 0);
   const loopArg = mode === 'loop' ? ['-stream_loop', '-1'] : [];
-  const timeArg = mode === 'loop' && minutes > 0 ? ['-t', String(minutes * 60)] : [];
+  const timeArg = mode === 'loop' && mins > 0 ? ['-t', String(mins * 60)] : [];
 
   // -c copy = lightest: zero decode/encode, pure remux to FLV
   // -bsf:a aac_adtstoasc = required to wrap ADTS AAC → MPEG-4 AAC for FLV
@@ -61,13 +63,15 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   ];
 
   const proc = spawn('ffmpeg', args, { stdio: ['pipe', 'pipe', 'pipe'] });
-  const info = streams.get(id);
-  if (info) {
-    info.process = proc;
-    info.pid = proc.pid;
-    info.status = 'live';
-    info.startTime = new Date().toISOString();
-  }
+  let info = streams.get(id);
+  if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
+
+  info.process = proc;
+  info.pid = proc.pid;
+  info.status = 'live';
+  info.startTime = new Date().toISOString();
+  info.retryCount = info.retryCount || 0; // Đếm số lần retry
+  broadcast(`🟢 *Luồng #${id} ĐÃ BẮT ĐẦU LIVE!*`);
 
   let errBuf = '';
   proc.stderr.on('data', (d) => {
@@ -76,48 +80,126 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     if (s) s.lastLog = errBuf.split('\n').filter(Boolean).pop() || '';
   });
 
-  proc.on('close', () => {
+  proc.on('close', (code) => {
     const s = streams.get(id);
-    if (s && s.status !== 'stopped') s.status = 'ended';
+    if (!s) return;
+    
+    // Dọn _killTimer nếu có
+    if (s._killTimer) { clearTimeout(s._killTimer); s._killTimer = null; }
+
+    // Nếu do user bấm stop → status đã là 'stopped', không làm gì thêm
+    if (s.status === 'stopped') return;
+
+    if (code !== 0 && s.retryCount < 5) {
+      s.status = 'reconnecting';
+      s.retryCount++;
+      const msg = `[Stream #${id}] Lỗi (code ${code}), thử lại lần ${s.retryCount} sau 10s...`;
+      console.log(msg);
+      broadcast(`🟡 *Luồng #${id} bị văng (code ${code})*\nĐang thử kết nối lại lần ${s.retryCount}/5...`);
+      s.timer = setTimeout(() => {
+        if (streams.has(id) && streams.get(id).status === 'reconnecting') {
+           launchFFmpeg(id, key, file, mode, minutes);
+        }
+      }, 10000);
+    } else {
+      s.status = 'ended';
+      if(code !== 0) {
+        s.lastLog = `[Thất bại] FFMPEG thoát lỗi code ${code} sau ${s.retryCount} lần thử.`;
+        broadcast(`🔴 *Luồng #${id} KẾT THÚC LỖI!*\nĐã thử lại ${s.retryCount} lần nhưng thất bại.`);
+      } else {
+        broadcast(`⚪ *Luồng #${id} ĐÃ KẾT THÚC BÌNH THƯỜNG.*`);
+      }
+    }
   });
 }
 
 // ─── Start Stream ─────────────────────────────────────────────────────────────
+function proceedStartStream(id) {
+  const s = streams.get(id);
+  if (!s || s.status === 'stopped') return;
+
+  if (s.mode === 'scheduled') {
+    const localISO = s.scheduledTime.length === 16 ? s.scheduledTime + ':00' : s.scheduledTime;
+    const delay = new Date(localISO).getTime() - Date.now();
+    
+    if (delay <= 0) {
+      s.status = 'ended';
+      s.lastLog = 'Thời gian đặt lịch đã qua sau khi tải xong!';
+      return;
+    }
+
+    s.status = 'scheduled';
+    s.timer = setTimeout(() => {
+      const s2 = streams.get(id);
+      if (s2 && s2.status !== 'stopped') { 
+        s2.mode = 'loop'; 
+        s2.status = 'launching'; 
+        launchFFmpeg(id, s2.key, s2.file, 'loop', s2.minutes);
+      }
+    }, delay);
+  } else {
+    s.status = 'launching';
+    launchFFmpeg(id, s.key, s.file, s.mode, s.minutes);
+  }
+}
+
 function startStream({ key, file, mode, minutes, scheduledTime }) {
   const id = nextId++;
+  const isDrive = !!extractDriveId(file);
 
   if (mode === 'scheduled') {
-    const delay = new Date(scheduledTime).getTime() - Date.now();
+    const localISO = scheduledTime.length === 16 ? scheduledTime + ':00' : scheduledTime;
+    const delay = new Date(localISO).getTime() - Date.now();
     if (delay <= 0) return { error: 'Thời gian đặt lịch đã qua rồi!' };
-
-    const info = {
-      id, key, file, mode: 'scheduled',
-      status: 'scheduled',
-      scheduledTime,
-      startTime: null,
-      process: null, pid: null, lastLog: ''
-    };
-
-    info.timer = setTimeout(() => {
-      const s = streams.get(id);
-      if (s) { s.mode = 'loop'; s.status = 'launching'; }
-      launchFFmpeg(id, key, file, 'loop', minutes);
-    }, delay);
-
-    streams.set(id, info);
-    return { id, status: 'scheduled', scheduledTime };
   }
 
   const info = {
-    id, key, file, mode,
-    status: 'launching',
-    scheduledTime: null,
+    id, key, file, mode, minutes, scheduledTime,
+    status: isDrive ? 'downloading' : (mode === 'scheduled' ? 'scheduled' : 'launching'),
     startTime: null,
-    process: null, pid: null, lastLog: ''
+    process: null, pid: null, lastLog: '', retryCount: 0
   };
   streams.set(id, info);
-  launchFFmpeg(id, key, file, mode, minutes);
-  return { id, status: 'live' };
+
+  if (isDrive) {
+    info.lastLog = 'Đang bắt đầu tải file từ Drive...';
+    console.log(`\n[Stream #${id}] ⬇️ Bắt đầu tải video từ Google Drive...`);
+    console.log(`[Stream #${id}] 🔗 Link: ${file}`);
+    
+    downloadGoogleDriveFile(file, os.tmpdir(), (dl, total, pct) => {
+      if (streams.has(id)) {
+        if (pct !== null) {
+          streams.get(id).lastLog = `Đang tải... ${pct}%`;
+          console.log(`[Stream #${id}] ⏳ Tiến độ: ${pct}% (${(dl/1024/1024).toFixed(2)} MB / ${(total/1024/1024).toFixed(2)} MB)`);
+        }
+        else {
+          streams.get(id).lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB`;
+          console.log(`[Stream #${id}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB`);
+        }
+      }
+    }).then(filePath => {
+      const s = streams.get(id);
+      if (!s || s.status === 'stopped') return;
+      s.file = filePath;
+      s.lastLog = 'Tải xong, chuẩn bị live...';
+      console.log(`\n[Stream #${id}] ✅ TẢI XONG! File được lưu tạm tại: ${filePath}`);
+      console.log(`[Stream #${id}] 🚀 Bắt đầu kích hoạt FFmpeg...`);
+      broadcast(`✅ *Tải Drive Xong!*\nChuẩn bị phát luồng #${id}...`);
+      proceedStartStream(id);
+    }).catch(err => {
+      const s = streams.get(id);
+      if (!s) return;
+      s.status = 'ended';
+      s.lastLog = `❌ Lỗi tải Drive: ${err.message}`;
+      console.error(`\n[Stream #${id}] ❌ Lỗi tải Google Drive: ${err.message}`);
+      broadcast(`❌ *Lỗi tải Drive (Luồng #${id})*\n${err.message}`);
+    });
+    
+    return { id, status: 'downloading', scheduledTime };
+  } else {
+    proceedStartStream(id);
+    return { id, status: info.status, scheduledTime };
+  }
 }
 
 // ─── Stop Stream ──────────────────────────────────────────────────────────────
@@ -141,13 +223,39 @@ function stopStream(id) {
   return true;
 }
 
+// ─── Restart Stream ───────────────────────────────────────────────────────────
+function restartStream(id) {
+  const s = streams.get(id);
+  if (!s) return { error: 'Không tìm thấy luồng' };
+  
+  if (s.status === 'live' || s.status === 'launching' || s.status === 'scheduled' || s.status === 'reconnecting') {
+    return { error: 'Luồng đang chạy, không thể khởi động lại' };
+  }
+  
+  s.status = 'launching';
+  s.startTime = null;
+  s.process = null;
+  s.pid = null;
+  s.lastLog = '';
+  s.retryCount = 0;
+  
+  launchFFmpeg(id, s.key, s.file, s.mode, s.minutes);
+  return { ok: true, id };
+}
+
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
 function readBody(req) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', d => (body += d));
     req.on('end', () => resolve(body));
+    req.on('error', reject);
   });
+}
+
+async function parseBody(req) {
+  try { return JSON.parse(await readBody(req)); }
+  catch (_) { return null; }
 }
 
 function json(res, code, data) {
@@ -160,7 +268,7 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-  const { pathname } = url.parse(req.url);
+  const { pathname } = new URL(req.url, `http://127.0.0.1:${PORT}`);
 
   // Serve UI
   if (pathname === '/' || pathname === '/index.html') {
@@ -182,7 +290,8 @@ const server = http.createServer(async (req, res) => {
 
   // API: Start stream
   if (req.method === 'POST' && pathname === '/api/start') {
-    const body = JSON.parse(await readBody(req));
+    const body = await parseBody(req);
+    if (!body) { json(res, 400, { error: 'Invalid JSON' }); return; }
     const result = startStream(body);
     json(res, result.error ? 400 : 200, result);
     return;
@@ -190,9 +299,35 @@ const server = http.createServer(async (req, res) => {
 
   // API: Stop stream
   if (req.method === 'POST' && pathname === '/api/stop') {
-    const { id } = JSON.parse(await readBody(req));
-    stopStream(Number(id));
+    const body = await parseBody(req);
+    if (!body) { json(res, 400, { error: 'Invalid JSON' }); return; }
+    stopStream(Number(body.id));
     json(res, 200, { ok: true });
+    return;
+  }
+  // API: Restart stream
+  if (req.method === 'POST' && pathname === '/api/restart') {
+    const body = await parseBody(req);
+    if (!body) { json(res, 400, { error: 'Invalid JSON' }); return; }
+    
+    const result = restartStream(Number(body.id));
+    if (result.error) {
+       json(res, 400, result);
+    } else {
+       json(res, 200, result);
+    }
+    return;
+  }
+  // API: Xóa các luồng đã dừng/kết thúc
+  if (req.method === 'POST' && pathname === '/api/clear') {
+    let count = 0;
+    for (const [id, s] of streams) {
+      if (s.status === 'stopped' || s.status === 'ended') {
+        streams.delete(id);
+        count++;
+      }
+    }
+    json(res, 200, { cleared: count });
     return;
   }
 
@@ -200,15 +335,23 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/api/streams') {
     const list = [];
     for (const [, s] of streams) {
+      let displayFile = path.basename(s.file);
+      if (s.file.includes('drive.google.com') || s.file.includes('view?usp=')) {
+        displayFile = 'Google Drive Video';
+      } else if (displayFile.startsWith('drive_video_')) {
+        displayFile = 'Google Drive Video';
+      }
+
       list.push({
         id: s.id,
         keyHint: s.key.substring(0, 6) + '****',
-        file: path.basename(s.file),
+        file: displayFile,
         mode: s.mode,
         status: s.status,
         startTime: s.startTime,
         scheduledTime: s.scheduledTime,
-        lastLog: s.lastLog || ''
+        lastLog: s.lastLog || '',
+        retryCount: s.retryCount || 0
       });
     }
     json(res, 200, list);
@@ -216,6 +359,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   res.writeHead(404); res.end('Not found');
+});
+
+// ─── Khởi tạo Telegram Bot ────────────────────────────────────────────────────
+initBot({
+  startStream,
+  stopStream,
+  restartStream,
+  getStreams: () => Array.from(streams.values()),
+  clearStreams: () => {
+    let count = 0;
+    for (const [id, s] of streams) {
+      if (s.status === 'stopped' || s.status === 'ended') {
+        streams.delete(id);
+        count++;
+      }
+    }
+    return count;
+  }
 });
 
 server.listen(PORT, '127.0.0.1', () => {
