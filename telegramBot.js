@@ -103,20 +103,22 @@ function initBot(actions) {
       
       else if (text.startsWith('/status')) {
         const list = actions.getStreams();
-        if (list.length === 0) return bot.sendMessage(chatId, '📭 Hiện chưa có luồng nào.');
-        
         const startUsage = process.cpuUsage();
         const startTime = process.hrtime();
         
-        // Đợi 1 giây để đo CPU chính xác
         setTimeout(() => {
           const endUsage = process.cpuUsage(startUsage);
           const endTime = process.hrtime(startTime);
           const elapTimeMs = endTime[0] * 1000 + endTime[1] / 1000000;
           const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
-          
           const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
           const uptime = Math.floor(process.uptime() / 60);
+
+          let sysInfo = `🖥 *Hệ thống:* \`RAM: ${mem}MB\` | \`CPU: ${cpuPercent}%\` | \`Uptime: ${uptime}p\`\n`;
+
+          if (list.length === 0) {
+            return bot.sendMessage(chatId, `${sysInfo}━━━━━━━━━━━━━━━━━━\n📭 Hiện chưa có luồng nào.`);
+          }
           
           list.forEach(s => {
             const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
