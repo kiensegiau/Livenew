@@ -136,8 +136,14 @@ function initBot(actions) {
           }
           msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
           const buttons = [];
-          if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) buttons.push([{ text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` }]);
-          else buttons.push([{ text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` }]);
+          if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) {
+            buttons.push([{ text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` }]);
+          } else {
+            buttons.push([
+              { text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` },
+              { text: '🗑 Xóa luồng', callback_data: `delete_${s.id}` }
+            ]);
+          }
           bot.sendMessage(chatId, msgStr, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
         });
       }, 1000);
@@ -214,6 +220,11 @@ function initBot(actions) {
         else {
           bot.answerCallbackQuery(query.id, { text: `Đang khởi động lại #${id}` });
           bot.editMessageText(`🚀 *LUỒNG #${id}* Đang khởi động lại...`, { chat_id: chatId, message_id: query.message.message_id, parse_mode: 'Markdown' });
+        }
+      } else if (action === 'delete') {
+        if (actions.deleteStream(id)) {
+          bot.answerCallbackQuery(query.id, { text: `Đã xóa luồng #${id}` });
+          bot.editMessageText(`🗑 *LUỒNG #${id}* Đã được gỡ bỏ khỏi danh sách.`, { chat_id: chatId, message_id: query.message.message_id, parse_mode: 'Markdown' });
         }
       }
     } catch (e) { console.error('Lỗi nút bấm:', e.message); }

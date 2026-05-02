@@ -521,10 +521,15 @@ initBot({
     const s = streams.get(id);
     return s ? (s._fullLogs || 'Chưa có log chi tiết.') : 'Không tìm thấy luồng.';
   },
-  rebootServer: () => {
-    saveStreams();
-    setTimeout(() => process.exit(0), 1000);
-    return true;
+  deleteStream: (id) => {
+    const s = streams.get(id);
+    if (s) {
+      if (s.process) s.process.kill();
+      streams.delete(id);
+      saveStreams();
+      return true;
+    }
+    return false;
   }
 });
 
