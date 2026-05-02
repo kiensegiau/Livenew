@@ -41,6 +41,18 @@ function browseFile() {
   });
 }
 
+function cleanupFile(filePath) {
+  if (!filePath) return;
+  // Chỉ xóa nếu file nằm trong thư mục tạm OS hoặc là file drive_video_
+  const isTemp = filePath.includes(os.tmpdir()) || path.basename(filePath).startsWith('drive_video_');
+  if (isTemp && fs.existsSync(filePath)) {
+    fs.unlink(filePath, (err) => {
+      if (err) console.error(`[Cleanup] Lỗi xóa file ${filePath}:`, err.message);
+      else console.log(`[Cleanup] Đã xóa file tạm: ${filePath}`);
+    });
+  }
+}
+
 // ─── Launch FFmpeg ────────────────────────────────────────────────────────────
 function launchFFmpeg(id, key, file, mode, minutes) {
   const mins = Math.max(0, parseInt(minutes) || 0);
@@ -109,6 +121,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
       } else {
         broadcast(`⚪ *Luồng #${id} ĐÃ KẾT THÚC BÌNH THƯỜNG.*`);
       }
+      // Xóa file nếu luồng kết thúc (không phải đang reconnect)
+      cleanupFile(s.file);
     }
   });
 }
@@ -222,6 +236,10 @@ function stopStream(id) {
       try { info.process.kill(); } catch (_) {}
     }
   }
+
+  // Xóa file tạm nếu có (từ Drive)
+  cleanupFile(info.file);
+
   return true;
 }
 
