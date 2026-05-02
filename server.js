@@ -56,6 +56,22 @@ function cleanupOrphanedFiles() {
   });
   console.log('[System] 🧹 Đã dọn dẹp các file rác mồ côi.');
 }
+
+async function checkFFmpeg() {
+  return new Promise((resolve) => {
+    exec('ffmpeg -version', (err) => {
+      if (err) {
+        console.error('\n❌ LỖI: Không tìm thấy FFmpeg trong hệ thống!');
+        console.log('👉 Vui lòng cài đặt FFmpeg và thêm vào biến môi trường PATH.\n');
+        resolve(false);
+      } else {
+        console.log('[System] ✅ Kiểm tra FFmpeg: Sẵn sàng.');
+        resolve(true);
+      }
+    });
+  });
+}
+
 let nextId = 1;
 
 // ─── File Browse Dialog (PowerShell → temp file) ────────────────────────────
@@ -132,6 +148,16 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   info.startTime = new Date().toISOString();
   info.retryCount = info.retryCount || 0; // Đếm số lần retry
   broadcast(`🟢 *Luồng #${id} ĐÃ BẮT ĐẦU LIVE!*`);
+
+  proc.on('error', (err) => {
+    const s = streams.get(id);
+    if (s) {
+      s.status = 'ended';
+      s.lastLog = `❌ Lỗi khởi động FFmpeg: ${err.message}`;
+      broadcast(`🔴 *LỖI KHỞI ĐỘNG LUỒNG #${id}!*\nNội dung: \`${err.message}\``);
+      saveStreams();
+    }
+  });
 
   let errBuf = '';
   proc.stderr.on('data', (d) => {
@@ -457,10 +483,19 @@ initBot({
   getLogs: (id) => {
     const s = streams.get(id);
     return s ? (s._fullLogs || 'Chưa có log chi tiết.') : 'Không tìm thấy luồng.';
+  },
+  rebootServer: () => {
+    saveStreams();
+    setTimeout(() => process.exit(0), 1000);
+    return true;
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', async () => {
+  const ffmpegOk = await checkFFmpeg();
+  if (!ffmpegOk) {
+    console.log('⚠️ Cảnh báo: Hệ thống có thể không hoạt động đúng do thiếu FFmpeg.');
+  }
   cleanupOrphanedFiles(); 
   loadStreams();
   const addr = `http://localhost:${PORT}`;

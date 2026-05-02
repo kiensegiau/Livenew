@@ -4,7 +4,9 @@
   "description": "YouTube Multi-Stream Live Controller",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "pm2 start server.js --name live-controller --log-date-format \"YYYY-MM-DD HH:mm:ss\"",
+    "stop": "pm2 stop live-controller",
+    "logs": "pm2 logs live-controller",
     "dev": "node --watch server.js"
   },
   "dependencies": {
