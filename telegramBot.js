@@ -447,19 +447,28 @@ function updateProgress(streamId, pct, text) {
     }
     config.adminIds.forEach(chatId => {
       if (!current.messageIds[chatId]) {
+        if (current._sending) return; // Đang gửi tin nhắn đầu, không gửi thêm
+        current._sending = true;
         bot.sendMessage(chatId, text, { parse_mode: 'Markdown' }).then(m => {
           current.messageIds[chatId] = m.message_id;
-        }).catch(() => {});
+          current._sending = false;
+          current.lastTime = Date.now();
+        }).catch(() => { current._sending = false; });
       } else {
         const now = Date.now();
-        const timePassed = now - (current.lastTime || 0) > 5000;
+        const timePassed = now - (current.lastTime || 0) > 3000; // Giảm xuống 3 giây cho mượt
         const pctJumped = typeof pct === 'number' && (pct - current.lastPct >= 2);
         
-        // Cập nhật nếu tăng 2% HOẶC nếu đã qua 5 giây (để thấy MB nhảy)
         if (pct === null || pct === 100 || pctJumped || timePassed) {
-          bot.editMessageText(text, { chat_id: chatId, message_id: current.messageIds[chatId], parse_mode: 'Markdown' }).catch(() => {});
-          current.lastTime = now;
-          if (typeof pct === 'number') current.lastPct = pct;
+          if (current._editing) return; // Đang sửa tin nhắn cũ, đợi tí
+          current._editing = true;
+          bot.editMessageText(text, { chat_id: chatId, message_id: current.messageIds[chatId], parse_mode: 'Markdown' })
+            .then(() => {
+              current._editing = false;
+              current.lastTime = Date.now();
+              if (typeof pct === 'number') current.lastPct = pct;
+            })
+            .catch(() => { current._editing = false; });
         }
       }
     });
