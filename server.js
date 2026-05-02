@@ -9,6 +9,10 @@ const { initBot, broadcast, updateProgress } = require('./telegramBot');
 const PORT = 3131;
 const streams = new Map();
 const BACKUP_FILE = path.join(__dirname, 'streams_backup.json');
+const DOWNLOAD_DIR = path.join(__dirname, 'downloads');
+
+// Đảm bảo thư mục downloads tồn tại
+if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
 // --- Persistence Logic ---
 function saveStreams() {
@@ -45,27 +49,35 @@ function loadStreams() {
 }
 
 function cleanupOrphanedFiles() {
-  const tempDir = os.tmpdir();
-  fs.readdir(tempDir, (err, files) => {
+  const activeFiles = Array.from(streams.values()).map(s => s.file);
+  
+  if (!fs.existsSync(DOWNLOAD_DIR)) return;
+
+  fs.readdir(DOWNLOAD_DIR, (err, files) => {
     if (err) return;
     files.forEach(f => {
-      if (f.startsWith('drive_video_')) {
-        fs.unlink(path.join(tempDir, f), () => {});
+      const fullPath = path.join(DOWNLOAD_DIR, f);
+      // Xóa nếu là file video tải về và không nằm trong danh sách đang dùng
+      if (f.startsWith('drive_video_') && !activeFiles.includes(fullPath)) {
+        fs.unlink(fullPath, () => {});
       }
     });
   });
-  console.log('[System] 🧹 Đã dọn dẹp các file rác mồ côi.');
+  console.log('[System] 🧹 Đã dọn dẹp các file rác trong thư mục downloads.');
 }
 
 async function checkFFmpeg() {
+  const localFF = path.join(__dirname, 'ffmpeg.exe');
+  const cmd = fs.existsSync(localFF) ? `"${localFF}" -version` : 'ffmpeg -version';
+  
   return new Promise((resolve) => {
-    exec('ffmpeg -version', (err) => {
+    exec(cmd, (err) => {
       if (err) {
-        console.error('\n❌ LỖI: Không tìm thấy FFmpeg trong hệ thống!');
-        console.log('👉 Vui lòng cài đặt FFmpeg và thêm vào biến môi trường PATH.\n');
+        console.error('\n❌ LỖI: Không tìm thấy FFmpeg!');
+        console.log('👉 Cách sửa: Copy file ffmpeg.exe vào thư mục này hoặc cài đặt FFmpeg vào máy.\n');
         resolve(false);
       } else {
-        console.log('[System] ✅ Kiểm tra FFmpeg: Sẵn sàng.');
+        console.log(`[System] ✅ Kiểm tra FFmpeg: Sẵn sàng (${fs.existsSync(localFF) ? 'Bản tại chỗ' : 'Bản hệ thống'}).`);
         resolve(true);
       }
     });
@@ -105,20 +117,37 @@ function browseFile() {
   });
 }
 
-function cleanupFile(filePath) {
+function cleanupFile(filePath, retryCount = 0) {
   if (!filePath) return;
-  // Chỉ xóa nếu file nằm trong thư mục tạm OS hoặc là file drive_video_
-  const isTemp = filePath.includes(os.tmpdir()) || path.basename(filePath).startsWith('drive_video_');
+  // Xóa nếu nằm trong thư mục downloads hoặc thư mục tạm hệ thống
+  const isTemp = filePath.includes(DOWNLOAD_DIR) || filePath.includes(os.tmpdir()) || path.basename(filePath).startsWith('drive_video_');
   if (isTemp && fs.existsSync(filePath)) {
     fs.unlink(filePath, (err) => {
-      if (err) console.error(`[Cleanup] Lỗi xóa file ${filePath}:`, err.message);
-      else console.log(`[Cleanup] Đã xóa file tạm: ${filePath}`);
+      if (err) {
+        if (err.code === 'EBUSY' && retryCount < 3) {
+          console.log(`[Cleanup] File đang bận, thử lại lần ${retryCount + 1} sau 3s...`);
+          setTimeout(() => cleanupFile(filePath, retryCount + 1), 3000);
+        } else {
+          console.error(`[Cleanup] Lỗi xóa file ${filePath}:`, err.message);
+        }
+      } else {
+        console.log(`[Cleanup] Đã xóa file tạm: ${filePath}`);
+      }
     });
   }
 }
 
 // ─── Launch FFmpeg ────────────────────────────────────────────────────────────
 function launchFFmpeg(id, key, file, mode, minutes) {
+  // Kiểm tra file tồn tại trước khi chạy
+  if (!file || !fs.existsSync(file)) {
+    console.error(`[Stream #${id}] ❌ Lỗi: File video không tồn tại tại: ${file}`);
+    broadcast(`🔴 *LUỒNG #${id} THẤT BẠI!*\nLỗi: Không tìm thấy file video trên ổ đĩa.`);
+    const s = streams.get(id);
+    if (s) s.status = 'ended';
+    return;
+  }
+
   const mins = Math.max(0, parseInt(minutes) || 0);
   const loopArg = mode === 'loop' ? ['-stream_loop', '-1'] : [];
   const timeArg = mode === 'loop' && mins > 0 ? ['-t', String(mins * 60)] : [];
@@ -132,13 +161,17 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     ...timeArg,
     '-c', 'copy',
     '-bsf:a', 'aac_adtstoasc',
-    '-bufsize', '10000k',
-    '-maxrate', '5500k',
+    '-bufsize', '20000k', // Tăng buffer cho file lớn
+    '-maxrate', '8000k',
+    '-rtmp_buffer', '100', // Tăng buffer RTMP
     '-f', 'flv',
     `rtmp://a.rtmp.youtube.com/live2/${key}`
   ];
 
-  const proc = spawn('ffmpeg', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+  const localFF = path.join(__dirname, 'ffmpeg.exe');
+  const ffmpegCmd = fs.existsSync(localFF) ? localFF : 'ffmpeg';
+  
+  const proc = spawn(ffmpegCmd, args, { stdio: ['pipe', 'pipe', 'pipe'] });
   let info = streams.get(id);
   if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
 
@@ -161,8 +194,10 @@ function launchFFmpeg(id, key, file, mode, minutes) {
 
   let errBuf = '';
   proc.stderr.on('data', (d) => {
-    updateStreamLog(id, d); // Ghi log chi tiết
-    errBuf = (errBuf + d.toString()).slice(-2000); 
+    const dataStr = d.toString();
+    process.stdout.write(`[FFmpeg #${id}] ${dataStr}`); // In trực tiếp ra console
+    updateStreamLog(id, d); 
+    errBuf = (errBuf + dataStr).slice(-2000); 
     const s = streams.get(id);
     if (s) s.lastLog = errBuf.split('\n').filter(Boolean).pop() || '';
   });
@@ -193,8 +228,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     } else {
       s.status = 'ended';
       if(code !== 0) {
-        s.lastLog = `[Thất bại] FFMPEG thoát lỗi code ${code} sau ${s.retryCount} lần thử.`;
-        broadcast(`🔴 *Luồng #${id} KẾT THÚC LỖI!*\nĐã thử lại ${s.retryCount} lần nhưng thất bại.`);
+        s.lastLog = s.lastLog || `Thoát với mã ${code}`;
+        broadcast(`🔴 *LUỒNG #${id} BỊ LỖI FFmpeg!*\n━━━━━━━━━━━━━━━━━━\n💬 Chi tiết: \`${escapeMarkdown(s.lastLog)}\`\n\n_Sử dụng lệnh /log ${id} để xem toàn bộ nhật ký._`);
       } else {
         broadcast(`⚪ *Luồng #${id} ĐÃ KẾT THÚC BÌNH THƯỜNG.*`);
       }
@@ -258,9 +293,9 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
   if (isDrive) {
     info.lastLog = 'Đang bắt đầu tải file từ Drive...';
     console.log(`\n[Stream #${id}] ⬇️ Bắt đầu tải video từ Google Drive...`);
-    console.log(`[Stream #${id}] 🔗 Link: ${file}`);
+    console.log(`[Stream #${id}] 🔗 Link: ${opt.file}`);
     
-    downloadGoogleDriveFile(file, os.tmpdir(), (dl, total, pct) => {
+    downloadGoogleDriveFile(opt.file, DOWNLOAD_DIR, (dl, total, pct) => {
       if (streams.has(id)) {
         if (pct !== null) {
           streams.get(id).lastLog = `Đang tải... ${pct}%`;
