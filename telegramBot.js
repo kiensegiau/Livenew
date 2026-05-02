@@ -39,6 +39,18 @@ function initBot(actions) {
   try {
     bot = new TelegramBot(config.token, { polling: true });
     console.log('\n[Telegram Bot] 🤖 Bot đang chạy...');
+
+    bot.setMyCommands([
+      { command: 'status', description: '📊 Xem & Điều khiển luồng' },
+      { command: 'live', description: '🔄 Phát Loop (Key Link)' },
+      { command: 'once', description: '▶️ Phát một lần (Key Link)' },
+      { command: 'schedule', description: '🕐 Đặt lịch (Key Link HH:mm [m])' },
+      { command: 'log', description: '📝 Xem nhật ký chi tiết' },
+      { command: 'admins', description: '👥 Quản lý quản trị viên' },
+      { command: 'reboot', description: '♻️ Khởi động lại Server' },
+      { command: 'clear', description: '🧹 Dọn dẹp luồng rác' },
+      { command: 'help', description: '❓ Hướng dẫn sử dụng' }
+    ]);
   } catch (e) {
     console.error('Lỗi khởi tạo Bot:', e.message);
     return;
