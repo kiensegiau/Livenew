@@ -169,9 +169,17 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   ];
 
   const localFF = path.join(__dirname, 'ffmpeg.exe');
-  const ffmpegCmd = fs.existsSync(localFF) ? localFF : 'ffmpeg';
+  const ffmpegCmd = fs.existsSync(localFF) ? `"${localFF}"` : 'ffmpeg';
   
-  const proc = spawn(ffmpegCmd, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+  console.log(`[Stream #${id}] 🛠 Thực thi lệnh: ${ffmpegCmd} ${args.join(' ')}`);
+
+  const proc = spawn(ffmpegCmd, args, { stdio: ['pipe', 'pipe', 'pipe'], shell: true });
+  
+  proc.on('error', (err) => {
+    console.error(`[Stream #${id}] ❌ Lỗi khởi động FFmpeg:`, err.message);
+    broadcast(`❌ *LUỒNG #${id} KHÔNG THỂ KHỞI CHẠY!*\nLỗi: \`${err.message}\``);
+  });
+
   let info = streams.get(id);
   if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
 
@@ -293,11 +301,15 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
   streams.set(id, info);
 
   if (isDrive) {
+    // Làm sạch link: lấy URL thực sự nếu người dùng dán thừa text
+    const urlMatch = file.match(/https?:\/\/[^\s]+/);
+    const cleanFile = urlMatch ? urlMatch[0] : file;
+    
     info.lastLog = 'Đang bắt đầu tải file từ Drive...';
     console.log(`\n[Stream #${id}] ⬇️ Bắt đầu tải video từ Google Drive...`);
-    console.log(`[Stream #${id}] 🔗 Link: ${file}`);
+    console.log(`[Stream #${id}] 🔗 Link: ${cleanFile}`);
     
-    downloadGoogleDriveFile(file, DOWNLOAD_DIR, (dl, total, pct) => {
+    downloadGoogleDriveFile(cleanFile, DOWNLOAD_DIR, (dl, total, pct) => {
       if (streams.has(id)) {
         if (pct !== null) {
           streams.get(id).lastLog = `Đang tải... ${pct}%`;
