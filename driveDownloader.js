@@ -45,18 +45,25 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
       let htmlBody = '';
       res.on('data', chunk => htmlBody += chunk);
       res.on('end', () => {
-        const actionMatch = htmlBody.match(/action="([^"]+)"/);
-        const confirmMatch = htmlBody.match(/name="confirm"\s+value="([^"]+)"/);
-        const uuidMatch = htmlBody.match(/name="uuid"\s+value="([^"]+)"/);
-        const idMatch = htmlBody.match(/name="id"\s+value="([^"]+)"/);
+        const actionMatch = htmlBody.match(/action="([^"]+)"/i);
+        const confirmMatch = htmlBody.match(/name="confirm"\s+value="([^"]+)"/i) || htmlBody.match(/confirm=([a-zA-Z0-9_\-]+)/i);
+        const uuidMatch = htmlBody.match(/name="uuid"\s+value="([^"]+)"/i);
+        const idMatch = htmlBody.match(/name="id"\s+value="([^"]+)"/i) || htmlBody.match(/id=([a-zA-Z0-9_\-]+)/i);
 
-        if (actionMatch && confirmMatch && idMatch) {
-          let bypassUrl = actionMatch[1];
-          bypassUrl += `?id=${idMatch[1]}&export=download&confirm=${confirmMatch[1]}`;
+        if (confirmMatch) {
+          const confirmToken = confirmMatch[1];
+          const fileId = idMatch ? idMatch[1] : extractDriveId(url);
+          const finalAction = actionMatch ? actionMatch[1].replace(/&amp;/g, '&') : "https://drive.google.com/uc";
+          
+          let bypassUrl = finalAction;
+          if (!bypassUrl.includes('?')) bypassUrl += '?';
+          if (!bypassUrl.includes('id=')) bypassUrl += `&id=${fileId}`;
+          bypassUrl += `&export=download&confirm=${confirmToken}`;
           if (uuidMatch) bypassUrl += `&uuid=${uuidMatch[1]}`;
+          
           return fetchUrl(bypassUrl, newCookieString, attempt + 1, destPath, onProgress, resolve, reject);
         } else {
-          return reject(new Error("Giải mã Bypass Virus thất bại."));
+          return reject(new Error("Giải mã Bypass Virus thất bại. Hãy chắc chắn link Drive đã được bật 'Bất kỳ ai có đường liên kết'."));
         }
       });
       return;
