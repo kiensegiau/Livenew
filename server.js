@@ -14,7 +14,7 @@ const BACKUP_FILE = path.join(__dirname, 'streams_backup.json');
 function saveStreams() {
   const data = Array.from(streams.values()).map(s => ({
     id: s.id, key: s.key, file: s.file, mode: s.mode, minutes: s.minutes, 
-    scheduledTime: s.scheduledTime, status: s.status === 'live' || s.status === 'reconnecting' ? 'live' : s.status
+    scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, status: s.status
   }));
   fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
 }
@@ -24,15 +24,22 @@ function loadStreams() {
     try {
       const data = JSON.parse(fs.readFileSync(BACKUP_FILE, 'utf-8'));
       data.forEach(s => {
-        // Chỉ khôi phục các luồng đang chạy hoặc đang lịch
-        if (['live', 'scheduled', 'reconnecting', 'launching'].includes(s.status)) {
+        // Khôi phục các luồng chưa kết thúc
+        if (['live', 'scheduled', 'reconnecting', 'launching', 'downloading'].includes(s.status)) {
           streams.set(s.id, { ...s, process: null, pid: null, retryCount: 0, lastLog: 'Đang khôi phục...' });
-          // Kích hoạt lại
-          if (s.status === 'scheduled') proceedStartStream(s.id);
-          else launchFFmpeg(s.id, s.key, s.file, s.mode, s.minutes);
+          nextId = Math.max(nextId, s.id + 1);
+          
+          if (s.status === 'downloading' || (s.status === 'live' && s.file.startsWith('http'))) {
+              // Nếu đang tải hoặc live trực tiếp từ link -> chạy lại quy trình start
+              startStream({ key: s.key, file: s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
+          } else if (s.status === 'scheduled') {
+              proceedStartStream(s.id);
+          } else {
+              launchFFmpeg(s.id, s.key, s.file, s.mode, s.minutes);
+          }
         }
       });
-      console.log(`[System] ♻️ Đã khôi phục ${data.length} luồng từ bản sao lưu.`);
+      console.log(`[System] ♻️ Đã khôi phục ${streams.size} luồng từ bản sao lưu.`);
     } catch (e) { console.error('[System] Lỗi đọc backup:', e.message); }
   }
 }
@@ -287,6 +294,7 @@ function stopStream(id) {
 
   // Xóa file tạm nếu có (từ Drive)
   cleanupFile(info.file);
+  saveStreams(); // Lưu lại trạng thái dừng
 
   return true;
 }

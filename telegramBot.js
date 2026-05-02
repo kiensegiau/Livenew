@@ -174,6 +174,14 @@ function initBot(actions) {
       bot.sendMessage(chatId, `📜 *LOG CHI TIẾT LUỒNG #${id}:*\n\n\`\`\`\n${escapeMarkdown(logs)}\n\`\`\``, { parse_mode: 'Markdown' });
     }
 
+    else if (text.startsWith('/admins')) {
+      let msg = `👥 *DANH SÁCH ADMIN (${config.adminIds.length}):*\n\n`;
+      config.adminIds.forEach((id, index) => {
+        msg += `${index + 1}. ID: \`${id}\` ${id === chatId ? '*(Bạn)*' : ''}\n`;
+      });
+      bot.sendMessage(chatId, msg, { parse_mode: 'Markdown' });
+    }
+
     else if (text.startsWith('/clear')) {
       bot.sendMessage(chatId, `🧹 Đã dọn dẹp ${actions.clearStreams()} luồng.`);
     }
