@@ -283,6 +283,9 @@ function proceedStartStream(id) {
 }
 
 function startStream({ key, file, mode, minutes, scheduledTime }) {
+  // Nếu không có luồng nào, reset số thứ tự về 1
+  if (streams.size === 0) nextId = 1;
+  
   const id = nextId++;
   const isDrive = !!extractDriveId(file);
 
