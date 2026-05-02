@@ -451,13 +451,18 @@ function updateProgress(streamId, pct, text) {
           current.messageIds[chatId] = m.message_id;
         }).catch(() => {});
       } else {
-        // Cập nhật khi tăng thêm 2% hoặc khi hoàn tất để tránh bị Telegram chặn (Rate Limit)
-        if (pct === null || pct === 100 || (typeof pct === 'number' && pct - current.lastPct >= 2)) {
+        const now = Date.now();
+        const timePassed = now - (current.lastTime || 0) > 5000;
+        const pctJumped = typeof pct === 'number' && (pct - current.lastPct >= 2);
+        
+        // Cập nhật nếu tăng 2% HOẶC nếu đã qua 5 giây (để thấy MB nhảy)
+        if (pct === null || pct === 100 || pctJumped || timePassed) {
           bot.editMessageText(text, { chat_id: chatId, message_id: current.messageIds[chatId], parse_mode: 'Markdown' }).catch(() => {});
+          current.lastTime = now;
+          if (typeof pct === 'number') current.lastPct = pct;
         }
       }
     });
-    if (pct !== null) current.lastPct = pct;
     if (pct === 100) activeProgressMessages.delete(streamId);
   } catch (e) { console.error('Lỗi cập nhật tiến độ:', e.message); }
 }

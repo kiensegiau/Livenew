@@ -14,10 +14,15 @@ const DOWNLOAD_DIR = path.join(__dirname, 'downloads');
 // Đảm bảo thư mục downloads tồn tại
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return text.toString().replace(/[*_`\[]/g, '\\$&');
+}
+
 // --- Persistence Logic ---
 function saveStreams() {
   const data = Array.from(streams.values()).map(s => ({
-    id: s.id, key: s.key, file: s.file, mode: s.mode, minutes: s.minutes, 
+    id: s.id, key: s.key, file: s.file, originalFile: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, 
     scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, status: s.status
   }));
   fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
@@ -33,13 +38,18 @@ function loadStreams() {
           streams.set(s.id, { ...s, process: null, pid: null, retryCount: 0, lastLog: 'Đang khôi phục...' });
           nextId = Math.max(nextId, s.id + 1);
           
-          if (s.status === 'downloading' || (s.status === 'live' && s.file.startsWith('http'))) {
-              // Nếu đang tải hoặc live trực tiếp từ link -> chạy lại quy trình start
-              startStream({ key: s.key, file: s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
+          if (s.status === 'downloading' || (s.status === 'live' && s.originalFile && s.originalFile.startsWith('http'))) {
+              // Nếu đang tải hoặc live từ link -> ưu tiên tải lại/chạy lại từ link gốc
+              startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
           } else if (s.status === 'scheduled') {
               proceedStartStream(s.id);
           } else {
-              launchFFmpeg(s.id, s.key, s.file, s.mode, s.minutes);
+              // Kiểm tra nếu file cục bộ mất thì thử tải lại từ link gốc nếu có
+              if (!s.file.startsWith('http') && !fs.existsSync(s.file) && s.originalFile && s.originalFile.startsWith('http')) {
+                  startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
+              } else {
+                  launchFFmpeg(s.id, s.key, s.file, s.mode, s.minutes);
+              }
           }
         }
       });
@@ -49,21 +59,8 @@ function loadStreams() {
 }
 
 function cleanupOrphanedFiles() {
-  const activeFiles = Array.from(streams.values()).map(s => s.file);
-  
-  if (!fs.existsSync(DOWNLOAD_DIR)) return;
-
-  fs.readdir(DOWNLOAD_DIR, (err, files) => {
-    if (err) return;
-    files.forEach(f => {
-      const fullPath = path.join(DOWNLOAD_DIR, f);
-      // Xóa nếu là file video tải về và không nằm trong danh sách đang dùng
-      if (f.startsWith('drive_video_') && !activeFiles.includes(fullPath)) {
-        fs.unlink(fullPath, () => {});
-      }
-    });
-  });
-  console.log('[System] 🧹 Đã dọn dẹp các file rác trong thư mục downloads.');
+  // Tạm thời vô hiệu hóa việc tự động xóa khi khởi động để tránh mất file
+  console.log('[System] 🧹 Chế độ dọn dẹp tự động đã được tạm tắt để bảo vệ file của bạn.');
 }
 
 async function checkFFmpeg() {
@@ -296,7 +293,7 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
   }
 
   const info = {
-    id, key, file, mode, minutes, scheduledTime,
+    id, key, file, originalFile: file, mode, minutes, scheduledTime,
     status: isDrive ? 'downloading' : (mode === 'scheduled' ? 'scheduled' : 'launching'),
     startTime: null,
     process: null, pid: null, lastLog: '', retryCount: 0
