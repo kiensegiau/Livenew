@@ -1,0 +1,9 @@
+{
+  "name": "youtube-live-controller",
+  "version": "1.0.0",
+  "description": "YouTube Multi-Stream Live Controller",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

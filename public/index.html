@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Live Controller</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a12;
+    --surface: rgba(255,255,255,0.04);
+    --surface-hover: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.08);
+    --border-hover: rgba(255,255,255,0.18);
+    --text: #e8e8f0;
+    --text-muted: #6b7280;
+    --accent: #ff0000;
+    --accent-glow: rgba(255,0,0,0.3);
+    --green: #22c55e;
+    --green-glow: rgba(34,197,94,0.3);
+    --yellow: #f59e0b;
+    --yellow-glow: rgba(245,158,11,0.3);
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  html { font-size: 14px; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+    background-image:
+      radial-gradient(ellipse 60% 40% at 50% -10%, rgba(255,0,0,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 30% at 80% 80%, rgba(59,130,246,0.05) 0%, transparent 50%);
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    max-width: 820px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .badge { font-size: 0.7rem; padding: 3px 8px; border-radius: 20px;
+    background: rgba(255,0,0,0.12); color: var(--accent);
+    border: 1px solid rgba(255,0,0,0.2); font-weight: 600; letter-spacing: 0.5px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    backdrop-filter: blur(12px);
+    max-width: 820px;
+    margin: 0 auto 20px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--border-hover); }
+
+  .card-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 6px; }
+
+  input[type="text"],
+  input[type="datetime-local"],
+  input[type="number"] {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 0 3px rgba(255,255,255,0.04); }
+  input[readonly] { color: var(--text-muted); cursor: default; }
+
+  .row { display: grid; gap: 12px; }
+  .row.col2 { grid-template-columns: 1fr 1fr; }
+  .row.col3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  .file-row { display: flex; gap: 8px; align-items: flex-end; }
+  .file-row input { flex: 1; }
+
+  /* Buttons */
+  .btn {
+    border: none; cursor: pointer; font-family: inherit; font-weight: 600;
+    border-radius: var(--radius-sm); transition: all 0.15s; display: inline-flex;
+    align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+  }
+  .btn-sm { padding: 10px 14px; font-size: 0.8rem; }
+  .btn-lg { padding: 14px 24px; font-size: 1rem; width: 100%; border-radius: var(--radius); }
+
+  .btn-ghost {
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: var(--border-hover); }
+
+  .btn-live {
+    background: linear-gradient(135deg, #ff0000, #cc0000);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(255,0,0,0.3);
+  }
+  .btn-live:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255,0,0,0.45); }
+  .btn-live:active { transform: translateY(0); }
+  .btn-live:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Mode tabs */
+  .mode-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .mode-tab {
+    flex: 1; padding: 9px; text-align: center; border-radius: var(--radius-sm);
+    background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+    cursor: pointer; font-size: 0.8rem; font-weight: 500; color: var(--text-muted);
+    transition: all 0.15s; user-select: none;
+  }
+  .mode-tab.active {
+    background: rgba(255,0,0,0.1); border-color: rgba(255,0,0,0.4);
+    color: #fff; font-weight: 600;
+  }
+  .mode-tab:not(.active):hover { background: var(--surface-hover); color: var(--text); }
+
+  .mode-section { display: none; }
+  .mode-section.visible { display: grid; gap: 12px; }
+
+  /* Streams table */
+  .streams-list { display: flex; flex-direction: column; gap: 10px; }
+  .stream-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    transition: border-color 0.2s;
+  }
+  .stream-item:hover { border-color: var(--border-hover); }
+
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green-glow); animation: pulse 1.5s infinite; }
+  .status-dot.scheduled { background: var(--yellow); box-shadow: 0 0 6px var(--yellow-glow); }
+  .status-dot.ended, .status-dot.stopped { background: var(--text-muted); }
+  .status-dot.launching { background: var(--blue); animation: pulse 0.8s infinite; }
+
+  .stream-info {}
+  .stream-name { font-size: 0.85rem; font-weight: 500; }
+  .stream-meta { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
+
+  .status-badge {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 20px;
+  }
+  .status-badge.live { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+  .status-badge.scheduled { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
+  .status-badge.ended, .status-badge.stopped { background: rgba(107,114,128,0.15); color: var(--text-muted); border: 1px solid rgba(107,114,128,0.2); }
+  .status-badge.launching { background: rgba(59,130,246,0.15); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
+
+  .btn-stop {
+    padding: 5px 10px; font-size: 0.72rem; border-radius: 6px;
+    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
+    color: var(--red); cursor: pointer; font-family: inherit; font-weight: 600;
+    transition: all 0.15s;
+  }
+  .btn-stop:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.5); }
+
+  .empty-state { text-align: center; padding: 32px; color: var(--text-muted); font-size: 0.85rem; }
+  .empty-state .icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.4; }
+
+  .countdown { font-variant-numeric: tabular-nums; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px; z-index: 999;
+    padding: 12px 18px; border-radius: var(--radius-sm);
+    font-size: 0.85rem; font-weight: 500;
+    transform: translateY(80px); opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    pointer-events: none;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { background: rgba(34,197,94,0.9); color: #000; }
+  #toast.error { background: rgba(239,68,68,0.9); color: #fff; }
+  #toast.info { background: rgba(59,130,246,0.9); color: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot"></span> YouTube Live Controller</h1>
+  <span class="badge">FFmpeg -c copy</span>
+</header>
+
+<!-- Config Card -->
+<div class="card">
+  <div class="card-title">⚙️ Cấu hình luồng mới</div>
+
+  <!-- Stream Key -->
+  <div style="margin-bottom:14px">
+    <label>Stream Key (YouTube Studio)</label>
+    <input type="text" id="streamKey" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" />
+  </div>
+
+  <!-- Video File -->
+  <div style="margin-bottom:18px">
+    <label>File Video</label>
+    <div class="file-row">
+      <input type="text" id="videoPath" placeholder="Chọn file hoặc paste đường dẫn vào đây..." />
+      <button class="btn btn-ghost btn-sm" onclick="browse()">📂 Browse</button>
+    </div>
+  </div>
+
+  <!-- Mode Tabs -->
+  <div class="card-title">📡 Chế độ phát</div>
+  <div class="mode-tabs">
+    <div class="mode-tab active" onclick="setMode('loop')">🔁 Vòng lặp</div>
+    <div class="mode-tab" onclick="setMode('once')">▶️ Phát 1 lần</div>
+    <div class="mode-tab" onclick="setMode('scheduled')">🕐 Đặt lịch</div>
+  </div>
+
+  <!-- Loop options -->
+  <div class="mode-section visible" id="mode-loop">
+    <div>
+      <label>Số phút live (0 = không giới hạn)</label>
+      <input type="number" id="minutes" value="1440" min="0" />
+    </div>
+  </div>
+
+  <!-- Once options -->
+  <div class="mode-section" id="mode-once">
+    <p style="color:var(--text-muted);font-size:0.82rem;padding:8px 0">
+      Phát hết video rồi tự dừng. Không cần cấu hình thêm.
+    </p>
+  </div>
+
+  <!-- Scheduled options -->
+  <div class="mode-section" id="mode-scheduled">
+    <div class="row col2">
+      <div>
+        <label>Thời gian bắt đầu</label>
+        <input type="datetime-local" id="schedTime" />
+      </div>
+      <div>
+        <label>Số phút live (vòng lặp sau khi bật)</label>
+        <input type="number" id="schedMinutes" value="1440" min="0" />
+      </div>
+    </div>
+  </div>
+
+  <!-- Start Button -->
+  <div style="margin-top:20px">
+    <button class="btn btn-live btn-lg" id="btnStart" onclick="startStream()">
+      🔴 BẮT ĐẦU LIVE
+    </button>
+  </div>
+</div>
+
+<!-- Active Streams Card -->
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:0">📋 Luồng đang chạy</div>
+    <span style="font-size:0.75rem;color:var(--text-muted)" id="streamCount">0 luồng</span>
+  </div>
+  <div class="streams-list" id="streamsList">
+    <div class="empty-state">
+      <div class="icon">📡</div>
+      Chưa có luồng nào. Bấm BẮT ĐẦU LIVE để khởi động.
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let currentMode = 'loop';
+
+// ── Set default datetime to now+5min ──
+(function setDefaultSchedule() {
+  const d = new Date(Date.now() + 5 * 60000);
+  d.setSeconds(0, 0);
+  document.getElementById('schedTime').value = d.toISOString().slice(0, 16);
+})();
+
+// ── Mode switching ──
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-tab').forEach((el, i) => {
+    el.classList.toggle('active', ['loop','once','scheduled'][i] === mode);
+  });
+  document.querySelectorAll('.mode-section').forEach(el => el.classList.remove('visible'));
+  document.getElementById('mode-' + mode).classList.add('visible');
+}
+
+// ── Browse file ──
+async function browse() {
+  showToast('Đang mở hộp thoại chọn file...', 'info');
+  try {
+    const r = await fetch('/api/browse', { method: 'POST' });
+    const { path } = await r.json();
+    if (path) {
+      document.getElementById('videoPath').value = path;
+      showToast('Đã chọn: ' + path.split('\\').pop(), 'success');
+    } else {
+      showToast('Không có file nào được chọn.', 'info');
+    }
+  } catch (e) {
+    showToast('Lỗi khi mở dialog!', 'error');
+  }
+}
+
+// ── Start stream ──
+async function startStream() {
+  const key = document.getElementById('streamKey').value.trim();
+  const file = document.getElementById('videoPath').value.trim();
+
+  if (!key) { showToast('Vui lòng nhập Stream Key!', 'error'); return; }
+  if (!file) { showToast('Vui lòng chọn file video!', 'error'); return; }
+
+  const btn = document.getElementById('btnStart');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang khởi động...';
+
+  const body = { key, file, mode: currentMode };
+
+  if (currentMode === 'loop') {
+    body.minutes = parseInt(document.getElementById('minutes').value) || 0;
+  } else if (currentMode === 'scheduled') {
+    body.scheduledTime = document.getElementById('schedTime').value;
+    body.minutes = parseInt(document.getElementById('schedMinutes').value) || 0;
+    if (!body.scheduledTime) { showToast('Vui lòng chọn thời gian!', 'error'); btn.disabled = false; btn.textContent = '🔴 BẮT ĐẦU LIVE'; return; }
+  } else {
+    body.minutes = 0;
+  }
+
+  try {
+    const r = await fetch('/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+
+    if (data.error) {
+      showToast(data.error, 'error');
+    } else {
+      const msg = currentMode === 'scheduled'
+        ? `🕐 Đã đặt lịch! Sẽ live lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN')}`
+        : '🔴 Đã bật luồng Live!';
+      showToast(msg, 'success');
+    }
+  } catch (e) {
+    showToast('Không kết nối được server!', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔴 BẮT ĐẦU LIVE';
+}
+
+// ── Stop stream ──
+async function stopStream(id) {
+  await fetch('/api/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id })
+  });
+  showToast('Đã dừng luồng #' + id, 'info');
+}
+
+// ── Render streams ──
+function renderStreams(list) {
+  const el = document.getElementById('streamsList');
+  const count = document.getElementById('streamCount');
+  const active = list.filter(s => s.status === 'live' || s.status === 'scheduled' || s.status === 'launching');
+  count.textContent = `${list.length} luồng`;
+
+  if (list.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📡</div>Chưa có luồng nào.</div>`;
+    return;
+  }
+
+  el.innerHTML = list.map(s => {
+    const canStop = ['live', 'scheduled', 'launching'].includes(s.status);
+    const statusLabel = { live: 'LIVE', scheduled: 'ĐẶT LỊCH', ended: 'KẾT THÚC', stopped: 'ĐÃ DỪNG', launching: 'ĐANG BẬT' }[s.status] || s.status;
+
+    let meta = s.keyHint + ' · ' + s.file;
+    if (s.status === 'live' && s.startTime) {
+      const elapsed = Math.floor((Date.now() - new Date(s.startTime)) / 1000);
+      meta += ' · ' + formatDuration(elapsed);
+    }
+    if (s.status === 'scheduled' && s.scheduledTime) {
+      const remaining = Math.max(0, Math.floor((new Date(s.scheduledTime) - Date.now()) / 1000));
+      meta += ' · Bắt đầu sau <span class="countdown">' + formatDuration(remaining) + '</span>';
+    }
+
+    return `
+      <div class="stream-item">
+        <div class="status-dot ${s.status}"></div>
+        <div class="stream-info">
+          <div class="stream-name">#${s.id} · ${modeLabel(s.mode)}</div>
+          <div class="stream-meta">${meta}</div>
+        </div>
+        <span class="status-badge ${s.status}">${statusLabel}</span>
+        ${canStop ? `<button class="btn-stop" onclick="stopStream(${s.id})">■ Dừng</button>` : '<div></div>'}
+      </div>`;
+  }).join('');
+}
+
+function modeLabel(m) {
+  return { loop: 'Vòng lặp', once: 'Phát 1 lần', scheduled: 'Đặt lịch' }[m] || m;
+}
+
+function formatDuration(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+// ── Poll streams ──
+async function poll() {
+  try {
+    const r = await fetch('/api/streams');
+    const list = await r.json();
+    renderStreams(list);
+  } catch (_) {}
+}
+poll();
+setInterval(poll, 2000);
+
+// ── Toast ──
+let toastTimer;
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = type; }, 3500);
+}
+</script>
+</body>
+</html>
