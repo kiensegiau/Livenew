@@ -4,6 +4,24 @@ const path = require('path');
 
 const CONFIG_PATH = path.join(__dirname, 'bot_config.json');
 
+const { exec } = require('child_process');
+function getNetBytes() {
+  return new Promise(resolve => {
+    exec('netstat -e', (err, stdout) => {
+      try {
+        if (!err && stdout) {
+          const bytesLine = stdout.split('\n').find(l => l.trim().startsWith('Bytes'));
+          if (bytesLine) {
+            const parts = bytesLine.trim().split(/\s+/);
+            return resolve({ rx: parseInt(parts[1]) || 0, tx: parseInt(parts[2]) || 0 });
+          }
+        }
+      } catch (e) {}
+      resolve({ rx: 0, tx: 0 });
+    });
+  });
+}
+
 let config = { token: "", adminIds: [], password: "live" };
 try {
   if (fs.existsSync(CONFIG_PATH)) {
@@ -58,17 +76,24 @@ function initBot(actions) {
   }
 
   // Hàm gửi báo cáo định kỳ
-  const sendPeriodicReport = () => {
+  const sendPeriodicReport = async () => {
     try {
       const list = actions.getStreams();
       const startUsage = process.cpuUsage();
       const startTime = process.hrtime();
+      const netStart = await getNetBytes();
       
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
           const endUsage = process.cpuUsage(startUsage);
           const endTime = process.hrtime(startTime);
+          const netEnd = await getNetBytes();
+
           const elapTimeMs = endTime[0] * 1000 + endTime[1] / 1000000;
+          const elapSec = elapTimeMs / 1000;
+          const rxSpeedMbps = ((netEnd.rx - netStart.rx) * 8 / 1024 / 1024 / elapSec).toFixed(1);
+          const txSpeedMbps = ((netEnd.tx - netStart.tx) * 8 / 1024 / 1024 / elapSec).toFixed(1);
+
           const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
           const active = list.filter(s => s.status === 'live').length;
           const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
@@ -76,6 +101,7 @@ function initBot(actions) {
 
           let report = `📊 *BÁO CÁO HỆ THỐNG ĐỊNH KỲ*\n━━━━━━━━━━━━━━━━━━\n`;
           report += `⏱ Uptime: \`${uptimeH}h\` | 🧠 RAM: \`${mem}MB\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
+          report += `🌐 Mạng: ⬇️ \`${rxSpeedMbps} Mbps\` | ⬆️ \`${txSpeedMbps} Mbps\`\n`;
           report += `📺 Luồng: \`${active}/${list.length}\` đang chạy\n\n`;
 
           if (list.length > 0) {
