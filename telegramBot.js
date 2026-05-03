@@ -109,9 +109,12 @@ function initBot(actions) {
               const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
               let logBrief = s.lastLog || '...';
               if (s.status === 'live') {
-                const bitrate = s.lastLog.match(/bitrate=[^\s]*/);
-                const speed = s.lastLog.match(/speed=[^\s]*/);
-                if (bitrate && speed) logBrief = `${bitrate[0]} ${speed[0]}`;
+                const time = s.lastLog.match(/time=\S+/);
+                const bitrate = s.lastLog.match(/bitrate=\s*\S+/);
+                const speed = s.lastLog.match(/speed=\s*\S+/);
+                if (time && bitrate && speed) {
+                  logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
+                }
               }
               report += `${icon} *#${s.id}*: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\`\n`;
             });
@@ -193,10 +196,12 @@ function initBot(actions) {
           
           let logBrief = s.lastLog;
           if (s.status === 'live') {
-            // Trích xuất bitrate và speed từ log FFmpeg để hiển thị gọn
-            const bitrate = s.lastLog.match(/bitrate=[^\s]*/);
-            const speed = s.lastLog.match(/speed=[^\s]*/);
-            if (bitrate && speed) logBrief = `${bitrate[0]} ${speed[0]}`;
+            const time = s.lastLog.match(/time=\S+/);
+            const bitrate = s.lastLog.match(/bitrate=\s*\S+/);
+            const speed = s.lastLog.match(/speed=\s*\S+/);
+            if (time && bitrate && speed) {
+              logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
+            }
           }
           msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
           const buttons = [];
