@@ -38,16 +38,22 @@ function loadStreams() {
           streams.set(s.id, { ...s, process: null, pid: null, retryCount: 0, lastLog: 'Đang khôi phục...' });
           nextId = Math.max(nextId, s.id + 1);
           
-          if (s.status === 'downloading' || (s.status === 'live' && s.originalFile && s.originalFile.startsWith('http'))) {
-              // Nếu đang tải hoặc live từ link -> ưu tiên tải lại/chạy lại từ link gốc
+          if (s.status === 'downloading') {
+              // Nếu đang tải dở lúc sập mạng -> bắt buộc tải lại
               startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
           } else if (s.status === 'scheduled') {
               proceedStartStream(s.id);
           } else {
-              // Kiểm tra nếu file cục bộ mất thì thử tải lại từ link gốc nếu có
-              if (!s.file.startsWith('http') && !fs.existsSync(s.file) && s.originalFile && s.originalFile.startsWith('http')) {
+              // Nếu file video cục bộ vẫn còn -> DÙNG LẠI LUÔN, KHÔNG TẢI LẠI
+              if (s.file && fs.existsSync(s.file)) {
+                  launchFFmpeg(s.id, s.key, s.file, s.mode, s.minutes);
+              } 
+              // Nếu file bị xóa mất nhưng có link gốc -> tải lại để cứu rỗi
+              else if (s.originalFile && s.originalFile.startsWith('http')) {
                   startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
-              } else {
+              } 
+              // Các trường hợp khác
+              else {
                   launchFFmpeg(s.id, s.key, s.file, s.mode, s.minutes);
               }
           }
