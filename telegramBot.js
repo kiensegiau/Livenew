@@ -57,12 +57,10 @@ function initBot(actions) {
     return;
   }
 
-  // Báo cáo định kỳ mỗi 30 phút
-  setInterval(() => {
+  // Hàm gửi báo cáo định kỳ
+  const sendPeriodicReport = () => {
     try {
       const list = actions.getStreams();
-      if (list.length === 0 && process.uptime() > 3600) return;
-      
       const startUsage = process.cpuUsage();
       const startTime = process.hrtime();
       
@@ -74,23 +72,36 @@ function initBot(actions) {
           const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
           const active = list.filter(s => s.status === 'live').length;
           const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
-          const uptime = Math.floor(process.uptime() / 60);
+          const uptimeH = (process.uptime() / 3600).toFixed(1);
 
           let report = `📊 *BÁO CÁO HỆ THỐNG ĐỊNH KỲ*\n━━━━━━━━━━━━━━━━━━\n`;
-          report += `⏱ Uptime: \`${uptime}p\` | 🧠 RAM: \`${mem}MB\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
-          report += `📺 Đang chạy: \`${active}/${list.length}\`\n\n`;
+          report += `⏱ Uptime: \`${uptimeH}h\` | 🧠 RAM: \`${mem}MB\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
+          report += `📺 Luồng: \`${active}/${list.length}\` đang chạy\n\n`;
 
           if (list.length > 0) {
             list.forEach(s => {
               const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
-              report += `${icon} *#${s.id}*: \`${s.status}\` | Log: \`${escapeMarkdown(s.lastLog)}\`\n`;
+              let logBrief = s.lastLog || '...';
+              if (s.status === 'live') {
+                const bitrate = s.lastLog.match(/bitrate=[^\s]*/);
+                const speed = s.lastLog.match(/speed=[^\s]*/);
+                if (bitrate && speed) logBrief = `${bitrate[0]} ${speed[0]}`;
+              }
+              report += `${icon} *#${s.id}*: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\`\n`;
             });
+          } else {
+            report += `📭 _Hiện không có luồng nào đang hoạt động._`;
           }
           broadcast(report);
         } catch (e) { console.error('Lỗi báo cáo (nội):', e.message); }
       }, 1000);
     } catch (e) { console.error('Lỗi báo cáo (ngoại):', e.message); }
-  }, 30 * 60 * 1000);
+  };
+
+  // Gửi ngay 1 bản khi khởi động để kiểm tra
+  sendPeriodicReport();
+  // Duy trì mỗi 30 phút
+  setInterval(sendPeriodicReport, 30 * 60 * 1000);
 
   bot.on('message', (msg) => {
     try {
@@ -291,19 +302,27 @@ function initBot(actions) {
         }
       }
       else if (action === 'wiztime') {
-        const time = idStr; // Lấy HH:mm từ idStr
+        const hour = idStr.split(':')[0];
         const state = userStates.get(chatId);
         if (state) {
           bot.answerCallbackQuery(query.id);
-          handleWizard(chatId, time, state, actions);
+          handleWizard(chatId, hour, state, actions);
         }
       }
       else if (action === 'wizmin') {
-        const mins = idStr; // Lấy minutes từ idStr
+        const mins = idStr;
         const state = userStates.get(chatId);
         if (state) {
           bot.answerCallbackQuery(query.id);
           handleWizard(chatId, mins, state, actions);
+        }
+      }
+      else if (action === 'wizdur') {
+        const dur = idStr;
+        const state = userStates.get(chatId);
+        if (state) {
+          bot.answerCallbackQuery(query.id);
+          handleWizard(chatId, dur, state, actions);
         }
       }
     } catch (e) { console.error('Lỗi nút bấm:', e.message); }
@@ -355,10 +374,13 @@ function generateCalendar(year, month) {
 }
 
 function broadcast(message) {
-  if (bot && config.adminIds) {
+  if (bot && config.adminIds && config.adminIds.length > 0) {
+    console.log(`[System] 📢 Đang gửi báo cáo tới ${config.adminIds.length} quản trị viên...`);
     config.adminIds.forEach(id => {
-      bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(() => {});
+      bot.sendMessage(id, message, { parse_mode: 'Markdown' }).catch(e => console.error(`Lỗi gửi tới ${id}:`, e.message));
     });
+  } else {
+    console.log('[System] ⚠️ Không có quản trị viên nào để gửi báo cáo.');
   }
 }
 
@@ -391,32 +413,48 @@ function handleWizard(chatId, text, state, actions) {
       state.data.date = text;
       state.step = 'time';
       const quickTimes = [
-        [{ text: '08:00', callback_data: 'wiztime_08:00' }, { text: '12:00', callback_data: 'wiztime_12:00' }, { text: '14:00', callback_data: 'wiztime_14:00' }],
-        [{ text: '20:00', callback_data: 'wiztime_20:00' }, { text: '22:00', callback_data: 'wiztime_22:00' }, { text: '00:00', callback_data: 'wiztime_00:00' }],
+        [{ text: '00:00', callback_data: 'wiztime_00:00' }, { text: '02:00', callback_data: 'wiztime_02:00' }, { text: '04:00', callback_data: 'wiztime_04:00' }, { text: '06:00', callback_data: 'wiztime_06:00' }],
+        [{ text: '08:00', callback_data: 'wiztime_08:00' }, { text: '10:00', callback_data: 'wiztime_10:00' }, { text: '12:00', callback_data: 'wiztime_12:00' }, { text: '14:00', callback_data: 'wiztime_14:00' }],
+        [{ text: '16:00', callback_data: 'wiztime_16:00' }, { text: '18:00', callback_data: 'wiztime_18:00' }, { text: '20:00', callback_data: 'wiztime_20:00' }, { text: '22:00', callback_data: 'wiztime_22:00' }],
         [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
       ];
-      bot.sendMessage(chatId, `⏰ Bước 4: Chọn **Giờ phát** hoặc tự nhập (VD: 14:30):`, { 
+      bot.sendMessage(chatId, `⏰ Bước 4: Chọn **Giờ phát** hoặc tự nhập (VD: 14):`, { 
         parse_mode: 'Markdown', 
         reply_markup: { inline_keyboard: quickTimes } 
       });
     }
     else if (state.step === 'time') {
-      state.data.time = text;
-      state.step = 'minutes';
+      state.data.hour = text;
+      state.step = 'minute';
       const quickMins = [
-        [{ text: '🔄 Phát lặp (0)', callback_data: 'wizmin_0' }, { text: '30p', callback_data: 'wizmin_30' }],
-        [{ text: '60p (1h)', callback_data: 'wizmin_60' }, { text: '120p (2h)', callback_data: 'wizmin_120' }],
+        [{ text: ':00', callback_data: 'wizmin_00' }, { text: ':05', callback_data: 'wizmin_05' }, { text: ':10', callback_data: 'wizmin_10' }],
+        [{ text: ':15', callback_data: 'wizmin_15' }, { text: ':20', callback_data: 'wizmin_20' }, { text: ':25', callback_data: 'wizmin_25' }],
+        [{ text: ':30', callback_data: 'wizmin_30' }, { text: ':35', callback_data: 'wizmin_35' }, { text: ':40', callback_data: 'wizmin_40' }],
+        [{ text: ':45', callback_data: 'wizmin_45' }, { text: ':50', callback_data: 'wizmin_50' }, { text: ':55', callback_data: 'wizmin_55' }],
         [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
       ];
-      bot.sendMessage(chatId, `⏱ Bước 5: Chọn **Thời lượng** (phút) hoặc tự nhập:`, { 
+      bot.sendMessage(chatId, `⏱ Bước 5: Chọn **Phút** hoặc tự nhập (VD: 05, 15, 30):`, { 
         parse_mode: 'Markdown', 
         reply_markup: { inline_keyboard: quickMins } 
       });
     }
-    else if (state.step === 'minutes') {
+    else if (state.step === 'minute') {
+      state.data.minute = text;
+      state.step = 'duration';
+      const quickDurs = [
+        [{ text: '🔄 Phát lặp (0)', callback_data: 'wizdur_0' }, { text: '1h', callback_data: 'wizdur_60' }, { text: '6h', callback_data: 'wizdur_360' }],
+        [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+      ];
+      bot.sendMessage(chatId, `⏳ Bước 6: Nhập **Thời lượng phát** (phút) hoặc chọn nhanh:`, { 
+        parse_mode: 'Markdown', 
+        reply_markup: { inline_keyboard: quickDurs } 
+      });
+    }
+    else if (state.step === 'duration') {
       const minutes = parseInt(text) || 0;
       const isOnce = state.cmd === 'scheduleonce';
-      const scheduledTime = `${state.data.date}T${state.data.time}`;
+      const timeStr = `${String(state.data.hour).padStart(2, '0')}:${String(state.data.minute).padStart(2, '0')}`;
+      const scheduledTime = `${state.data.date}T${timeStr}`;
       
       const result = actions.startStream({ 
         key: state.data.key, 

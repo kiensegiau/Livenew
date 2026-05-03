@@ -63,6 +63,22 @@ function cleanupOrphanedFiles() {
   console.log('[System] 🧹 Chế độ dọn dẹp tự động đã được tạm tắt để bảo vệ file của bạn.');
 }
 
+// Xóa file tạm sau khi luồng kết thúc (chỉ file tải từ Drive)
+function cleanupFile(filePath) {
+  if (!filePath) return;
+  // Chỉ xóa các file trong thư mục downloads (tránh xóa nhầm file gốc)
+  if (filePath.includes(DOWNLOAD_DIR) && fs.existsSync(filePath)) {
+    setTimeout(() => {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`[System] 🗑 Đã xóa file tạm: ${filePath}`);
+      } catch (e) {
+        console.error(`[System] ⚠️ Không thể xóa file tạm: ${e.message}`);
+      }
+    }, 5000); // Đợi 5 giây cho chắc trước khi xóa
+  }
+}
+
 async function checkFFmpeg() {
   const localFF = path.join(__dirname, 'ffmpeg.exe');
   const cmd = fs.existsSync(localFF) ? `"${localFF}" -version` : 'ffmpeg -version';
@@ -173,7 +189,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   const proc = spawn(ffmpegCmd, args, { 
     stdio: ['pipe', 'pipe', 'pipe'], 
     shell: true,
-    cwd: __dirname // Ép chạy đúng thư mục gốc của dự án
+    cwd: __dirname,
+    windowsHide: true // Ẩn hoàn toàn cửa sổ CMD khi chạy
   });
   
   proc.on('error', (err) => {
