@@ -239,7 +239,12 @@ function initBot(actions) {
         const parts = text.split(/\s+/).filter(Boolean);
         if (parts.length < 3) return bot.sendMessage(chatId, '❌ Lỗi: Bạn phải nhập theo mẫu: `/live <Key> <Link>`', { parse_mode: 'Markdown' });
         const result = actions.startStream({ key: parts[1], file: parts.slice(2).join(' '), mode: isOnce ? 'once' : 'loop', minutes: 0 });
-        bot.sendMessage(chatId, result.error ? `❌ Lỗi: \`${escapeMarkdown(result.error)}\`` : `✅ Đã tạo luồng *#${result.id}*`, { parse_mode: 'Markdown' });
+        if (result.error) {
+          bot.sendMessage(chatId, `❌ Lỗi: \`${escapeMarkdown(result.error)}\``, { parse_mode: 'Markdown' });
+        } else {
+          const displayFile = result.file ? path.basename(result.file) : 'Google Drive Video';
+          bot.sendMessage(chatId, `🚀 *ĐÃ TẠO LUỒNG #${result.id} THÀNH CÔNG*\n🎞 Video: \`${displayFile}\`\n🔄 Chế độ: \`${isOnce ? 'Phát 1 lần' : 'Phát lặp'}\``, { parse_mode: 'Markdown' });
+        }
       }
 
       else if (text.startsWith('/schedule') && !text.startsWith('/status')) {

@@ -212,7 +212,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   info.status = 'live';
   info.startTime = new Date().toISOString();
   info.retryCount = info.retryCount || 0; // Đếm số lần retry
-  broadcast(`🟢 *Luồng #${id} ĐÃ BẮT ĐẦU LIVE!*`);
+  const fileName = path.basename(info.file);
+  broadcast(`🟢 *LUỒNG #${id} BẮT ĐẦU LIVE!*\n🎞 Video: \`${fileName}\``);
 
   proc.on('error', (err) => {
     const s = streams.get(id);
@@ -263,9 +264,9 @@ function launchFFmpeg(id, key, file, mode, minutes) {
       s.status = 'ended';
       if(code !== 0) {
         s.lastLog = s.lastLog || `Thoát với mã ${code}`;
-        broadcast(`🔴 *LUỒNG #${id} BỊ LỖI FFmpeg!*\n━━━━━━━━━━━━━━━━━━\n💬 Chi tiết: \`${escapeMarkdown(s.lastLog)}\`\n\n_Sử dụng lệnh /log ${id} để xem toàn bộ nhật ký._`);
+        broadcast(`🔴 *LUỒNG #${id} BỊ LỖI FFmpeg!*\n🎞 Video: \`${path.basename(s.file)}\`\n💬 Chi tiết: \`${escapeMarkdown(s.lastLog)}\``);
       } else {
-        broadcast(`⚪ *Luồng #${id} ĐÃ KẾT THÚC BÌNH THƯỜNG.*`);
+        broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n🎞 Video: \`${path.basename(s.file)}\``);
       }
       // Xóa file nếu luồng kết thúc (không phải đang reconnect)
       cleanupFile(s.file);
@@ -346,7 +347,7 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
         else {
           streams.get(id).lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB`;
           console.log(`[Stream #${id}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB`);
-          updateProgress(id, null, `⬇️ *Luồng #${id}* đang tải: \`${(dl/1024/1024).toFixed(1)} MB\``);
+          updateProgress(id, null, `⬇️ *LUỒNG #${id}* đang tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n🔗 File: \`${path.basename(cleanFile)}\``);
         }
       }
     }).then(filePath => {
@@ -356,7 +357,7 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
       s.lastLog = 'Tải xong, chuẩn bị live...';
       console.log(`\n[Stream #${id}] ✅ TẢI XONG! File được lưu tạm tại: ${filePath}`);
       console.log(`[Stream #${id}] 🚀 Bắt đầu kích hoạt FFmpeg...`);
-      updateProgress(id, 100, `✅ *Luồng #${id}* đã tải xong!\nChuẩn bị phát Live...`);
+      updateProgress(id, 100, `✅ *LUỒNG #${id}* đã tải xong!\n🎞 Video: \`${path.basename(filePath)}\`\n🚀 Đang kích hoạt phát Live...`);
       proceedStartStream(id);
     }).catch(err => {
       const s = streams.get(id);

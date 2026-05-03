@@ -90,11 +90,13 @@ function runVideoMaker() {
     '-map', '[vout]',
     '-map', '[aout]',
     '-c:v', 'libx264',
-    '-b:v', '6800k',
+    '-b:v', '5500k',
+    '-maxrate', '5500k',
+    '-bufsize', '11000k',
     '-r', '30',
     '-g', '60',
     '-keyint_min', '60',
-    '-preset', 'fast',
+    '-preset', 'veryfast',
     '-c:a', 'aac',
     '-b:a', '192k',
     '-shortest',
@@ -103,7 +105,7 @@ function runVideoMaker() {
   );
 
   console.log(`\n⏳ Đang tiến hành ghép nối video và âm thanh...`);
-  console.log(`(Đang chạy chế độ ép Bitrate 3800k & Tự động cân bằng định dạng Audio)`);
+  console.log(`(Đang chạy chế độ ép Bitrate 5500k & Tự động cân bằng định dạng Audio)`);
   
   const proc = spawn(ffmpegCmd, args, { 
     shell: true, 
@@ -124,8 +126,13 @@ function runVideoMaker() {
       } catch (err) {
         console.error(`[System] ⚠️ Không thể xóa video phôi: ${err.message}`);
       }
+      
+      console.log(`\n🔄 Đang chuyển sang xử lý video tiếp theo...`);
+      setTimeout(() => runVideoMaker(), 2000); // Đợi 2 giây rồi chạy file tiếp theo
     } else {
       console.error(`\n❌ RẤT TIẾC, ĐÃ CÓ LỖI XẢY RA TRONG QUÁ TRÌNH GHÉP (Mã lỗi: ${code}).`);
+      // Vẫn tiếp tục video khác nếu có lỗi
+      setTimeout(() => runVideoMaker(), 2000);
     }
   });
 }
