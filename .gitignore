@@ -7,3 +7,19 @@ drive_video_*
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# Bỏ qua nội dung trong các thư mục media nhưng giữ lại thư mục (thông qua file .gitkeep)
+videos/*
+!videos/.gitkeep
+
+music/*
+!music/.gitkeep
+
+outputs/*
+!outputs/.gitkeep
+
+temp/*
+!temp/.gitkeep
+
+downloads/*
+!downloads/.gitkeep
