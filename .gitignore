@@ -7,6 +7,8 @@ drive_video_*
 npm-debug.log*
 .DS_Store
 Thumbs.db
+streams_backup.json
+bot_config.json
 
 # Bỏ qua nội dung trong các thư mục media nhưng giữ lại thư mục (thông qua file .gitkeep)
 videos/*
