@@ -187,7 +187,6 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   // -c copy = lightest: zero decode/encode, pure remux to FLV
   // -bsf:a aac_adtstoasc = required to wrap ADTS AAC → MPEG-4 AAC for FLV
   const args = [
-    '-loglevel', 'error',        // Chỉ hiện lỗi, giảm tải CPU xử lý Log
     '-thread_queue_size', '4096',
     ...loopArg,
     '-re',
