@@ -1,8 +1,21 @@
 const http = require('http');
-const { spawn, exec } = require('child_process');
+const { spawn, exec, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+
+// --- Tự động dọn dẹp các tiến trình FFmpeg "ma" khi khởi động ---
+try {
+    console.log('[System] Đang kiểm tra và dọn dẹp các luồng FFmpeg cũ để tránh chồng chéo...');
+    if (os.platform() === 'win32') {
+        execSync('taskkill /F /IM ffmpeg.exe /T', { stdio: 'ignore' });
+    } else {
+        execSync('pkill -9 ffmpeg', { stdio: 'ignore' });
+    }
+    console.log('[System] Dọn dẹp hoàn tất. Hệ thống sẵn sàng!');
+} catch (e) {
+    // Không có tiến trình nào đang chạy, bỏ qua lỗi
+}
 const { downloadGoogleDriveFile, extractDriveId } = require('./driveDownloader');
 const { initBot, broadcast, updateProgress } = require('./telegramBot');
 
@@ -174,6 +187,7 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   // -c copy = lightest: zero decode/encode, pure remux to FLV
   // -bsf:a aac_adtstoasc = required to wrap ADTS AAC → MPEG-4 AAC for FLV
   const args = [
+    '-loglevel', 'error',        // Chỉ hiện lỗi, giảm tải CPU xử lý Log
     '-thread_queue_size', '4096',
     ...loopArg,
     '-re',
