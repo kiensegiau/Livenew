@@ -174,29 +174,35 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   // -c copy = lightest: zero decode/encode, pure remux to FLV
   // -bsf:a aac_adtstoasc = required to wrap ADTS AAC → MPEG-4 AAC for FLV
   const args = [
+    '-thread_queue_size', '4096',
     ...loopArg,
     '-re',
+    '-fflags', '+genpts',        // Sửa timestamp khi copy
     '-i', file,
     ...timeArg,
+
+    // ================== CẤU HÌNH SIÊU ỔN ĐỊNH CHO NHIỀU LUỒNG ==================
     '-c', 'copy',
     '-bsf:a', 'aac_adtstoasc',
-    '-bufsize', '20000k', // Tăng buffer cho file lớn
-    '-maxrate', '8000k',
-    '-rtmp_buffer', '100', // Tăng buffer RTMP
+    '-bufsize', '15000k',        // Buffer nạp dữ liệu
+    '-maxrate', '4500k',         // Giới hạn bitrate tối ưu
+    '-rtmp_buffer', '5000',      // Buffer gửi đi 5 giây (chống lag)
+    '-rtmp_live', 'live',        // Tối ưu hóa cho Live Stream
     '-f', 'flv',
+    '-flvflags', 'no_duration_filesize', // Giúp YouTube nhận luồng nhanh hơn
     `rtmp://a.rtmp.youtube.com/live2/${key}`
   ];
 
   const localFF = path.join(__dirname, 'ffmpeg.exe');
-  const ffmpegCmd = fs.existsSync(localFF) ? `"${localFF}"` : 'ffmpeg';
+  const ffmpegCmd = fs.existsSync(localFF) ? localFF : 'ffmpeg';
   
-  console.log(`[Stream #${id}] 🛠 Thực thi lệnh: ${ffmpegCmd} ${args.join(' ')}`);
+  console.log(`[Stream #${id}] 🚀 Khởi chạy luồng ổn định cao (Bitrate 4.5M)...`);
 
   const proc = spawn(ffmpegCmd, args, { 
     stdio: ['pipe', 'pipe', 'pipe'], 
-    shell: true,
+    shell: false, // Dùng shell false để ổn định tham số
     cwd: __dirname,
-    windowsHide: true // Ẩn hoàn toàn cửa sổ CMD khi chạy
+    windowsHide: true 
   });
   
   proc.on('error', (err) => {
