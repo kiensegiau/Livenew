@@ -187,23 +187,23 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   // -c copy = lightest: zero decode/encode, pure remux to FLV
   // -bsf:a aac_adtstoasc = required to wrap ADTS AAC → MPEG-4 AAC for FLV
   const args = [
-    '-thread_queue_size', '4096',
+    '-thread_queue_size', '8192',  // Tăng tối đa hàng đợi đọc file
     ...loopArg,
     '-re',
     '-fflags', '+genpts',        // Sửa timestamp khi copy
     '-i', file,
     ...timeArg,
 
-    // ================== CẤU HÌNH SIÊU ỔN ĐỊNH CHO NHIỀU LUỒNG ==================
+    // ================== CẤU HÌNH SIÊU BỘ ĐỆM (CHỐNG MẠNG CHẬP CHỜN) ==================
     '-c', 'copy',
     '-bsf:a', 'aac_adtstoasc',
-    '-bufsize', '15000k',        // Buffer nạp dữ liệu
-    '-maxrate', '4500k',         // Giới hạn bitrate tối ưu
-    '-rtmp_buffer', '5000',      // Buffer gửi đi 5 giây (chống lag)
-    '-rtmp_live', 'live',        // Tối ưu hóa cho Live Stream
+    '-bufsize', '30000k',        // Bộ đệm dữ liệu lớn
+    '-maxrate', '5000k',         
+    '-rtmp_buffer', '30000',     // SIÊU BỘ ĐỆM: Chờ mạng tối đa 30 giây
+    '-rtmp_live', 'live', 
     '-f', 'flv',
-    '-flvflags', 'no_duration_filesize', // Giúp YouTube nhận luồng nhanh hơn
-    `rtmp://a.rtmp.youtube.com/live2/${key}`
+    '-flvflags', 'no_duration_filesize',
+    `rtmp://a.rtmp.youtube.com/live2/${key}?tcp_nodelay=1`
   ];
 
   const localFF = path.join(__dirname, 'ffmpeg.exe');
