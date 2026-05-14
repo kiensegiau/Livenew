@@ -249,62 +249,74 @@ function initBot(actions) {
         const startUsage = process.cpuUsage();
         const startTime = process.hrtime();
         
-        setTimeout(() => {
-          try {
-            const endUsage = process.cpuUsage(startUsage);
-            const endTime = process.hrtime(startTime);
-            const elapTimeMs = endTime[0] * 1000 + endTime[1] / 1000000;
-            const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
-            
-            // RAM Hệ thống
-            const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1);
-            const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1);
-            const usedMem = (totalMem - freeMem).toFixed(1);
-            
-            const uptime = Math.floor(os.uptime() / 60);
+        getNetBytes().then(netStart => {
+          setTimeout(async () => {
+            try {
+              const endUsage = process.cpuUsage(startUsage);
+              const endTime = process.hrtime(startTime);
+              const netEnd = await getNetBytes();
 
-            let sysInfo = `🖥 *Hệ thống:* \`RAM: ${usedMem}/${totalMem}GB\` | \`CPU: ${cpuPercent}%\` | \`Uptime: ${uptime}p\`\n`;
-
-            if (list.length === 0) {
-              return bot.sendMessage(chatId, `${sysInfo}━━━━━━━━━━━━━━━━━━\n📭 Hiện chưa có luồng nào.`);
-            }
-            
-            list.forEach(s => {
-              const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
+              const elapTimeMs = endTime[0] * 1000 + endTime[1] / 1000000;
+              const elapSec = elapTimeMs / 1000;
+              const rxSpeedMbps = ((netEnd.rx - netStart.rx) * 8 / 1024 / 1024 / elapSec).toFixed(1);
+              const txSpeedMbps = ((netEnd.tx - netStart.tx) * 8 / 1024 / 1024 / elapSec).toFixed(1);
+              const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
               
-              let msgStr = `${icon} *LUỒNG #${s.id}*\n`;
-              msgStr += `🖥 *Hệ thống:* \`RAM: ${usedMem}/${totalMem}GB\` | \`CPU: ${cpuPercent}%\` | \`Uptime: ${uptime}p\`\n`;
-              msgStr += `━━━━━━━━━━━━━━━━━━\n`;
-              msgStr += `Trạng thái: \`${s.status}\`\n`;
-            if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
-            
-            let logBrief = s.lastLog;
-            if (s.status === 'live') {
-              const time = s.lastLog.match(/time=\S+/);
-              const bitrate = s.lastLog.match(/bitrate=\s*\S+/);
-              const speed = s.lastLog.match(/speed=\s*\S+/);
-              if (time && bitrate && speed) {
-                logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
+              const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1);
+              const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1);
+              const usedMem = (totalMem - freeMem).toFixed(1);
+              
+              const disk = await getDiskUsage();
+              const uptimeH = (os.uptime() / 3600).toFixed(1);
+
+              let sysInfo = `📊 *TRẠNG THÁI HỆ THỐNG*\n━━━━━━━━━━━━━━━━━━\n`;
+              sysInfo += `⏱ Uptime: \`${uptimeH}h\` | 🧠 RAM: \`${usedMem}/${totalMem}GB\`\n`;
+              sysInfo += `💽 Disk: \`${disk}\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
+              sysInfo += `🌐 Mạng: ⬇️ \`${rxSpeedMbps} Mbps\` | ⬆️ \`${txSpeedMbps} Mbps\`\n`;
+
+              if (list.length === 0) {
+                return bot.sendMessage(chatId, `${sysInfo}━━━━━━━━━━━━━━━━━━\n📭 Hiện chưa có luồng nào.`, { parse_mode: 'Markdown' });
               }
+              
+              // Gửi báo cáo hệ thống trước
+              await bot.sendMessage(chatId, sysInfo, { parse_mode: 'Markdown' });
+
+              // Sau đó gửi từng luồng
+              list.forEach(s => {
+                const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
+                
+                let msgStr = `${icon} *LUỒNG #${s.id}*\n`;
+                msgStr += `Trạng thái: \`${s.status}\`\n`;
+                if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
+                
+                let logBrief = s.lastLog;
+                if (s.status === 'live') {
+                  const time = s.lastLog.match(/time=\S+/);
+                  const bitrate = s.lastLog.match(/bitrate=\s*\S+/);
+                  const speed = s.lastLog.match(/speed=\s*\S+/);
+                  if (time && bitrate && speed) {
+                    logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
+                  }
+                }
+                msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
+                const buttons = [];
+                if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) {
+                  buttons.push([{ text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` }]);
+                } else {
+                  buttons.push([
+                    { text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` },
+                    { text: '🗑 Xóa luồng', callback_data: `delete_${s.id}` }
+                  ]);
+                }
+                bot.sendMessage(chatId, msgStr, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+              });
+            } catch(e) {
+              console.error('Lỗi khi xử lý lệnh status:', e);
+              bot.sendMessage(chatId, `❌ Lỗi lấy status: ${e.message}`);
             }
-            msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
-            const buttons = [];
-            if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) {
-              buttons.push([{ text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` }]);
-            } else {
-              buttons.push([
-                { text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` },
-                { text: '🗑 Xóa luồng', callback_data: `delete_${s.id}` }
-              ]);
-            }
-            bot.sendMessage(chatId, msgStr, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
-          });
-          } catch(e) {
-            console.error('Lỗi khi xử lý lệnh status:', e);
-            bot.sendMessage(chatId, `❌ Lỗi lấy status: ${e.message}`);
-          }
-        }, 1000);
-    }
+          }, 1000);
+        }).catch(e => console.error(e));
+      }
 
       else if (text === '/live' || text === '/once') {
         userStates.set(chatId, { cmd: text.substring(1), step: 'key', data: {} });
