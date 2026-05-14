@@ -5,20 +5,92 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, 'bot_config.json');
 
 const { exec } = require('child_process');
+const os = require('os');
+
 function getNetBytes() {
   return new Promise(resolve => {
-    exec('netstat -e', (err, stdout) => {
-      try {
-        if (!err && stdout) {
-          const bytesLine = stdout.split('\n').find(l => l.trim().startsWith('Bytes'));
-          if (bytesLine) {
-            const parts = bytesLine.trim().split(/\s+/);
-            return resolve({ rx: parseInt(parts[1]) || 0, tx: parseInt(parts[2]) || 0 });
+    if (os.platform() === 'win32') {
+      exec('netstat -e', (err, stdout) => {
+        try {
+          if (!err && stdout) {
+            const bytesLine = stdout.split('\n').find(l => l.trim().startsWith('Bytes'));
+            if (bytesLine) {
+              const parts = bytesLine.trim().split(/\s+/);
+              return resolve({ rx: parseInt(parts[1]) || 0, tx: parseInt(parts[2]) || 0 });
+            }
           }
-        }
-      } catch (e) {}
-      resolve({ rx: 0, tx: 0 });
-    });
+        } catch (e) {}
+        resolve({ rx: 0, tx: 0 });
+      });
+    } else {
+      // Linux: Đọc từ /proc/net/dev - Cải tiến dùng Regex để tránh lỗi dính chữ
+      exec('cat /proc/net/dev', (err, stdout) => {
+        try {
+          if (!err && stdout) {
+            const lines = stdout.split('\n');
+            let totalRx = 0, totalTx = 0;
+            lines.forEach(line => {
+              if (line.includes(':')) {
+                // Tách phần số liệu sau dấu hai chấm
+                const dataPart = line.split(':')[1].trim();
+                const parts = dataPart.split(/\s+/);
+                if (parts.length >= 16) {
+                  totalRx += parseInt(parts[0]) || 0;
+                  totalTx += parseInt(parts[8]) || 0;
+                }
+              }
+            });
+            return resolve({ rx: totalRx, tx: totalTx });
+          }
+        } catch (e) {}
+        resolve({ rx: 0, tx: 0 });
+      });
+    }
+  });
+}
+
+function getDiskUsage() {
+  return new Promise(resolve => {
+    if (os.platform() === 'win32') {
+      exec('wmic logicaldisk get size,freespace,caption', (err, stdout) => {
+        try {
+          if (!err && stdout) {
+            const lines = stdout.trim().split('\n').slice(1);
+            const cDrive = lines.find(l => l.includes('C:'));
+            if (cDrive) {
+              const [caption, free, size] = cDrive.trim().split(/\s+/);
+              const used = parseInt(size) - parseInt(free);
+              const pct = (used / parseInt(size) * 100).toFixed(0);
+              return resolve(`${(used/1024/1024/1024).toFixed(1)}/${(parseInt(size)/1024/1024/1024).toFixed(1)}GB (${pct}%)`);
+            }
+          }
+        } catch (e) {}
+        resolve('N/A');
+      });
+    } else {
+      // Linux: df -h / - Xử lý trường hợp tên thiết bị dài gây xuống dòng
+      exec('df -h /', (err, stdout) => {
+        try {
+          if (!err && stdout) {
+            const lines = stdout.trim().split('\n');
+            // Dòng cuối cùng thường chứa dữ liệu, nhưng nếu bị xuống dòng thì dữ liệu nằm ở dòng cuối
+            const lastLine = lines[lines.length - 1].trim();
+            const parts = lastLine.split(/\s+/);
+            
+            if (parts.length >= 5) {
+              // Cấu trúc: Filesystem Size Used Avail Use% Mounted
+              // Nếu parts.length là 6 -> [FS, Size, Used, Avail, Use%, Mount]
+              // Nếu parts.length là 5 (do xuống dòng) -> [Size, Used, Avail, Use%, Mount]
+              const size = parts.length === 6 ? parts[1] : parts[0];
+              const used = parts.length === 6 ? parts[2] : parts[1];
+              const pct = parts.length === 6 ? parts[4] : parts[3];
+              return resolve(`${used}/${size} (${pct})`);
+            }
+          }
+        } catch (e) {}
+        resolve('N/A');
+      });
+    }
   });
 }
 
@@ -96,11 +168,17 @@ function initBot(actions) {
 
           const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
           const active = list.filter(s => s.status === 'live').length;
-          const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
-          const uptimeH = (process.uptime() / 3600).toFixed(1);
+          
+          // RAM Hệ thống
+          const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1);
+          const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1);
+          const usedMem = (totalMem - freeMem).toFixed(1);
+          const disk = await getDiskUsage();
+          const uptimeH = (os.uptime() / 3600).toFixed(1);
 
           let report = `📊 *BÁO CÁO HỆ THỐNG ĐỊNH KỲ*\n━━━━━━━━━━━━━━━━━━\n`;
-          report += `⏱ Uptime: \`${uptimeH}h\` | 🧠 RAM: \`${mem}MB\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
+          report += `⏱ Uptime: \`${uptimeH}h\` | 🧠 RAM: \`${usedMem}/${totalMem}GB\`\n`;
+          report += `💽 Disk: \`${disk}\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
           report += `🌐 Mạng: ⬇️ \`${rxSpeedMbps} Mbps\` | ⬆️ \`${txSpeedMbps} Mbps\`\n`;
           report += `📺 Luồng: \`${active}/${list.length}\` đang chạy\n\n`;
 
@@ -176,10 +254,15 @@ function initBot(actions) {
           const endTime = process.hrtime(startTime);
           const elapTimeMs = endTime[0] * 1000 + endTime[1] / 1000000;
           const cpuPercent = (100 * (endUsage.user + endUsage.system) / 1000 / elapTimeMs).toFixed(1);
-          const mem = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
-          const uptime = Math.floor(process.uptime() / 60);
+          
+          // RAM Hệ thống
+          const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(1);
+          const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(1);
+          const usedMem = (totalMem - freeMem).toFixed(1);
+          
+          const uptime = Math.floor(os.uptime() / 60);
 
-          let sysInfo = `🖥 *Hệ thống:* \`RAM: ${mem}MB\` | \`CPU: ${cpuPercent}%\` | \`Uptime: ${uptime}p\`\n`;
+          let sysInfo = `🖥 *Hệ thống:* \`RAM: ${usedMem}/${totalMem}GB\` | \`CPU: ${cpuPercent}%\` | \`Uptime: ${uptime}p\`\n`;
 
           if (list.length === 0) {
             return bot.sendMessage(chatId, `${sysInfo}━━━━━━━━━━━━━━━━━━\n📭 Hiện chưa có luồng nào.`);
