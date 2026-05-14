@@ -589,6 +589,10 @@ initBot({
       return true;
     }
     return false;
+  },
+  rebootServer: () => {
+    console.log('[System] Bot yêu cầu khởi động lại (Reboot)...');
+    process.exit(1);
   }
 });
 
