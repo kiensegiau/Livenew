@@ -19,9 +19,12 @@ function extractDriveId(url) {
 function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, reject) {
   if (attempt > 3) return reject(new Error("Quá số vòng Redirect tối đa của Google Drive."));
 
-  const options = { headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
-  } };
+  const options = { 
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+    },
+    highWaterMark: 1024 * 1024 * 4 // Tăng bộ đệm đọc lên 4MB để tối đa hóa băng thông 1Gbps
+  };
   if (cookieString) options.headers['Cookie'] = cookieString;
 
   const transport = url.startsWith('http://') ? http : https;
@@ -89,21 +92,29 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
       const finalDest = path.join(destPath, filename);
       if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
 
-      const fileStream = fs.createWriteStream(finalDest);
+      // Tăng bộ đệm ghi file lên 4MB để giảm tải I/O đĩa, tăng tốc độ ghi
+      const fileStream = fs.createWriteStream(finalDest, { highWaterMark: 1024 * 1024 * 4 });
       let downloadedBytes = 0;
 
       res.pipe(fileStream);
 
-      // Cập nhật tiến độ mỗi 1 giây để tránh gửi quá nhiều log
-      let lastReport = 0;
+      // Cập nhật tiến độ mỗi 1 giây và tính tốc độ tải thực tế
+      let lastReport = Date.now();
+      let lastReportBytes = 0;
+
       res.on('data', (chunk) => {
         downloadedBytes += chunk.length;
         if (onProgress) {
           const now = Date.now();
-          if (now - lastReport > 1000) {
+          const timePassed = now - lastReport;
+          if (timePassed >= 1000) {
             const percentage = totalBytes ? Math.round((downloadedBytes / totalBytes) * 100) : null;
-            onProgress(downloadedBytes, totalBytes, percentage);
+            const speedBytesPerSec = (downloadedBytes - lastReportBytes) / (timePassed / 1000);
+            
+            onProgress(downloadedBytes, totalBytes, percentage, speedBytesPerSec);
+            
             lastReport = now;
+            lastReportBytes = downloadedBytes;
           }
         }
       });

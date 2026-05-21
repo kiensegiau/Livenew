@@ -454,23 +454,26 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id }
     console.log(`\n[Stream #${streamId}] ⬇️ Bắt đầu tải video từ Google Drive...`);
     console.log(`[Stream #${streamId}] 🔗 Link: ${cleanFile}`);
     
-    downloadGoogleDriveFile(cleanFile, DOWNLOAD_DIR, (dl, total, pct) => {
+    downloadGoogleDriveFile(cleanFile, DOWNLOAD_DIR, (dl, total, pct, speed) => {
       const s = streams.get(streamId);
       if (s) {
         const dualText = s.dualStream ? '⚡ [SONG SONG A+B]' : '📡 [ĐƠN LUỒNG]';
+        const speedMBs = speed ? (speed / 1024 / 1024).toFixed(1) : '0.0';
+        const speedMbps = speed ? (speed * 8 / 1024 / 1024).toFixed(1) : '0.0';
+        
         if (pct !== null) {
-          s.lastLog = `Đang tải... ${pct}%`;
-          console.log(`[Stream #${streamId}] ⏳ Tiến độ: ${pct}% (${(dl/1024/1024).toFixed(2)} MB / ${(total/1024/1024).toFixed(2)} MB)`);
+          s.lastLog = `Đang tải... ${pct}% (${speedMBs} MB/s)`;
+          console.log(`[Stream #${streamId}] ⏳ Tiến độ: ${pct}% (${(dl/1024/1024).toFixed(2)} MB / ${(total/1024/1024).toFixed(2)} MB) | Tốc độ: ${speedMBs} MB/s (${speedMbps} Mbps)`);
           
           // Tạo thanh tiến trình trực quan
           const filled = Math.round(pct / 10);
           const bar = '■'.repeat(filled) + '□'.repeat(10 - filled);
-          updateProgress(streamId, pct, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[${bar}] ${pct}%\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB\`\n📡 Cấu hình: \`${dualText}\``);
+          updateProgress(streamId, pct, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[${bar}] ${pct}%\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB\`\n⚡ Tốc độ: \`${speedMBs} MB/s\` (${speedMbps} Mbps)\n📡 Cấu hình: \`${dualText}\``);
         }
         else {
-          s.lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB`;
-          console.log(`[Stream #${streamId}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB`);
-          updateProgress(streamId, null, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[Đang tải...]\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n📡 Cấu hình: \`${dualText}\``);
+          s.lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB (${speedMBs} MB/s)`;
+          console.log(`[Stream #${streamId}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB | Tốc độ: ${speedMBs} MB/s`);
+          updateProgress(streamId, null, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[Đang tải...]\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n⚡ Tốc độ: \`${speedMBs} MB/s\`\n📡 Cấu hình: \`${dualText}\``);
         }
       }
     }).then(filePath => {
