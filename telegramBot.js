@@ -194,7 +194,8 @@ function initBot(actions) {
                   logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
                 }
               }
-              report += `${icon} *#${s.id}*: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\`\n`;
+              const dualText = s.dualStream ? ' [Song song ⚡]' : '';
+              report += `${icon} *#${s.id}*${dualText}: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\`\n`;
             });
           } else {
             report += `📭 _Hiện không có luồng nào đang hoạt động._`;
@@ -287,6 +288,8 @@ function initBot(actions) {
                 
                 let msgStr = `${icon} *LUỒNG #${s.id}*\n`;
                 msgStr += `Trạng thái: \`${s.status}\`\n`;
+                const protection = s.dualStream ? 'Song song A+B ⚡ (Bảo vệ tối đa)' : 'Đơn luồng 📡';
+                msgStr += `🛡️ Chế độ phát: \`${protection}\`\n`;
                 if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
                 
                 let logBrief = s.lastLog;
@@ -343,7 +346,7 @@ function initBot(actions) {
           bot.sendMessage(chatId, `❌ Lỗi: \`${escapeMarkdown(result.error)}\``, { parse_mode: 'Markdown' });
         } else {
           const displayFile = result.file ? path.basename(result.file) : 'Google Drive Video';
-          bot.sendMessage(chatId, `🚀 *ĐÃ TẠO LUỒNG #${result.id} THÀNH CÔNG*\n🎞 Video: \`${displayFile}\`\n🔄 Chế độ: \`${isOnce ? 'Phát 1 lần' : 'Phát lặp'}\``, { parse_mode: 'Markdown' });
+          bot.sendMessage(chatId, `🚀 *ĐÃ TẠO LUỒNG #${result.id} THÀNH CÔNG*\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${displayFile}\`\n🔄 Chế độ: \`${isOnce ? 'Phát 1 lần' : 'Phát lặp'}\`\n📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``, { parse_mode: 'Markdown' });
         }
       }
 
@@ -365,7 +368,7 @@ function initBot(actions) {
           }
           const result = actions.startStream({ key: parts[1], file: parts.slice(2).join(' '), mode: 'scheduled', scheduledMode: isOnce ? 'once' : 'loop', minutes, scheduledTime });
           if (result.error) bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
-          else bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id}* lúc \`${new Date(scheduledTime).toLocaleString('vi-VN')}\``, { parse_mode: 'Markdown' });
+          else bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id} THÀNH CÔNG*\n━━━━━━━━━━━━━━━━━━\n⏰ Thời gian: \`${new Date(scheduledTime).toLocaleString('vi-VN')}\`\n📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``, { parse_mode: 'Markdown' });
       }
 
       else if (text.startsWith('/log ')) {

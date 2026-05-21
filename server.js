@@ -36,7 +36,7 @@ function escapeMarkdown(text) {
 function saveStreams() {
   const data = Array.from(streams.values()).map(s => ({
     id: s.id, key: s.key, file: s.file, originalFile: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, 
-    scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, status: s.status
+    scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, status: s.status, dualStream: !!s.dualStream
   }));
   fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
 }
@@ -53,7 +53,7 @@ function loadStreams() {
           
           if (s.status === 'downloading') {
               // Nếu đang tải dở lúc sập mạng -> bắt buộc tải lại
-              startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
+              startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id, dualStream: s.dualStream });
           } else if (s.status === 'scheduled') {
               proceedStartStream(s.id);
           } else {
@@ -63,7 +63,7 @@ function loadStreams() {
               } 
               // Nếu file bị xóa mất nhưng có link gốc -> tải lại để cứu rỗi
               else if (s.originalFile && s.originalFile.startsWith('http')) {
-                  startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id });
+                  startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id, dualStream: s.dualStream });
               } 
               // Các trường hợp khác
               else {
@@ -78,25 +78,39 @@ function loadStreams() {
 }
 
 function cleanupOrphanedFiles() {
-  // Tạm thời vô hiệu hóa việc tự động xóa khi khởi động để tránh mất file
-  console.log('[System] 🧹 Chế độ dọn dẹp tự động đã được tạm tắt để bảo vệ file của bạn.');
+  console.log('[System] 🧹 Đang quét dọn dẹp tự động các file video tạm không sử dụng...');
+  if (!fs.existsSync(DOWNLOAD_DIR)) return;
+  
+  fs.readdir(DOWNLOAD_DIR, (err, files) => {
+    if (err) return console.error('[Cleanup] Không thể đọc thư mục downloads:', err.message);
+    
+    // Lấy danh sách tất cả các file đang được sử dụng trong map streams
+    const activeFiles = new Set();
+    for (const s of streams.values()) {
+      if (s.file) activeFiles.add(path.resolve(s.file));
+      if (s.originalFile) activeFiles.add(path.resolve(s.originalFile));
+    }
+    
+    files.forEach(file => {
+      if (file === '.gitkeep') return;
+      const fullPath = path.join(DOWNLOAD_DIR, file);
+      const resolvedPath = path.resolve(fullPath);
+      
+      // Nếu file không thuộc bất kỳ luồng hoạt động nào -> XÓA NGAY!
+      if (!activeFiles.has(resolvedPath)) {
+        fs.unlink(fullPath, (err) => {
+          if (err) {
+            console.error(`[Cleanup] Lỗi tự động xóa file mồ côi ${file}:`, err.message);
+          } else {
+            console.log(`[Cleanup] ✅ Tự động dọn dẹp file rác mồ côi: ${file}`);
+          }
+        });
+      }
+    });
+  });
 }
 
-// Xóa file tạm sau khi luồng kết thúc (chỉ file tải từ Drive)
-function cleanupFile(filePath) {
-  if (!filePath) return;
-  // Chỉ xóa các file trong thư mục downloads (tránh xóa nhầm file gốc)
-  if (filePath.includes(DOWNLOAD_DIR) && fs.existsSync(filePath)) {
-    setTimeout(() => {
-      try {
-        fs.unlinkSync(filePath);
-        console.log(`[System] 🗑 Đã xóa file tạm: ${filePath}`);
-      } catch (e) {
-        console.error(`[System] ⚠️ Không thể xóa file tạm: ${e.message}`);
-      }
-    }, 5000); // Đợi 5 giây cho chắc trước khi xóa
-  }
-}
+// Xóa file tạm sau khi luồng kết thúc (sử dụng hàm có retry thông minh bên dưới)
 
 async function checkFFmpeg() {
   const localFF = path.join(__dirname, 'ffmpeg.exe');
@@ -180,9 +194,52 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     return;
   }
 
+  let info = streams.get(id);
+  if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
+
+  info.dualStream = true; // Luôn luôn phát song song 2 luồng A+B để tránh mọi sự cố
+  const currentRetry = info.retryCount || 0;
+  const serverLetter = (currentRetry % 2 === 0) ? 'a' : 'b';
+
   const mins = Math.max(0, parseInt(minutes) || 0);
   const loopArg = mode === 'loop' ? ['-stream_loop', '-1'] : [];
   const timeArg = mode === 'loop' && mins > 0 ? ['-t', String(mins * 60)] : [];
+
+  let serverName = '';
+  let formatArgs = [];
+  let outputUrl = '';
+
+  if (info.dualStream) {
+    serverName = 'Song song cả hai Máy chủ A và B';
+    console.log(`[Stream #${id}] 🔗 Khởi chạy luồng phát SONG SONG cả 2 Máy chủ chính (A) và dự phòng (B)`);
+    
+    const rtmpA = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://a.rtmp.youtube.com/live2/${key}`;
+    const rtmpB = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://b.rtmp.youtube.com/live2/${key}`;
+    
+    formatArgs = [
+      '-map', '0',               // BẮT BUỘC: Ánh xạ toàn bộ luồng đầu vào cho tee muxer hoạt động
+      '-c', 'copy',
+      '-bsf:a', 'aac_adtstoasc',
+      '-f', 'tee'
+    ];
+    outputUrl = `${rtmpA}|${rtmpB}`;
+  } else {
+    const fallbackServerName = serverLetter === 'a' ? 'Máy chủ chính (A)' : 'Máy chủ dự phòng (B)';
+    serverName = fallbackServerName;
+    console.log(`[Stream #${id}] 🔗 Sử dụng YouTube Ingestion Server: ${fallbackServerName}`);
+    
+    formatArgs = [
+      '-c', 'copy',
+      '-bsf:a', 'aac_adtstoasc',
+      '-bufsize', '30000k',        // Bộ đệm dữ liệu lớn
+      '-maxrate', '5000k',         
+      '-rtmp_buffer', '30000',     // SIÊU BỘ ĐỆM: Chờ mạng tối đa 30 giây
+      '-rtmp_live', 'live', 
+      '-f', 'flv',
+      '-flvflags', 'no_duration_filesize'
+    ];
+    outputUrl = `rtmp://${serverLetter}.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
+  }
 
   // -c copy = lightest: zero decode/encode, pure remux to FLV
   // -bsf:a aac_adtstoasc = required to wrap ADTS AAC → MPEG-4 AAC for FLV
@@ -193,17 +250,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     '-fflags', '+genpts',        // Sửa timestamp khi copy
     '-i', file,
     ...timeArg,
-
-    // ================== CẤU HÌNH SIÊU BỘ ĐỆM (CHỐNG MẠNG CHẬP CHỜN) ==================
-    '-c', 'copy',
-    '-bsf:a', 'aac_adtstoasc',
-    '-bufsize', '30000k',        // Bộ đệm dữ liệu lớn
-    '-maxrate', '5000k',         
-    '-rtmp_buffer', '30000',     // SIÊU BỘ ĐỆM: Chờ mạng tối đa 30 giây
-    '-rtmp_live', 'live', 
-    '-f', 'flv',
-    '-flvflags', 'no_duration_filesize',
-    `rtmp://a.rtmp.youtube.com/live2/${key}?tcp_nodelay=1`
+    ...formatArgs,
+    outputUrl
   ];
 
   const localFF = path.join(__dirname, 'ffmpeg.exe');
@@ -223,16 +271,31 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     broadcast(`❌ *LUỒNG #${id} KHÔNG THỂ KHỞI CHẠY!*\nLỗi: \`${err.message}\``);
   });
 
-  let info = streams.get(id);
-  if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
-
   info.process = proc;
   info.pid = proc.pid;
   info.status = 'live';
   info.startTime = new Date().toISOString();
   info.retryCount = info.retryCount || 0; // Đếm số lần retry
   const fileName = path.basename(info.file);
-  broadcast(`🟢 *LUỒNG #${id} BẮT ĐẦU LIVE!*\n🎞 Video: \`${fileName}\``);
+
+  if (info.dualStream) {
+    broadcast(`🚀 *LUỒNG #${id} BẮT ĐẦU LIVE (SONG SONG A+B) ⚡*\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${fileName}\`\n📡 Chế độ: \`Song song cả 2 Máy chủ chính & dự phòng (Độ ổn định cực hạn)\`\n🛡 Trạng thái bảo vệ: \`Hoạt động song song (High Redundancy Active)\``);
+  } else {
+    broadcast(`🟢 *LUỒNG #${id} BẮT ĐẦU LIVE!*\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${fileName}\`\n📡 Ingest Server: \`${serverName}\` (Đơn luồng)`);
+  }
+
+  // --- CƠ CHẾ KHÔI PHỤC THÔNG MINH: RESET RETRY COUNT KHI LIVE ỔN ĐỊNH ---
+  if (info._stableTimer) {
+    clearTimeout(info._stableTimer);
+    info._stableTimer = null;
+  }
+  info._stableTimer = setTimeout(() => {
+    const s = streams.get(id);
+    if (s && s.status === 'live') {
+      console.log(`[Stream #${id}] 🟢 Luồng phát đã chạy ổn định trên 60 giây. Reset retryCount về 0.`);
+      s.retryCount = 0;
+    }
+  }, 60000);
 
   proc.on('error', (err) => {
     const s = streams.get(id);
@@ -265,15 +328,23 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     // Dọn _killTimer nếu có
     if (s._killTimer) { clearTimeout(s._killTimer); s._killTimer = null; }
 
+    // Dọn _stableTimer nếu có
+    if (s._stableTimer) { clearTimeout(s._stableTimer); s._stableTimer = null; }
+
     // Nếu do user bấm stop → status đã là 'stopped', không làm gì thêm
     if (s.status === 'stopped') return;
 
-    if (code !== 0 && s.retryCount < 5) {
+    // Thiết lập số lần thử lại tối đa (chế độ loop cho phép reconnect vô hạn)
+    const maxRetry = s.mode === 'loop' ? 999 : 50;
+    const isErrorOrLoop = (code !== 0) || (s.mode === 'loop');
+
+    if (isErrorOrLoop && s.retryCount < maxRetry) {
       s.status = 'reconnecting';
       s.retryCount++;
-      const msg = `[Stream #${id}] Lỗi (code ${code}), thử lại lần ${s.retryCount} sau 10s...`;
+      const maxRetryText = s.mode === 'loop' ? '∞' : maxRetry;
+      const msg = `[Stream #${id}] Luồng bị ngắt (mã ${code}), đang kết nối lại lần ${s.retryCount}/${maxRetryText} sau 10 giây...`;
       console.log(msg);
-      broadcast(`🟡 *Luồng #${id} bị văng (code ${code})*\nĐang thử kết nối lại lần ${s.retryCount}/5...`);
+      broadcast(`🟡 *Luồng #${id} bị văng (mã ${code})*\nĐang thử kết nối lại lần ${s.retryCount}/${maxRetryText}...`);
       s.timer = setTimeout(() => {
         if (streams.has(id) && streams.get(id).status === 'reconnecting') {
            launchFFmpeg(id, key, file, mode, minutes);
@@ -287,8 +358,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
       } else {
         broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n🎞 Video: \`${path.basename(s.file)}\``);
       }
-      // Xóa file nếu luồng kết thúc (không phải đang reconnect)
-      cleanupFile(s.file);
+      // KHÔNG tự ý xóa file tạm khi luồng sập nữa để bảo vệ khả năng bật lại
+      console.log(`[Stream #${id}] Luồng đã kết thúc vĩnh viễn. Giữ lại file video tạm.`);
     }
     saveStreams(); // Lưu backup khi trạng thái thay đổi
   });
@@ -326,11 +397,11 @@ function proceedStartStream(id) {
   }
 }
 
-function startStream({ key, file, mode, minutes, scheduledTime }) {
+function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id }) {
   // Nếu không có luồng nào, reset số thứ tự về 1
-  if (streams.size === 0) nextId = 1;
+  if (streams.size === 0 && !id) nextId = 1;
   
-  const id = nextId++;
+  const streamId = id || nextId++;
   const isDrive = !!extractDriveId(file);
 
   if (mode === 'scheduled') {
@@ -340,12 +411,13 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
   }
 
   const info = {
-    id, key, file, originalFile: file, mode, minutes, scheduledTime,
+    id: streamId, key, file, originalFile: file, mode, minutes, scheduledTime,
+    dualStream: true,
     status: isDrive ? 'downloading' : (mode === 'scheduled' ? 'scheduled' : 'launching'),
     startTime: null,
     process: null, pid: null, lastLog: '', retryCount: 0
   };
-  streams.set(id, info);
+  streams.set(streamId, info);
 
   if (isDrive) {
     // Làm sạch link: lấy URL thực sự nếu người dùng dán thừa text
@@ -353,45 +425,51 @@ function startStream({ key, file, mode, minutes, scheduledTime }) {
     const cleanFile = urlMatch ? urlMatch[0] : file;
     
     info.lastLog = 'Đang bắt đầu tải file từ Drive...';
-    console.log(`\n[Stream #${id}] ⬇️ Bắt đầu tải video từ Google Drive...`);
-    console.log(`[Stream #${id}] 🔗 Link: ${cleanFile}`);
+    console.log(`\n[Stream #${streamId}] ⬇️ Bắt đầu tải video từ Google Drive...`);
+    console.log(`[Stream #${streamId}] 🔗 Link: ${cleanFile}`);
     
     downloadGoogleDriveFile(cleanFile, DOWNLOAD_DIR, (dl, total, pct) => {
-      if (streams.has(id)) {
+      const s = streams.get(streamId);
+      if (s) {
+        const dualText = s.dualStream ? '⚡ [SONG SONG A+B]' : '📡 [ĐƠN LUỒNG]';
         if (pct !== null) {
-          streams.get(id).lastLog = `Đang tải... ${pct}%`;
-          console.log(`[Stream #${id}] ⏳ Tiến độ: ${pct}% (${(dl/1024/1024).toFixed(2)} MB / ${(total/1024/1024).toFixed(2)} MB)`);
-          updateProgress(id, pct, `⬇️ *Luồng #${id}* đang tải: \`${pct}%\` (${(dl/1024/1024).toFixed(1)}/${(total/1024/1024).toFixed(1)} MB)`);
+          s.lastLog = `Đang tải... ${pct}%`;
+          console.log(`[Stream #${streamId}] ⏳ Tiến độ: ${pct}% (${(dl/1024/1024).toFixed(2)} MB / ${(total/1024/1024).toFixed(2)} MB)`);
+          
+          // Tạo thanh tiến trình trực quan
+          const filled = Math.round(pct / 10);
+          const bar = '■'.repeat(filled) + '□'.repeat(10 - filled);
+          updateProgress(streamId, pct, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[${bar}] ${pct}%\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB\`\n📡 Cấu hình: \`${dualText}\``);
         }
         else {
-          streams.get(id).lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB`;
-          console.log(`[Stream #${id}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB`);
-          updateProgress(id, null, `⬇️ *LUỒNG #${id}* đang tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n🔗 File: \`${path.basename(cleanFile)}\``);
+          s.lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB`;
+          console.log(`[Stream #${streamId}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB`);
+          updateProgress(streamId, null, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[Đang tải...]\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n📡 Cấu hình: \`${dualText}\``);
         }
       }
     }).then(filePath => {
-      const s = streams.get(id);
+      const s = streams.get(streamId);
       if (!s || s.status === 'stopped') return;
       s.file = filePath;
       s.lastLog = 'Tải xong, chuẩn bị live...';
-      console.log(`\n[Stream #${id}] ✅ TẢI XONG! File được lưu tạm tại: ${filePath}`);
-      console.log(`[Stream #${id}] 🚀 Bắt đầu kích hoạt FFmpeg...`);
-      updateProgress(id, 100, `✅ *LUỒNG #${id}* đã tải xong!\n🎞 Video: \`${path.basename(filePath)}\`\n🚀 Đang kích hoạt phát Live...`);
-      proceedStartStream(id);
+      console.log(`\n[Stream #${streamId}] ✅ TẢI XONG! File được lưu tạm tại: ${filePath}`);
+      console.log(`[Stream #${streamId}] 🚀 Bắt đầu kích hoạt FFmpeg...`);
+      updateProgress(streamId, 100, `✅ *LUỒNG #${streamId}* - TẢI VIDEO THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${path.basename(filePath)}\`\n🚀 Trạng thái: \`Đang kích hoạt phát Live...\``);
+      proceedStartStream(streamId);
     }).catch(err => {
-      const s = streams.get(id);
+      const s = streams.get(streamId);
       if (!s) return;
       s.status = 'ended';
       s.lastLog = `❌ Lỗi tải Drive: ${err.message}`;
-      console.error(`\n[Stream #${id}] ❌ Lỗi tải Google Drive: ${err.message}`);
-      broadcast(`❌ *Lỗi tải Drive (Luồng #${id})*\n${err.message}`);
+      console.error(`\n[Stream #${streamId}] ❌ Lỗi tải Google Drive: ${err.message}`);
+      broadcast(`❌ *Lỗi tải Drive (Luồng #${streamId})*\n${err.message}`);
     });
     
-    return { id, status: 'downloading', scheduledTime };
+    return { id: streamId, status: 'downloading', scheduledTime };
   } else {
     saveStreams(); // Lưu lại ngay khi tạo luồng mới
-    proceedStartStream(id);
-    return { id, status: info.status, scheduledTime };
+    proceedStartStream(streamId);
+    return { id: streamId, status: info.status, scheduledTime };
   }
 }
 
@@ -521,10 +599,12 @@ const server = http.createServer(async (req, res) => {
     let count = 0;
     for (const [id, s] of streams) {
       if (s.status === 'stopped' || s.status === 'ended') {
+        cleanupFile(s.file);
         streams.delete(id);
         count++;
       }
     }
+    cleanupOrphanedFiles();
     json(res, 200, { cleared: count });
     return;
   }
@@ -549,7 +629,8 @@ const server = http.createServer(async (req, res) => {
         startTime: s.startTime,
         scheduledTime: s.scheduledTime,
         lastLog: s.lastLog || '',
-        retryCount: s.retryCount || 0
+        retryCount: s.retryCount || 0,
+        dualStream: !!s.dualStream
       });
     }
     json(res, 200, list);
@@ -569,10 +650,12 @@ initBot({
     let count = 0;
     for (const [id, s] of streams) {
       if (s.status === 'stopped' || s.status === 'ended') {
+        cleanupFile(s.file);
         streams.delete(id);
         count++;
       }
     }
+    cleanupOrphanedFiles();
     saveStreams();
     return count;
   },
@@ -583,8 +666,12 @@ initBot({
   deleteStream: (id) => {
     const s = streams.get(id);
     if (s) {
-      if (s.process) s.process.kill();
+      if (s.process) {
+        try { s.process.kill(); } catch (_) {}
+      }
+      cleanupFile(s.file);
       streams.delete(id);
+      cleanupOrphanedFiles();
       saveStreams();
       return true;
     }
@@ -603,6 +690,10 @@ server.listen(PORT, '0.0.0.0', async () => {
   }
   loadStreams(); // Khôi phục danh sách luồng trước
   cleanupOrphanedFiles(); // Sau đó mới dọn dẹp các file không nằm trong danh sách
+  
+  // Tự động quét dọn định kỳ mỗi 1 tiếng
+  setInterval(cleanupOrphanedFiles, 60 * 60 * 1000);
+  
   const addr = `http://localhost:${PORT}`;
   console.log('\n╔══════════════════════════════════════╗');
   console.log(`║  🎬 YouTube Live Controller PRO       ║`);

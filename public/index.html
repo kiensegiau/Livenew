@@ -199,6 +199,14 @@
   .status-dot.downloading { background: var(--accent); animation: pulse 0.8s infinite; box-shadow: 0 0 8px var(--accent); }
   .status-badge.downloading { background: rgba(168,85,247,0.15); color: var(--accent); border: 1px solid rgba(168,85,247,0.3); }
 
+  .protection-badge {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px;
+    padding: 3px 8px; border-radius: 20px;
+    background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.35);
+    display: inline-flex; align-items: center; gap: 4px;
+    box-shadow: 0 0 8px rgba(59,130,246,0.1);
+  }
+
   .btn-stop, .btn-restart {
     padding: 5px 10px; font-size: 0.72rem; border-radius: 6px;
     cursor: pointer; font-family: inherit; font-weight: 600;
@@ -470,7 +478,7 @@ function renderStreams(list) {
       <div class="stream-item">
         <div class="status-dot ${s.status}"></div>
         <div class="stream-info">
-          <div class="stream-name">#${s.id} · ${modeLabel(s.mode)}</div>
+          <div class="stream-name">#${s.id} · ${modeLabel(s.mode)} ${s.dualStream ? `<span class="protection-badge" style="margin-left: 8px;">Song song A+B ⚡</span>` : ''}</div>
           <div class="stream-meta">${meta}</div>
           ${s.lastLog ? `<div style="font-size: 0.65rem; color: var(--yellow); margin-top: 2px;">⚠️ ${s.lastLog}</div>` : ''}
         </div>
