@@ -194,7 +194,16 @@ function initBot(actions) {
                   logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
                 }
               }
-              const dualText = s.dualStream ? ' [Song song ⚡]' : '';
+              let dualText = '';
+              if (s.dualStream) {
+                if (s.status === 'live') {
+                  const actA = (s.streamAActive !== false) ? '🟢' : '🔴';
+                  const actB = (s.streamBActive !== false) ? '🟢' : '🔴';
+                  dualText = ` [Song song ⚡ A:${actA} B:${actB}]`;
+                } else {
+                  dualText = ' [Song song ⚡]';
+                }
+              }
               report += `${icon} *#${s.id}*${dualText}: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\`\n`;
             });
           } else {
@@ -290,6 +299,12 @@ function initBot(actions) {
                 msgStr += `Trạng thái: \`${s.status}\`\n`;
                 const protection = s.dualStream ? 'Song song A+B ⚡ (Bảo vệ tối đa)' : 'Đơn luồng 📡';
                 msgStr += `🛡️ Chế độ phát: \`${protection}\`\n`;
+                if (s.dualStream && s.status === 'live') {
+                  const statusA = (s.streamAActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
+                  const statusB = (s.streamBActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
+                  msgStr += `  ├─ 🇺🇸 Luồng A (Primary): \`${statusA}\`\n`;
+                  msgStr += `  └─ 🇸🇬 Luồng B (Backup): \`${statusB}\`\n`;
+                }
                 if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
                 
                 let logBrief = s.lastLog;

@@ -469,6 +469,11 @@ function renderStreams(list) {
       const elapsed = Math.floor((Date.now() - new Date(s.startTime)) / 1000);
       meta += ' · ' + formatDuration(elapsed);
     }
+    if (s.dualStream && s.status === 'live') {
+      const actA = (s.streamAActive !== false) ? '<span style="color:#22c55e">● A</span>' : '<span style="color:#ef4444">● A</span>';
+      const actB = (s.streamBActive !== false) ? '<span style="color:#22c55e">● B</span>' : '<span style="color:#ef4444">● B</span>';
+      meta += ` · ${actA} | ${actB}`;
+    }
     if (s.status === 'scheduled' && s.scheduledTime) {
       const remaining = Math.max(0, Math.floor((new Date(s.scheduledTime) - Date.now()) / 1000));
       meta += ' · Bắt đầu sau <span class="countdown">' + formatDuration(remaining) + '</span>';

@@ -198,6 +198,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
 
   info.dualStream = true; // Luôn luôn phát song song 2 luồng A+B để tránh mọi sự cố
+  info.streamAActive = true;
+  info.streamBActive = true;
   const currentRetry = info.retryCount || 0;
   const serverLetter = (currentRetry % 2 === 0) ? 'a' : 'b';
 
@@ -318,6 +320,20 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     if (s) {
         const lines = errBuf.split('\n').filter(Boolean);
         s.lastLog = lines.pop() || '';
+        
+        // Phát hiện rớt kết nối từng nhánh A hoặc B của tee muxer
+        if (dataStr.includes('Slave muxer #0 failed') || errBuf.includes('Slave muxer #0 failed')) {
+            if (s.streamAActive !== false) {
+                s.streamAActive = false;
+                broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
+            }
+        }
+        if (dataStr.includes('Slave muxer #1 failed') || errBuf.includes('Slave muxer #1 failed')) {
+            if (s.streamBActive !== false) {
+                s.streamBActive = false;
+                broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);
+            }
+        }
     }
   });
 
@@ -632,7 +648,9 @@ const server = http.createServer(async (req, res) => {
         scheduledTime: s.scheduledTime,
         lastLog: s.lastLog || '',
         retryCount: s.retryCount || 0,
-        dualStream: !!s.dualStream
+        dualStream: !!s.dualStream,
+        streamAActive: s.streamAActive !== false,
+        streamBActive: s.streamBActive !== false
       });
     }
     json(res, 200, list);
