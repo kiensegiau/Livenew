@@ -217,8 +217,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     serverName = 'Song song cả hai Máy chủ A và B';
     console.log(`[Stream #${id}] 🔗 Khởi chạy luồng phát SONG SONG cả 2 Máy chủ chính (A) và dự phòng (B)`);
     
-    const rtmpA = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://a.rtmp.youtube.com/live2/${key}`;
-    const rtmpB = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://b.rtmp.youtube.com/live2/${key}`;
+    const rtmpA = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://a.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
+    const rtmpB = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://b.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
     
     formatArgs = [
       '-map', '0',               // BẮT BUỘC: Ánh xạ toàn bộ luồng đầu vào cho tee muxer hoạt động
@@ -320,14 +320,15 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     errBuf = (errBuf + dataStr).slice(-2000); 
     const s = streams.get(id);
     if (s) {
-        const lines = errBuf.split('\n').filter(Boolean);
-        s.lastLog = lines.pop() || '';
+        // Thay thế \r thành \n để bóc tách log dòng tiến trình chính xác, tránh đè rác
+        const cleanLines = errBuf.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean);
+        s.lastLog = cleanLines[cleanLines.length - 1] || '';
         
         // Phát hiện rớt kết nối từng nhánh A hoặc B của tee muxer
         if (dataStr.includes('Slave muxer #0 failed') || errBuf.includes('Slave muxer #0 failed')) {
             if (s.streamAActive !== false) {
                 s.streamAActive = false;
-                const rtmpLines = errBuf.split('\n').filter(Boolean).reverse();
+                const rtmpLines = errBuf.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean).reverse();
                 const errLine = rtmpLines.find(l => l.includes('rtmp') || l.includes('Connection') || l.includes('failed') || l.includes('Error')) || 'Slave muxer #0 failed';
                 s.streamALog = errLine.trim();
                 broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
@@ -336,7 +337,7 @@ function launchFFmpeg(id, key, file, mode, minutes) {
         if (dataStr.includes('Slave muxer #1 failed') || errBuf.includes('Slave muxer #1 failed')) {
             if (s.streamBActive !== false) {
                 s.streamBActive = false;
-                const rtmpLines = errBuf.split('\n').filter(Boolean).reverse();
+                const rtmpLines = errBuf.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean).reverse();
                 const errLine = rtmpLines.find(l => l.includes('rtmp') || l.includes('Connection') || l.includes('failed') || l.includes('Error')) || 'Slave muxer #1 failed';
                 s.streamBLog = errLine.trim();
                 broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);

@@ -105,10 +105,14 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
       const finalDest = path.join(destPath, filename);
       if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
 
+      // Cầu nối bộ đệm 4MB giữa Network và Disk để giải phóng Socket đọc tối đa
+      const { PassThrough } = require('stream');
+      const bufferBridge = new PassThrough({ highWaterMark: 1024 * 1024 * 4 });
+
       // Tăng bộ đệm ghi file lên 4MB để giảm tải I/O đĩa, tăng tốc độ ghi
       const fileStream = fs.createWriteStream(finalDest, { highWaterMark: 1024 * 1024 * 4 });
 
-      res.pipe(fileStream);
+      res.pipe(bufferBridge).pipe(fileStream);
 
       // Cập nhật tiến độ mỗi 1 giây bằng cách đọc trực tiếp bytesWritten (Siêu nhẹ, không tốn CPU lắng nghe dồn dập)
       let lastReport = Date.now();
