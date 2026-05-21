@@ -4,6 +4,19 @@ const fs    = require('fs');
 const path  = require('path');
 const os    = require('os');
 
+// Cấu hình Keep-Alive Agent để tối ưu hóa kết nối TCP, giảm thời gian handshake và tận dụng băng thông VPS 1Gbps tốt hơn
+const keepAliveTimeout = 15000;
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 64,
+  keepAliveMsecs: keepAliveTimeout
+});
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  maxSockets: 64,
+  keepAliveMsecs: keepAliveTimeout
+});
+
 function extractDriveId(url) {
   let m = url.match(/\/file\/d\/([a-zA-Z0-9_\-]+)/);
   if (m) return m[1];
@@ -23,7 +36,7 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
     },
-    highWaterMark: 1024 * 1024 * 4 // Tăng bộ đệm đọc lên 4MB để tối đa hóa băng thông 1Gbps
+    agent: url.startsWith('https://') ? httpsAgent : httpAgent
   };
   if (cookieString) options.headers['Cookie'] = cookieString;
 
@@ -94,38 +107,39 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
 
       // Tăng bộ đệm ghi file lên 4MB để giảm tải I/O đĩa, tăng tốc độ ghi
       const fileStream = fs.createWriteStream(finalDest, { highWaterMark: 1024 * 1024 * 4 });
-      let downloadedBytes = 0;
 
       res.pipe(fileStream);
 
-      // Cập nhật tiến độ mỗi 1 giây và tính tốc độ tải thực tế
+      // Cập nhật tiến độ mỗi 1 giây bằng cách đọc trực tiếp bytesWritten (Siêu nhẹ, không tốn CPU lắng nghe dồn dập)
       let lastReport = Date.now();
       let lastReportBytes = 0;
 
-      res.on('data', (chunk) => {
-        downloadedBytes += chunk.length;
-        if (onProgress) {
-          const now = Date.now();
-          const timePassed = now - lastReport;
-          if (timePassed >= 1000) {
-            const percentage = totalBytes ? Math.round((downloadedBytes / totalBytes) * 100) : null;
-            const speedBytesPerSec = (downloadedBytes - lastReportBytes) / (timePassed / 1000);
-            
+      const progressInterval = setInterval(() => {
+        const downloadedBytes = fileStream.bytesWritten;
+        const now = Date.now();
+        const timePassed = now - lastReport;
+        if (timePassed >= 1000) {
+          const percentage = totalBytes ? Math.round((downloadedBytes / totalBytes) * 100) : null;
+          const speedBytesPerSec = (downloadedBytes - lastReportBytes) / (timePassed / 1000);
+          
+          if (onProgress) {
             onProgress(downloadedBytes, totalBytes, percentage, speedBytesPerSec);
-            
-            lastReport = now;
-            lastReportBytes = downloadedBytes;
           }
+          
+          lastReport = now;
+          lastReportBytes = downloadedBytes;
         }
-      });
+      }, 1000);
 
       fileStream.on('finish', () => {
+        clearInterval(progressInterval);
         fileStream.close();
         resolve(finalDest);
       });
 
       fileStream.on('error', (err) => {
-        fs.unlinkSync(finalDest);
+        clearInterval(progressInterval);
+        try { fs.unlinkSync(finalDest); } catch (_) {}
         reject(err);
       });
       return;
