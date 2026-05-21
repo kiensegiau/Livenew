@@ -299,12 +299,6 @@ function initBot(actions) {
                 msgStr += `Trạng thái: \`${s.status}\`\n`;
                 const protection = s.dualStream ? 'Song song A+B ⚡ (Bảo vệ tối đa)' : 'Đơn luồng 📡';
                 msgStr += `🛡️ Chế độ phát: \`${protection}\`\n`;
-                if (s.dualStream && s.status === 'live') {
-                  const statusA = (s.streamAActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
-                  const statusB = (s.streamBActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
-                  msgStr += `  ├─ 🇺🇸 Luồng A (Primary): \`${statusA}\`\n`;
-                  msgStr += `  └─ 🇸🇬 Luồng B (Backup): \`${statusB}\`\n`;
-                }
                 if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
                 
                 let logBrief = s.lastLog;
@@ -316,7 +310,19 @@ function initBot(actions) {
                     logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
                   }
                 }
-                msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
+
+                if (s.dualStream && s.status === 'live') {
+                  const statusA = (s.streamAActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
+                  const statusB = (s.streamBActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
+                  const logA = (s.streamAActive !== false) ? logBrief : (s.streamALog || 'Mất kết nối máy chủ chính A (Primary)');
+                  const logB = (s.streamBActive !== false) ? logBrief : (s.streamBLog || 'Mất kết nối máy chủ dự phòng B (Backup)');
+                  msgStr += `  ├─ 🇺🇸 Luồng A (Primary): \`${statusA}\`\n`;
+                  msgStr += `  │   └── 📝 Log: \`${escapeMarkdown(logA)}\`\n`;
+                  msgStr += `  └─ 🇸🇬 Luồng B (Backup): \`${statusB}\`\n`;
+                  msgStr += `      └── 📝 Log: \`${escapeMarkdown(logB)}\``;
+                } else {
+                  msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
+                }
                 const buttons = [];
                 if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) {
                   buttons.push([{ text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` }]);

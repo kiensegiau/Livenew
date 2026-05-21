@@ -200,6 +200,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   info.dualStream = true; // Luôn luôn phát song song 2 luồng A+B để tránh mọi sự cố
   info.streamAActive = true;
   info.streamBActive = true;
+  info.streamALog = '';
+  info.streamBLog = '';
   const currentRetry = info.retryCount || 0;
   const serverLetter = (currentRetry % 2 === 0) ? 'a' : 'b';
 
@@ -325,12 +327,18 @@ function launchFFmpeg(id, key, file, mode, minutes) {
         if (dataStr.includes('Slave muxer #0 failed') || errBuf.includes('Slave muxer #0 failed')) {
             if (s.streamAActive !== false) {
                 s.streamAActive = false;
+                const rtmpLines = errBuf.split('\n').filter(Boolean).reverse();
+                const errLine = rtmpLines.find(l => l.includes('rtmp') || l.includes('Connection') || l.includes('failed') || l.includes('Error')) || 'Slave muxer #0 failed';
+                s.streamALog = errLine.trim();
                 broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
             }
         }
         if (dataStr.includes('Slave muxer #1 failed') || errBuf.includes('Slave muxer #1 failed')) {
             if (s.streamBActive !== false) {
                 s.streamBActive = false;
+                const rtmpLines = errBuf.split('\n').filter(Boolean).reverse();
+                const errLine = rtmpLines.find(l => l.includes('rtmp') || l.includes('Connection') || l.includes('failed') || l.includes('Error')) || 'Slave muxer #1 failed';
+                s.streamBLog = errLine.trim();
                 broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);
             }
         }
@@ -650,7 +658,9 @@ const server = http.createServer(async (req, res) => {
         retryCount: s.retryCount || 0,
         dualStream: !!s.dualStream,
         streamAActive: s.streamAActive !== false,
-        streamBActive: s.streamBActive !== false
+        streamBActive: s.streamBActive !== false,
+        streamALog: s.streamALog || '',
+        streamBLog: s.streamBLog || ''
       });
     }
     json(res, 200, list);
