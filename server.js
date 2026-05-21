@@ -219,6 +219,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     formatArgs = [
       '-map', '0',               // BẮT BUỘC: Ánh xạ toàn bộ luồng đầu vào cho tee muxer hoạt động
       '-c', 'copy',
+      '-tag:v', '7',             // Ép nhãn H.264 video tương thích FLV chuẩn (tránh lỗi Tag avc1 incompatible)
+      '-tag:a', '10',            // Ép nhãn AAC audio tương thích FLV chuẩn (tránh lỗi Tag mp4a incompatible)
       '-bsf:a', 'aac_adtstoasc',
       '-f', 'tee'
     ];
