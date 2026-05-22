@@ -628,8 +628,8 @@ function json(res, code, data) {
 // ─── 🔐 CẤU HÌNH BẢO MẬT & ĐĂNG NHẬP ──────────────────────────────────────────
 const crypto = require('crypto');
 const AUTH_CONFIG_PATH = path.join(__dirname, 'auth_config.json');
-let authConfig = { username: 'admin', password: 'admin' };
-let sessionToken = crypto.randomBytes(16).toString('hex');
+let authConfig = { username: 'admin', password: 'admin', sessionToken: '' };
+let sessionToken = '';
 
 function loadAuthConfig() {
   try {
@@ -637,8 +637,17 @@ function loadAuthConfig() {
       const data = JSON.parse(fs.readFileSync(AUTH_CONFIG_PATH, 'utf8'));
       if (data.username && data.password) {
         authConfig = data;
+        if (data.sessionToken) {
+          sessionToken = data.sessionToken;
+        } else {
+          sessionToken = crypto.randomBytes(16).toString('hex');
+          authConfig.sessionToken = sessionToken;
+          saveAuthConfig();
+        }
       }
     } else {
+      sessionToken = crypto.randomBytes(16).toString('hex');
+      authConfig.sessionToken = sessionToken;
       saveAuthConfig();
     }
   } catch (e) {
@@ -704,6 +713,8 @@ const server = http.createServer(async (req, res) => {
 
     // Làm mới Token để buộc các phiên làm việc khác đăng nhập lại
     sessionToken = crypto.randomBytes(16).toString('hex');
+    authConfig.sessionToken = sessionToken;
+    saveAuthConfig();
     json(res, 200, { ok: true, msg: 'Đổi mật khẩu thành công!' });
     return;
   }

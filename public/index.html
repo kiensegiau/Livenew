@@ -2065,7 +2065,7 @@ let currentMode = 'loop';
 // ── Secure Session State & Authentication ──
 function showLoginOverlay() {
   const overlay = document.getElementById('loginOverlay');
-  if (overlay) {
+  if (overlay && overlay.classList.contains('hidden')) {
     overlay.classList.remove('hidden');
     document.getElementById('loginUser').focus();
   }
