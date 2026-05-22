@@ -25,7 +25,7 @@ function createWindow() {
   });
 
   // Check if there is a saved VPS IP config
-  const configPath = path.join(__dirname, 'vps_config.json');
+  const configPath = path.join(app.getPath('userData'), 'vps_config.json');
   let startUrl = null;
   if (fs.existsSync(configPath)) {
     try {
@@ -51,6 +51,35 @@ function createWindow() {
     if (validatedURL && validatedURL.startsWith('http')) {
       console.log('[Electron] Failed to load remote VPS URL, falling back to local bridge configuration.');
       mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    }
+  });
+
+  // Inject saved session token into remote page if loading remote VPS
+  mainWindow.webContents.on('dom-ready', () => {
+    const currentUrl = mainWindow.webContents.getURL();
+    if (currentUrl && currentUrl.startsWith('http')) {
+      const configPath = path.join(app.getPath('userData'), 'vps_config.json');
+      if (fs.existsSync(configPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          if (config.vpsSessionToken) {
+            console.log('[Electron] Syncing vpsSessionToken to remote page localStorage.');
+            mainWindow.webContents.executeJavaScript(`
+              (function() {
+                const savedToken = '${config.vpsSessionToken}';
+                const currentToken = localStorage.getItem('vps_session_token');
+                if (currentToken !== savedToken) {
+                  console.log('[Electron] Session token mismatch. Syncing and reloading.');
+                  localStorage.setItem('vps_session_token', savedToken);
+                  window.location.reload();
+                }
+              })();
+            `).catch(err => console.error('[Electron] Error injecting script:', err));
+          }
+        } catch (e) {
+          console.error('[Electron] Error syncing session token:', e);
+        }
+      }
     }
   });
 
@@ -234,5 +263,50 @@ ipcMain.on('go-to-config', () => {
   if (mainWindow) {
     mainWindow.loadFile(path.join(__dirname, 'index.html'));
   }
+});
+
+// IPC handler to save session token from remote page
+ipcMain.on('save-session-token', (event, token) => {
+  const configPath = path.join(app.getPath('userData'), 'vps_config.json');
+  try {
+    let config = {};
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+    config.vpsSessionToken = token;
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    console.log('[Electron] Saved new session token to vps_config.json.');
+  } catch (e) {
+    console.error('[Electron] Failed to save session token to file:', e);
+  }
+});
+
+// IPC handler to save VPS IP from local bridge page
+ipcMain.on('save-vps-ip', (event, vpsIp) => {
+  const configPath = path.join(app.getPath('userData'), 'vps_config.json');
+  try {
+    let config = {};
+    if (fs.existsSync(configPath)) {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+    config.vpsIp = vpsIp;
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    console.log('[Electron] Saved new VPS IP to vps_config.json:', vpsIp);
+  } catch (e) {
+    console.error('[Electron] Failed to save VPS IP to file:', e);
+  }
+});
+
+// IPC handle to retrieve saved configuration
+ipcMain.handle('get-vps-config', () => {
+  const configPath = path.join(app.getPath('userData'), 'vps_config.json');
+  if (fs.existsSync(configPath)) {
+    try {
+      return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) {
+      console.error('[Electron] Error reading vps_config.json:', e);
+    }
+  }
+  return {};
 });
 
