@@ -108,14 +108,23 @@ function cleanupOrphanedFiles() {
       const fullPath = path.join(DOWNLOAD_DIR, file);
       const resolvedPath = path.resolve(fullPath);
       
-      // Nếu file không thuộc bất kỳ luồng hoạt động nào -> XÓA NGAY!
+      // Nếu file không thuộc bất kỳ luồng hoạt động nào -> XEM XÉT XÓA!
       if (!activeFiles.has(resolvedPath)) {
-        fs.unlink(fullPath, (err) => {
-          if (err) {
-            console.error(`[Cleanup] Lỗi tự động xóa file mồ côi ${file}:`, err.message);
-          } else {
-            console.log(`[Cleanup] ✅ Tự động dọn dẹp file rác mồ côi: ${file}`);
+        fs.stat(fullPath, (err, stats) => {
+          if (err) return;
+          const ageInMs = Date.now() - stats.mtime.getTime();
+          // Bỏ qua các file mới tải hoặc sửa đổi dưới 60 phút để tránh xóa nhầm các file đang trong tiến trình tải hoặc chuẩn bị live
+          if (ageInMs < 60 * 60 * 1000) {
+            return;
           }
+          
+          fs.unlink(fullPath, (err) => {
+            if (err) {
+              console.error(`[Cleanup] Lỗi tự động xóa file mồ côi ${file}:`, err.message);
+            } else {
+              console.log(`[Cleanup] ✅ Tự động dọn dẹp file rác mồ côi: ${file}`);
+            }
+          });
         });
       }
     });

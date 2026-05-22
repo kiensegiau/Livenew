@@ -138,6 +138,9 @@ function fetchUrl(url, cookieString, attempt, destPath, onProgress, resolve, rej
       fileStream.on('finish', () => {
         clearInterval(progressInterval);
         fileStream.close();
+      });
+
+      fileStream.on('close', () => {
         resolve(finalDest);
       });
 
