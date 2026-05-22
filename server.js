@@ -332,9 +332,14 @@ function launchFFmpeg(id, key, file, mode, minutes) {
         newLines.forEach(line => {
             const lowerLine = line.toLowerCase();
             
+            // Bỏ qua dòng khai báo đầu ra của FFmpeg (tránh so khớp nhầm tham số URL như rw_timeout hay onfail)
+            if (lowerLine.includes('output #') || lowerLine.startsWith('output #')) {
+                return;
+            }
+            
             // --- KIỂM TRA NHÁNH A ---
-            if (lowerLine.includes('a.rtmp.youtube.com') || lowerLine.includes('slave muxer #0 failed')) {
-                const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || lowerLine.includes('timeout') || lowerLine.includes('slave muxer #0 failed');
+            if (lowerLine.includes('a.rtmp.youtube.com') || lowerLine.includes('slave muxer #0')) {
+                const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || /\btimeout\b/i.test(lowerLine) || lowerLine.includes('timed out') || lowerLine.includes('slave muxer #0 failed');
                 const isSuccess = lowerLine.includes('connected') || lowerLine.includes('successful') || lowerLine.includes('success') || lowerLine.includes('established') || lowerLine.includes('recovery successful');
                 
                 if (isFail && s.streamAActive !== false) {
@@ -349,8 +354,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
             }
             
             // --- KIỂM TRA NHÁNH B ---
-            if (lowerLine.includes('b.rtmp.youtube.com') || lowerLine.includes('slave muxer #1 failed')) {
-                const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || lowerLine.includes('timeout') || lowerLine.includes('slave muxer #1 failed');
+            if (lowerLine.includes('b.rtmp.youtube.com') || lowerLine.includes('slave muxer #1')) {
+                const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || /\btimeout\b/i.test(lowerLine) || lowerLine.includes('timed out') || lowerLine.includes('slave muxer #1 failed');
                 const isSuccess = lowerLine.includes('connected') || lowerLine.includes('successful') || lowerLine.includes('success') || lowerLine.includes('established') || lowerLine.includes('recovery successful');
                 
                 if (isFail && s.streamBActive !== false) {
