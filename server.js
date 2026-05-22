@@ -628,13 +628,21 @@ function json(res, code, data) {
 // ─── 🔐 CẤU HÌNH BẢO MẬT & ĐĂNG NHẬP ──────────────────────────────────────────
 const crypto = require('crypto');
 const AUTH_CONFIG_PATH = path.join(__dirname, 'auth_config.json');
+const FALLBACK_AUTH_CONFIG_PATH = path.join(os.tmpdir(), 'cyber_shield_auth_config.json');
+let activeAuthConfigPath = AUTH_CONFIG_PATH;
 let authConfig = { username: 'admin', password: 'admin', sessionToken: '' };
 let sessionToken = '';
 
 function loadAuthConfig() {
   try {
-    if (fs.existsSync(AUTH_CONFIG_PATH)) {
-      const data = JSON.parse(fs.readFileSync(AUTH_CONFIG_PATH, 'utf8'));
+    let configPath = AUTH_CONFIG_PATH;
+    if (!fs.existsSync(AUTH_CONFIG_PATH) && fs.existsSync(FALLBACK_AUTH_CONFIG_PATH)) {
+      configPath = FALLBACK_AUTH_CONFIG_PATH;
+    }
+    activeAuthConfigPath = configPath;
+
+    if (fs.existsSync(configPath)) {
+      const data = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       if (data.username && data.password) {
         authConfig = data;
         if (data.sessionToken) {
@@ -657,9 +665,19 @@ function loadAuthConfig() {
 
 function saveAuthConfig() {
   try {
-    fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify(authConfig, null, 2), 'utf8');
+    fs.writeFileSync(activeAuthConfigPath, JSON.stringify(authConfig, null, 2), 'utf8');
   } catch (e) {
-    console.error('[Auth] Lỗi lưu cấu hình bảo mật:', e.message);
+    console.error('[Auth] Lỗi lưu cấu hình bảo mật tại path chính:', e.message);
+    if (activeAuthConfigPath !== FALLBACK_AUTH_CONFIG_PATH) {
+      try {
+        console.log('[Auth] Đang thử lưu cấu hình bảo mật vào thư mục tạm hệ thống (fallback)...');
+        activeAuthConfigPath = FALLBACK_AUTH_CONFIG_PATH;
+        fs.writeFileSync(FALLBACK_AUTH_CONFIG_PATH, JSON.stringify(authConfig, null, 2), 'utf8');
+        console.log('[Auth] Lưu cấu hình bảo mật vào thư mục tạm thành công!');
+      } catch (err) {
+        console.error('[Auth] Lỗi lưu cấu hình bảo mật tại thư mục tạm:', err.message);
+      }
+    }
   }
 }
 
