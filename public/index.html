@@ -2862,8 +2862,34 @@ function renderStreams(list) {
 
     // Outer scoped variables for compact preview telemetry
     let ffmpegSpeedVal = '1.00x';
-    let ffmpegBitrateVal = '2500 kbps';
+    let ffmpegBitrateVal = 'Copy (Gốc)';
     let dlSpeedValString = '0.0';
+
+    if (['live', 'reconnecting', 'launching'].includes(s.status) && s.lastLog) {
+      let speedVal = '1.00x';
+      let bitrateVal = 'Copy (Gốc)';
+      let fpsVal = '';
+
+      const speedMatch = s.lastLog.match(/speed=\s*([\d\.]+)x/);
+      if (speedMatch) {
+        speedVal = speedMatch[1].trim() + 'x';
+      }
+      
+      const fpsMatch = s.lastLog.match(/fps=\s*([\d\.]+)/);
+      if (fpsMatch) {
+        fpsVal = fpsMatch[1].trim() + ' fps';
+      }
+
+      const bitMatch = s.lastLog.match(/bitrate=\s*([\d\.]+)([kK]bits\/s|[kb/s]+)/);
+      if (bitMatch) {
+        bitrateVal = Math.round(parseFloat(bitMatch[1])) + ' kbps';
+      } else if (s.lastLog.includes('bitrate=N/A')) {
+        bitrateVal = 'Copy (Gốc)';
+      }
+
+      ffmpegSpeedVal = fpsVal ? `${speedVal} (${fpsVal})` : speedVal;
+      ffmpegBitrateVal = bitrateVal;
+    }
 
     // Build Metadata metrics
     let metaItems = [];
@@ -2991,22 +3017,6 @@ function renderStreams(list) {
       else if (isAActive) lineClass = 'a-active';
       else if (isBActive) lineClass = 'b-active';
 
-      // Trích xuất tốc độ mã hóa và băng thông đẩy từ log FFmpeg thực tế
-      let speedVal = '1.00x';
-      let bitrateVal = '2500 kbps';
-      if (s.lastLog) {
-        const speedMatch = s.lastLog.match(/speed=\s*([\d\.]+)x/);
-        if (speedMatch) speedVal = speedMatch[1] + 'x';
-        
-        const bitMatch = s.lastLog.match(/bitrate=\s*([\d\.]+)([kK]bits\/s|[kb/s]+)/);
-        if (bitMatch) {
-          bitrateVal = Math.round(parseFloat(bitMatch[1])) + ' kbps';
-        }
-      }
-
-      ffmpegSpeedVal = speedVal;
-      ffmpegBitrateVal = bitrateVal;
-
       // Xác định trạng thái của Máy chủ YouTube trung tâm nhận từ 2 luồng đẩy
       let targetStatusClass = 'inactive';
       let targetStatusText = '🔴 OFFLINE';
@@ -3054,10 +3064,10 @@ function renderStreams(list) {
           <!-- Cột giữa: Nhãn băng thông đường truyền hiển thị trực tiếp đè lên mạch -->
           <div class="topology-center-telemetry" style="position: absolute; left: 42%; width: 22%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 12px 0; z-index: 3; pointer-events: none;">
             <div class="line-label ${isAActive ? 'active' : 'inactive'}" style="position: static; transform: none; margin-top: 10px; margin-left: auto; margin-right: auto; pointer-events: auto;">
-              ${isAActive ? `⚡ ${speedVal} | 📶 ${bitrateVal}` : '🔴 OFFLINE'}
+              ${isAActive ? `⚡ ${ffmpegSpeedVal} | 📶 ${ffmpegBitrateVal}` : '🔴 OFFLINE'}
             </div>
             <div class="line-label ${isBActive ? 'active' : 'inactive'}" style="position: static; transform: none; margin-bottom: 10px; margin-left: auto; margin-right: auto; pointer-events: auto;">
-              ${isBActive ? `⚡ ${speedVal} | 📶 ${bitrateVal}` : '🔴 OFFLINE'}
+              ${isBActive ? `⚡ ${ffmpegSpeedVal} | 📶 ${ffmpegBitrateVal}` : '🔴 OFFLINE'}
             </div>
           </div>
 
