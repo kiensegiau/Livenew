@@ -705,7 +705,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Bộ lọc bảo vệ (Auth Middleware) cho các API /api/*
+  // Bộ lọc bảo vệ (Auth Middleware) cho các API /api/* (Đã vô hiệu hóa hoàn toàn vì đây là app nội bộ)
+  /*
   if (pathname.startsWith('/api/') && pathname !== '/api/login') {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -714,6 +715,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
   }
+  */
 
   // API: Đổi mật khẩu bảo mật
   if (req.method === 'POST' && pathname === '/api/change-password') {

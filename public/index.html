@@ -2064,11 +2064,8 @@ let currentMode = 'loop';
 
 // ── Secure Session State & Authentication ──
 function showLoginOverlay() {
-  const overlay = document.getElementById('loginOverlay');
-  if (overlay && overlay.classList.contains('hidden')) {
-    overlay.classList.remove('hidden');
-    document.getElementById('loginUser').focus();
-  }
+  // Đã vô hiệu hóa hoàn toàn hiển thị đăng nhập vì đây là ứng dụng nội bộ
+  console.log('[Auth Bypass] showLoginOverlay called - bypassed for internal app.');
 }
 
 function hideLoginOverlay() {
@@ -2101,6 +2098,14 @@ async function submitLogin() {
     const data = await res.json();
     if (res.ok && data.token) {
       localStorage.setItem('vps_session_token', data.token);
+      if (window.require) {
+        try {
+          const { ipcRenderer } = window.require('electron');
+          ipcRenderer.send('save-session-token', data.token);
+        } catch (err) {
+          console.error('[Electron IPC Error]', err);
+        }
+      }
       hideLoginOverlay();
       useMockData = false;
       showToast('Đăng nhập thành công!', 'success');
@@ -2150,6 +2155,12 @@ async function changePassword() {
       
       // Clear current token and force login
       localStorage.removeItem('vps_session_token');
+      if (window.require) {
+        try {
+          const { ipcRenderer } = window.require('electron');
+          ipcRenderer.send('save-session-token', '');
+        } catch (err) {}
+      }
       showLoginOverlay();
     } else {
       showToast(data.error || 'Đổi mật khẩu thất bại!', 'error');
@@ -2178,6 +2189,12 @@ async function authFetch(url, options = {}) {
     const res = await fetch(url, options);
     if (res.status === 401) {
       localStorage.removeItem('vps_session_token');
+      if (window.require) {
+        try {
+          const { ipcRenderer } = window.require('electron');
+          ipcRenderer.send('save-session-token', '');
+        } catch (err) {}
+      }
       showLoginOverlay();
       throw new Error('Unauthorized');
     }
