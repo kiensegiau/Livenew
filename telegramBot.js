@@ -485,6 +485,13 @@ function initBot(actions) {
           handleWizard(chatId, dur, state, actions);
         }
       }
+      else if (action === 'wizskipname') {
+        const state = userStates.get(chatId);
+        if (state) {
+          bot.answerCallbackQuery(query.id);
+          handleWizard(chatId, '__SKIP_NAME__', state, actions);
+        }
+      }
     } catch (e) { console.error('Lỗi nút bấm:', e.message); }
   });
 }
@@ -556,15 +563,27 @@ function handleWizard(chatId, text, state, actions) {
     } 
     else if (state.step === 'link') {
       state.data.link = text;
+      state.step = 'name';
+      bot.sendMessage(chatId, `📝 Bước 3: Vui lòng nhập **Tên Luồng** (hoặc nhấn nút dưới để bỏ qua dùng mặc định):`, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: [
+          [{ text: '⏭️ Bỏ qua (Dùng mặc định)', callback_data: 'wizskipname' }],
+          [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+        ]}
+      });
+    }
+    else if (state.step === 'name') {
+      const streamName = text === '__SKIP_NAME__' ? '' : text;
+      state.data.name = streamName;
       if (state.cmd.startsWith('schedule')) {
         state.step = 'date';
         const now = new Date();
-        bot.sendMessage(chatId, `📅 Bước 3: Chọn **Ngày phát** từ lịch dưới đây:`, { 
+        bot.sendMessage(chatId, `📅 Bước 4: Chọn **Ngày phát** từ lịch dưới đây:`, { 
           parse_mode: 'Markdown', 
           reply_markup: generateCalendar(now.getFullYear(), now.getMonth())
         });
       } else {
-        const result = actions.startStream({ key: state.data.key, file: state.data.link, mode: state.cmd === 'once' ? 'once' : 'loop', minutes: 0 });
+        const result = actions.startStream({ key: state.data.key, file: state.data.link, mode: state.cmd === 'once' ? 'once' : 'loop', minutes: 0, name: state.data.name });
         userStates.delete(chatId);
         bot.sendMessage(chatId, result.error ? `❌ Lỗi: \`${escapeMarkdown(result.error)}\`` : `✅ Đã tạo luồng *#${result.id}* thành công!`, { parse_mode: 'Markdown' });
       }
@@ -578,7 +597,7 @@ function handleWizard(chatId, text, state, actions) {
         [{ text: '16:00', callback_data: 'wiztime_16:00' }, { text: '18:00', callback_data: 'wiztime_18:00' }, { text: '20:00', callback_data: 'wiztime_20:00' }, { text: '22:00', callback_data: 'wiztime_22:00' }],
         [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
       ];
-      bot.sendMessage(chatId, `⏰ Bước 4: Chọn **Giờ phát** hoặc tự nhập (VD: 14):`, { 
+      bot.sendMessage(chatId, `⏰ Bước 5: Chọn **Giờ phát** hoặc tự nhập (VD: 14):`, { 
         parse_mode: 'Markdown', 
         reply_markup: { inline_keyboard: quickTimes } 
       });
@@ -593,7 +612,7 @@ function handleWizard(chatId, text, state, actions) {
         [{ text: ':45', callback_data: 'wizmin_45' }, { text: ':50', callback_data: 'wizmin_50' }, { text: ':55', callback_data: 'wizmin_55' }],
         [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
       ];
-      bot.sendMessage(chatId, `⏱ Bước 5: Chọn **Phút** hoặc tự nhập (VD: 05, 15, 30):`, { 
+      bot.sendMessage(chatId, `⏱ Bước 6: Chọn **Phút** hoặc tự nhập (VD: 05, 15, 30):`, { 
         parse_mode: 'Markdown', 
         reply_markup: { inline_keyboard: quickMins } 
       });
@@ -605,7 +624,7 @@ function handleWizard(chatId, text, state, actions) {
         [{ text: '🔄 Phát lặp (0)', callback_data: 'wizdur_0' }, { text: '1h', callback_data: 'wizdur_60' }, { text: '6h', callback_data: 'wizdur_360' }],
         [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
       ];
-      bot.sendMessage(chatId, `⏳ Bước 6: Nhập **Thời lượng phát** (phút) hoặc chọn nhanh:`, { 
+      bot.sendMessage(chatId, `⏳ Bước 7: Nhập **Thời lượng phát** (phút) hoặc chọn nhanh:`, { 
         parse_mode: 'Markdown', 
         reply_markup: { inline_keyboard: quickDurs } 
       });
@@ -622,7 +641,8 @@ function handleWizard(chatId, text, state, actions) {
         mode: 'scheduled', 
         scheduledMode: isOnce ? 'once' : 'loop', 
         minutes, 
-        scheduledTime 
+        scheduledTime,
+        name: state.data.name
       });
       
       userStates.delete(chatId);
