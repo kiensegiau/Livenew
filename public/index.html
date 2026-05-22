@@ -2064,8 +2064,11 @@ let currentMode = 'loop';
 
 // ── Secure Session State & Authentication ──
 function showLoginOverlay() {
-  // Đã vô hiệu hóa hoàn toàn hiển thị đăng nhập vì đây là ứng dụng nội bộ
-  console.log('[Auth Bypass] showLoginOverlay called - bypassed for internal app.');
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay && overlay.classList.contains('hidden')) {
+    overlay.classList.remove('hidden');
+    document.getElementById('loginUser').focus();
+  }
 }
 
 function hideLoginOverlay() {

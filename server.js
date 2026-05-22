@@ -705,17 +705,22 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // Bộ lọc bảo vệ (Auth Middleware) cho các API /api/* (Đã vô hiệu hóa hoàn toàn vì đây là app nội bộ)
-  /*
+  // Bộ lọc bảo vệ (Auth Middleware) cho các API /api/*
+  // Nếu là yêu cầu từ ứng dụng Desktop của chúng ta (qua User-Agent đặc biệt), bỏ qua đăng nhập hoàn toàn.
+  // Ngược lại (nếu truy cập bằng Chrome/trình duyệt thường), vẫn bắt buộc đăng nhập để bảo mật hệ thống.
   if (pathname.startsWith('/api/') && pathname !== '/api/login') {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token !== sessionToken) {
-      json(res, 401, { error: 'Unauthorized' });
-      return;
+    const userAgent = req.headers['user-agent'] || '';
+    const isSecureApp = userAgent.includes('CyberShieldSecureAgent/1.0');
+    
+    if (!isSecureApp) {
+      const authHeader = req.headers['authorization'];
+      const token = authHeader && authHeader.split(' ')[1];
+      if (token !== sessionToken) {
+        json(res, 401, { error: 'Unauthorized' });
+        return;
+      }
     }
   }
-  */
 
   // API: Đổi mật khẩu bảo mật
   if (req.method === 'POST' && pathname === '/api/change-password') {
