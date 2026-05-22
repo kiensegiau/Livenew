@@ -5,6 +5,8 @@ let mainWindow;
 let tray;
 let isQuitting = false;
 
+const fs = require('fs');
+
 // Create the main application window
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -22,8 +24,27 @@ function createWindow() {
     }
   });
 
-  // Load the initial bridge configuration UI
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  // Check if there is a saved VPS IP config
+  const configPath = path.join(__dirname, 'vps_config.json');
+  let startUrl = null;
+  if (fs.existsSync(configPath)) {
+    try {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (config.vpsIp) {
+        startUrl = config.vpsIp;
+      }
+    } catch (e) {
+      console.error('Error reading vps_config.json:', e);
+    }
+  }
+
+  if (startUrl && startUrl.startsWith('http')) {
+    console.log('[Electron] Loading saved VPS URL directly:', startUrl);
+    mainWindow.loadURL(startUrl);
+  } else {
+    console.log('[Electron] Loading bridge configuration page.');
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  }
 
   // Custom application menu
   const menuTemplate = [

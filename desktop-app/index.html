@@ -49,6 +49,16 @@
           const testUrl = savedIp.endsWith('/') ? savedIp + 'api/streams' : savedIp + '/api/streams';
           const res = await fetch(testUrl, { method: 'GET', signal: AbortSignal.timeout(4000) });
           if (res.ok || res.status === 401) {
+            // Sync to config file for future startups
+            try {
+              const fs = require('fs');
+              const path = require('path');
+              const configPath = path.join(__dirname, 'vps_config.json');
+              fs.writeFileSync(configPath, JSON.stringify({ vpsIp: savedIp }, null, 2), 'utf8');
+            } catch (err) {
+              console.error('Failed to write startup config file:', err);
+            }
+
             showStatus('✅ Kết nối thành công! Đang tải bảng điều khiển...', 'success');
             setTimeout(() => {
               window.location.href = savedIp;
@@ -87,6 +97,17 @@
         
         if (res.ok || res.status === 401) {
           localStorage.setItem('vps_ip_address', vpsIp);
+          
+          // Save to config file for Electron main process to read next time
+          try {
+            const fs = require('fs');
+            const path = require('path');
+            const configPath = path.join(__dirname, 'vps_config.json');
+            fs.writeFileSync(configPath, JSON.stringify({ vpsIp: vpsIp }, null, 2), 'utf8');
+          } catch (err) {
+            console.error('Failed to write connection config file:', err);
+          }
+
           showStatus('✅ Kết nối thành công! Đang khởi chạy bảng điều khiển...', 'success');
           setTimeout(() => {
             window.location.href = vpsIp;
