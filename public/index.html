@@ -2862,12 +2862,12 @@ function renderStreams(list) {
 
     // Outer scoped variables for compact preview telemetry
     let ffmpegSpeedVal = '1.00x';
-    let ffmpegBitrateVal = 'Copy (Gốc)';
+    let ffmpegBitrateVal = 'N/A';
     let dlSpeedValString = '0.0';
 
     if (['live', 'reconnecting', 'launching'].includes(s.status) && s.lastLog) {
       let speedVal = '1.00x';
-      let bitrateVal = 'Copy (Gốc)';
+      let bitrateVal = 'N/A';
       let fpsVal = '';
 
       const speedMatch = s.lastLog.match(/speed=\s*([\d\.]+)x/);
@@ -2884,7 +2884,7 @@ function renderStreams(list) {
       if (bitMatch) {
         bitrateVal = Math.round(parseFloat(bitMatch[1])) + ' kbps';
       } else if (s.lastLog.includes('bitrate=N/A')) {
-        bitrateVal = 'Copy (Gốc)';
+        bitrateVal = 'N/A';
       }
 
       ffmpegSpeedVal = fpsVal ? `${speedVal} (${fpsVal})` : speedVal;
