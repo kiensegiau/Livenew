@@ -3,332 +3,1901 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube Live Controller</title>
+<title>Vệ Binh Cyber-Shield - Aegis Live Orchestrator PRO</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #0a0a12;
-    --surface: rgba(255,255,255,0.04);
-    --surface-hover: rgba(255,255,255,0.07);
-    --border: rgba(255,255,255,0.08);
-    --border-hover: rgba(255,255,255,0.18);
-    --text: #e8e8f0;
-    --text-muted: #6b7280;
-    --accent: #ff0000;
-    --accent-glow: rgba(255,0,0,0.3);
-    --green: #22c55e;
-    --green-glow: rgba(34,197,94,0.3);
-    --yellow: #f59e0b;
-    --yellow-glow: rgba(245,158,11,0.3);
-    --red: #ef4444;
+    --bg-dark: #040509;
+    --bg-gradient: radial-gradient(ellipse at 50% 0%, #12142e 0%, #040509 90%);
+    --panel-bg: rgba(13, 16, 32, 0.65);
+    --panel-border: rgba(255, 255, 255, 0.05);
+    --panel-border-hover: rgba(99, 102, 241, 0.25);
+    --input-bg: rgba(0, 0, 0, 0.45);
+    --input-border: rgba(255, 255, 255, 0.08);
+    --input-focus: rgba(99, 102, 241, 0.4);
+    
+    --text-primary: #f3f4f6;
+    --text-secondary: #9ca3af;
+    --text-muted: #4b5563;
+    
+    --accent: #ef4444;
+    --accent-gradient: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+    --accent-glow: rgba(239, 68, 68, 0.35);
+    
+    --primary: #6366f1;
+    --primary-gradient: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+    --primary-glow: rgba(99, 102, 241, 0.35);
+    
+    --success: #10b981;
+    --success-gradient: linear-gradient(135deg, #34d399 0%, #059669 100%);
+    --success-glow: rgba(16, 185, 129, 0.35);
+    
+    --warning: #f59e0b;
+    --warning-gradient: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+    --warning-glow: rgba(245, 158, 11, 0.35);
+    
+    --purple: #a855f7;
+    --purple-gradient: linear-gradient(135deg, #c084fc 0%, #7c3aed 100%);
+    --purple-glow: rgba(168, 85, 247, 0.35);
+    
     --blue: #3b82f6;
-    --radius: 12px;
+    --blue-gradient: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+    --blue-glow: rgba(59, 130, 246, 0.35);
+    
+    --radius-lg: 16px;
+    --radius-md: 12px;
     --radius-sm: 8px;
+    
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
-
-  html { font-size: 14px; }
 
   body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text);
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    background: var(--bg-dark);
+    background-image: var(--bg-gradient);
+    color: var(--text-primary);
     min-height: 100vh;
-    padding: 24px 16px 48px;
-    background-image:
-      radial-gradient(ellipse 60% 40% at 50% -10%, rgba(255,0,0,0.08) 0%, transparent 60%),
-      radial-gradient(ellipse 40% 30% at 80% 80%, rgba(59,130,246,0.05) 0%, transparent 50%);
+    padding: 32px 24px 60px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
   }
 
-  h1 {
-    font-size: 1.5rem;
+  /* Custom Scrollbars */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+  .dashboard-wrapper {
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 32px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 20px;
+  }
+
+  .header-title-area {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .header-logo-glow {
+    position: relative;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 14px var(--accent-glow);
+    animation: beacon 2s infinite;
+  }
+
+  @keyframes beacon {
+    0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 14px var(--accent-glow); }
+    50% { transform: scale(1.15); opacity: 0.7; box-shadow: 0 0 24px rgba(239, 68, 68, 0.7); }
+  }
+
+  .header-title-area h1 {
+    font-size: 1.75rem;
     font-weight: 700;
     letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 40%, #a1a1aa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .header-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .system-stats-bar {
+    display: flex;
+    gap: 10px;
+  }
+
+  .sys-badge {
+    font-size: 0.72rem;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+  }
+
+  .sys-badge.live-status {
+    background: rgba(16, 185, 129, 0.08);
+    border-color: rgba(16, 185, 129, 0.2);
+    color: var(--success);
+  }
+
+  /* Grid Layout */
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 30px;
+    align-items: start;
+  }
+
+  @media (min-width: 1024px) {
+    .dashboard-grid {
+      grid-template-columns: 420px 1fr;
+    }
+  }
+
+  /* Glass Cards */
+  .card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    transition: var(--transition);
+  }
+  .card:hover {
+    border-color: var(--panel-border-hover);
+    box-shadow: 0 12px 40px rgba(99, 102, 241, 0.06);
+  }
+
+  .card-header-area {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    padding-bottom: 14px;
+  }
+
+  .card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Form Elements */
+  .form-group {
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  label {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  input[type="text"],
+  input[type="datetime-local"],
+  input[type="number"],
+  input[type="password"] {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    padding: 12px 16px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    outline: none;
+    transition: var(--transition);
+  }
+
+  input[type="text"]:focus,
+  input[type="datetime-local"]:focus,
+  input[type="number"]:focus,
+  input[type="password"]:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 4px var(--input-focus);
+    background: rgba(0, 0, 0, 0.6);
+  }
+
+  input[readonly] {
+    color: var(--text-secondary);
+    cursor: default;
+    background: rgba(255,255,255,0.02);
+  }
+
+  /* Secure Password Input Toggler */
+  .btn-toggle-visibility {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    transition: var(--transition);
+  }
+  .btn-toggle-visibility:hover {
+    color: var(--text-primary);
+  }
+
+  /* File Input Specifics */
+  .file-input-grid {
+    display: flex;
+    gap: 8px;
+  }
+  .file-input-grid input {
+    flex: 1;
+  }
+
+  /* Custom Floating badges */
+  .drive-detect-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: var(--transition);
+  }
+  .drive-detect-badge.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Segmented Mode Switcher Tabs */
+  .mode-selector {
+    display: flex;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--input-border);
+    padding: 4px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    gap: 4px;
+  }
+
+  .mode-tab {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 0.8rem;
+    font-weight: 550;
+    color: var(--text-secondary);
+    text-align: center;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .mode-tab:hover {
+    color: var(--text-primary);
+    background: rgba(255,255,255,0.02);
+  }
+
+  .mode-tab.active {
+    background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  }
+
+  .mode-fields {
+    display: none;
+    animation: fadeIn 0.3s ease;
+  }
+  .mode-fields.visible {
+    display: block;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Action Buttons */
+  .btn {
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .btn-sm {
+    padding: 10px 14px;
+    font-size: 0.8rem;
+  }
+
+  .btn-lg {
+    padding: 15px 28px;
+    font-size: 0.95rem;
+    width: 100%;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  }
+
+  .btn-ghost {
+    background: rgba(255,255,255,0.04);
+    color: var(--text-primary);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .btn-ghost:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.15);
+  }
+
+  .btn-launch {
+    background: var(--accent-gradient);
+    color: #fff;
+    box-shadow: 0 8px 24px var(--accent-glow);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .btn-launch:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(239, 68, 68, 0.55);
+  }
+  .btn-launch:active {
+    transform: translateY(0);
+  }
+  .btn-launch:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+
+  /* Running Streams Section */
+  .right-header-tools {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .counter-badge {
+    font-size: 0.72rem;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: #818cf8;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+
+  .streams-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* Beautiful Telemetry Server Card */
+  .stream-card {
+    background: rgba(18, 22, 42, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stream-card.card-expanded {
+    background: rgba(18, 22, 42, 0.7);
+    border-color: rgba(99, 102, 241, 0.18);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+
+  .stream-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 4px;
+    background: var(--text-muted);
+    transition: var(--transition);
+  }
+
+  /* Glowing dynamic states for cards based on status class */
+  .stream-card.live::before { background: var(--success); }
+  .stream-card.reconnecting::before { background: var(--warning); }
+  .stream-card.downloading::before { background: var(--purple); }
+  .stream-card.launching::before { background: var(--blue); }
+  .stream-card.scheduled::before { background: var(--warning); }
+  .stream-card.ended::before, .stream-card.stopped::before { background: var(--text-muted); }
+
+  .stream-card.live {
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.03);
+    border-color: rgba(16, 185, 129, 0.08);
+  }
+
+  /* Compact/Expandable layout helper classes */
+  .expand-caret {
+    display: inline-block;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s, filter 0.3s;
+  }
+  .stream-card-compact-header:hover .expand-caret {
+    color: #fff;
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.6));
+  }
+  .stream-card-compact-header:hover .compact-file-info {
+    color: #fff;
+  }
+
+  .stream-card-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease, margin-top 0.3s ease;
+    opacity: 0;
+    margin-top: 0;
+  }
+
+  .stream-card-details.expanded {
+    max-height: 650px;
+    opacity: 1;
+    margin-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 14px;
+  }
+
+  .card-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .stream-id-area {
     display: flex;
     align-items: center;
     gap: 10px;
   }
-  h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
-    box-shadow: 0 0 8px var(--accent-glow); animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
 
-  header {
+  .stream-id-pill {
+    font-size: 0.8rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stream-mode-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.03);
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .stream-badge-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .status-badge.live {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.05);
+  }
+  .status-badge.live::before {
+    content: ''; width: 6px; height: 6px; background: #10b981; border-radius: 50%;
+    animation: beacon 1.2s infinite;
+  }
+
+  .status-badge.scheduled { background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.25); }
+  .status-badge.downloading { background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.25); }
+  .status-badge.launching { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
+  .status-badge.reconnecting { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-badge.ended, .status-badge.stopped { background: rgba(107, 114, 128, 0.12); color: var(--text-secondary); border: 1px solid rgba(107, 114, 128, 0.25); }
+
+  .protection-badge {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(99, 102, 241, 0.12);
+    color: #818cf8;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.08);
+  }
+
+  /* Dual Branch Hybrid Topology Visualizer */
+  /* Dual Branch Hybrid Topology Visualizer */
+  .topology-container {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 28px;
-    max-width: 820px;
-    margin-left: auto;
-    margin-right: auto;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    margin: 14px 0;
+    position: relative;
+    overflow: hidden;
+    height: 130px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
 
-  .badge { font-size: 0.7rem; padding: 3px 8px; border-radius: 20px;
-    background: rgba(255,0,0,0.12); color: var(--accent);
-    border: 1px solid rgba(255,0,0,0.2); font-weight: 600; letter-spacing: 0.5px; }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 24px;
-    backdrop-filter: blur(12px);
-    max-width: 820px;
-    margin: 0 auto 20px;
-    transition: border-color 0.2s;
-  }
-  .card:hover { border-color: var(--border-hover); }
-
-  .card-title {
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 16px;
-  }
-
-  label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 6px; }
-
-  input[type="text"],
-  input[type="datetime-local"],
-  input[type="number"] {
-    width: 100%;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    padding: 10px 12px;
-    font-family: inherit;
-    font-size: 0.9rem;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-  input:focus { border-color: rgba(255,255,255,0.3); box-shadow: 0 0 0 3px rgba(255,255,255,0.04); }
-  input[readonly] { color: var(--text-muted); cursor: default; }
-
-  .row { display: grid; gap: 12px; }
-  .row.col2 { grid-template-columns: 1fr 1fr; }
-  .row.col3 { grid-template-columns: 1fr 1fr 1fr; }
-
-  .file-row { display: flex; gap: 8px; align-items: flex-end; }
-  .file-row input { flex: 1; }
-
-  /* Buttons */
-  .btn {
-    border: none; cursor: pointer; font-family: inherit; font-weight: 600;
-    border-radius: var(--radius-sm); transition: all 0.15s; display: inline-flex;
-    align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
-  }
-  .btn-sm { padding: 10px 14px; font-size: 0.8rem; }
-  .btn-lg { padding: 14px 24px; font-size: 1rem; width: 100%; border-radius: var(--radius); }
-
-  .btn-ghost {
-    background: rgba(255,255,255,0.06);
-    color: var(--text);
-    border: 1px solid var(--border);
-  }
-  .btn-ghost:hover { background: rgba(255,255,255,0.1); border-color: var(--border-hover); }
-
-  .btn-live {
-    background: linear-gradient(135deg, #ff0000, #cc0000);
-    color: #fff;
-    box-shadow: 0 4px 20px rgba(255,0,0,0.3);
-  }
-  .btn-live:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(255,0,0,0.45); }
-  .btn-live:active { transform: translateY(0); }
-  .btn-live:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-  /* Mode tabs */
-  .mode-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
-  .mode-tab {
-    flex: 1; padding: 9px; text-align: center; border-radius: var(--radius-sm);
-    background: rgba(0,0,0,0.3); border: 1px solid var(--border);
-    cursor: pointer; font-size: 0.8rem; font-weight: 500; color: var(--text-muted);
-    transition: all 0.15s; user-select: none;
-  }
-  .mode-tab.active {
-    background: rgba(255,0,0,0.1); border-color: rgba(255,0,0,0.4);
-    color: #fff; font-weight: 600;
-  }
-  .mode-tab:not(.active):hover { background: var(--surface-hover); color: var(--text); }
-
-  .mode-section { display: none; }
-  .mode-section.visible { display: grid; gap: 12px; }
-
-  /* Streams table */
-  .streams-list { display: flex; flex-direction: column; gap: 10px; }
-  .stream-item {
-    display: grid;
-    grid-template-columns: auto 1fr auto auto;
+  /* Circular Nodes styling */
+  .topology-node-circle {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #0a0d18;
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    display: flex;
     align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: var(--transition);
+    cursor: default;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    z-index: 2;
+  }
+
+  .topology-node-circle.active {
+    border-color: var(--success);
+    box-shadow: 0 0 12px var(--success-glow);
+    background: #0c1a16;
+  }
+
+  .topology-node-circle.inactive {
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
+    background: #1c0d12;
+  }
+
+  .topology-node-circle.active::after {
+    content: '';
+    position: absolute;
+    top: -4px; left: -4px; right: -4px; bottom: -4px;
+    border-radius: 50%;
+    border: 1px dashed var(--success);
+    opacity: 0.5;
+    animation: rotate-dashed 8s linear infinite;
+  }
+
+  @keyframes rotate-dashed {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .topology-node-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topology-node-text-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .topology-node-text-status {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-top: 1px;
+  }
+  
+  .topo-node-row.active .topology-node-text-status { color: var(--success); }
+  .topo-node-row.inactive .topology-node-text-status { color: var(--accent); }
+
+  /* Central/Target Node Circle */
+  .topology-target-circle {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #0c0f24;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    z-index: 2;
+  }
+
+  .topology-target-circle.active {
+    border-color: var(--success);
+    box-shadow: 0 0 16px var(--success-glow);
+    background: #091b15;
+  }
+
+  .topology-target-circle.warning {
+    border-color: var(--warning);
+    box-shadow: 0 0 16px var(--warning-glow);
+    background: #1c1409;
+  }
+
+  .topology-target-circle.inactive {
+    border-color: var(--accent);
+    box-shadow: 0 0 16px var(--accent-glow);
+    background: #1c0d12;
+  }
+
+  .topology-target-circle.active::after {
+    content: '';
+    position: absolute;
+    top: -5px; left: -5px; right: -5px; bottom: -5px;
+    border-radius: 50%;
+    border: 1px dashed var(--success);
+    opacity: 0.6;
+    animation: rotate-dashed-reverse 10s linear infinite;
+  }
+
+  @keyframes rotate-dashed-reverse {
+    from { transform: rotate(360deg); }
+    to { transform: rotate(0deg); }
+  }
+
+  .target-beacon {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: beacon 1.5s infinite ease-in-out;
+  }
+
+  .topology-target-circle.warning .target-beacon {
+    background: var(--warning);
+    box-shadow: 0 0 8px var(--warning);
+  }
+
+  .topology-target-circle.inactive .target-beacon {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: none;
+  }
+
+  /* Connecting Circuit Line - SVG-based neon dashed streams */
+  .topo-line {
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    transition: var(--transition);
+  }
+  .topo-line.active {
+    stroke: #10b981;
+    stroke-dasharray: 6 5;
+    animation: topo-flow 1.2s linear infinite;
+    filter: drop-shadow(0 0 3px rgba(16, 185, 129, 0.5));
+  }
+  .topo-line.inactive {
+    stroke: rgba(255, 255, 255, 0.05);
+    stroke-dasharray: none;
+    filter: none;
+  }
+
+  @keyframes topo-flow {
+    from { stroke-dashoffset: 22; }
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* Telemetry pill floating over the wire */
+  .line-label {
+    background: #070913;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 0.58rem;
+    font-weight: 600;
+    white-space: nowrap;
+    z-index: 3;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .line-label.active {
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #34d399;
+  }
+
+  .line-label.inactive {
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+    background: #15090d;
+  }
+
+  .topology-center-telemetry .line-label {
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    margin: 0 auto;
+  }
+
+  /* File Info & Metadata */
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+
+  @media (min-width: 640px) {
+    .meta-grid {
+      grid-template-columns: 1fr auto;
+    }
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta-icon {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .countdown-ticker {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--warning);
+    font-weight: 500;
+  }
+
+  .uptime-ticker {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--success);
+    font-weight: 500;
+  }
+
+  .left-column-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+  }
+
+  /* VPS System Telemetry Card styling */
+  @keyframes sys-beacon {
+    0%, 100% { transform: scale(1); opacity: 1; box-shadow: 0 0 10px var(--blue-glow); }
+    50% { transform: scale(1.15); opacity: 0.7; box-shadow: 0 0 18px rgba(59, 130, 246, 0.7); }
+  }
+
+  .sys-rings-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .sys-ring-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+  }
+  .sys-ring-wrapper {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+  }
+  .sys-ring-wrapper:hover {
+    transform: scale(1.05);
+  }
+  .sys-ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+  .sys-ring-svg circle {
+    fill: none;
+    stroke-width: 6.5;
+    stroke-linecap: round;
+  }
+  .sys-ring-svg .ring-bg {
+    stroke: rgba(255, 255, 255, 0.04);
+  }
+  .sys-ring-svg .ring-active {
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sys-ring-svg .ring-active.cpu {
+    stroke: url(#cpuGrad);
+    filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.45));
+  }
+  .sys-ring-svg .ring-active.ram {
+    stroke: url(#ramGrad);
+    filter: drop-shadow(0 0 5px rgba(168, 85, 247, 0.45));
+  }
+  .sys-ring-svg .ring-active.disk {
+    stroke: url(#diskGrad);
+    filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.45));
+  }
+  .sys-ring-svg .ring-active.net {
+    stroke: url(#netGrad);
+    filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.45));
+  }
+  .sys-ring-info {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .sys-ring-pct {
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    color: #fff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.08);
+  }
+  .sys-ring-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .sys-ring-sub {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    margin-top: 1px;
+  }
+
+  .sys-details-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 12px;
-    padding: 12px 16px;
-    background: rgba(0,0,0,0.25);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    transition: border-color 0.2s;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 16px;
+    margin-top: 16px;
   }
-  .stream-item:hover { border-color: var(--border-hover); }
-
-  .status-dot {
-    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  .sys-detail-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: var(--transition);
   }
-  .status-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green-glow); animation: pulse 1.5s infinite; }
-  .status-dot.scheduled { background: var(--yellow); box-shadow: 0 0 6px var(--yellow-glow); }
-  .status-dot.ended, .status-dot.stopped { background: var(--text-muted); }
-  .status-dot.launching { background: var(--blue); animation: pulse 0.8s infinite; }
-
-  .stream-info {}
-  .stream-name { font-size: 0.85rem; font-weight: 500; }
-  .stream-meta { font-size: 0.7rem; color: var(--text-muted); margin-top: 2px; }
-
-  .status-badge {
-    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
-    padding: 3px 8px; border-radius: 20px;
+  .sys-detail-item:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    background: rgba(99, 102, 241, 0.06);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.05);
+    transform: translateY(-1px);
   }
-  .status-badge.live { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
-  .status-badge.scheduled { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
-  .status-badge.ended, .status-badge.stopped { background: rgba(107,114,128,0.15); color: var(--text-muted); border: 1px solid rgba(107,114,128,0.2); }
-  .status-badge.launching { background: rgba(59,130,246,0.15); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
-
-  .status-dot.reconnecting { background: var(--yellow); animation: pulse 0.5s infinite; }
-  .status-badge.reconnecting { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.3); }
-  
-  .status-dot.downloading { background: var(--accent); animation: pulse 0.8s infinite; box-shadow: 0 0 8px var(--accent); }
-  .status-badge.downloading { background: rgba(168,85,247,0.15); color: var(--accent); border: 1px solid rgba(168,85,247,0.3); }
-
-  .protection-badge {
-    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.5px;
-    padding: 3px 8px; border-radius: 20px;
-    background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.35);
-    display: inline-flex; align-items: center; gap: 4px;
-    box-shadow: 0 0 8px rgba(59,130,246,0.1);
+  .sys-detail-label {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .sys-detail-value {
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.08);
   }
 
-  .btn-stop, .btn-restart {
-    padding: 5px 10px; font-size: 0.72rem; border-radius: 6px;
-    cursor: pointer; font-family: inherit; font-weight: 600;
-    transition: all 0.15s;
+  /* Premium Circular Download Zone */
+  .download-zone-premium {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.06) 0%, rgba(99, 102, 241, 0.03) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    margin: 14px 0;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    box-shadow: 0 8px 32px rgba(168, 85, 247, 0.05);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    position: relative;
+    overflow: hidden;
   }
-  .btn-stop {
-    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.25);
-    color: var(--red);
-  }
-  .btn-stop:hover { background: rgba(239,68,68,0.2); border-color: rgba(239,68,68,0.5); }
-  
-  .btn-restart {
-    background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25);
-    color: var(--blue);
-  }
-  .btn-restart:hover { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); }
 
-  .empty-state { text-align: center; padding: 32px; color: var(--text-muted); font-size: 0.85rem; }
-  .empty-state .icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.4; }
-
-  .countdown { font-variant-numeric: tabular-nums; }
-
-  /* Toast */
-  #toast {
-    position: fixed; bottom: 24px; right: 24px; z-index: 999;
-    padding: 12px 18px; border-radius: var(--radius-sm);
-    font-size: 0.85rem; font-weight: 500;
-    transform: translateY(80px); opacity: 0;
-    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  .download-zone-premium::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(circle at 10% 20%, rgba(168, 85, 247, 0.1) 0%, transparent 60%);
     pointer-events: none;
   }
-  #toast.show { transform: translateY(0); opacity: 1; }
-  #toast.success { background: rgba(34,197,94,0.9); color: #000; }
-  #toast.error { background: rgba(239,68,68,0.9); color: #fff; }
-  #toast.info { background: rgba(59,130,246,0.9); color: #fff; }
+
+  .dl-left-circular {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dl-ring-wrapper {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dl-ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .dl-ring-svg circle {
+    fill: none;
+    stroke-width: 4.5;
+    stroke-linecap: round;
+  }
+
+  .dl-ring-svg .ring-bg {
+    stroke: rgba(255, 255, 255, 0.04);
+  }
+
+  .dl-ring-svg .ring-active {
+    transition: stroke-dashoffset 0.4s ease;
+    filter: drop-shadow(0 0 4px rgba(168, 85, 247, 0.5));
+  }
+
+  .dl-ring-info {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dl-ring-pct {
+    font-size: 0.85rem;
+    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    color: #fff;
+    text-shadow: 0 0 6px rgba(168, 85, 247, 0.6);
+  }
+
+  .dl-right-telemetry {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .dl-speed-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #c084fc;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(192, 132, 252, 0.3);
+  }
+
+  .dl-speed-title {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin-top: 1px;
+  }
+
+  .dl-speed-number {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1;
+    letter-spacing: -0.5px;
+    background: linear-gradient(to right, #fff 40%, #c084fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .dl-speed-unit {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #c084fc;
+    margin-right: 8px;
+  }
+
+  .dl-speed-mbps {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .dl-status-text {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  .dl-progress-detail {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+  }
+
+  .dl-progress-detail-val {
+    color: #c084fc;
+    text-shadow: 0 0 6px rgba(192, 132, 252, 0.2);
+  }
+
+  /* Monospace Logs & Accordion */
+  .accordion-trigger {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: var(--transition);
+    user-select: none;
+    margin-top: 10px;
+  }
+
+  .accordion-trigger:hover {
+    background: rgba(255,255,255,0.04);
+    color: var(--text-primary);
+  }
+
+  .accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .accordion-content.expanded {
+    max-height: 200px;
+    transition: max-height 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  .console-terminal {
+    background: #020306;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    padding: 10px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    color: #e2e8f0;
+    height: 120px;
+    overflow-y: auto;
+    margin-top: -1px;
+    border-top: none;
+  }
+
+  /* Actions Toolbar */
+  .card-actions-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    padding-top: 14px;
+    justify-content: flex-end;
+  }
+
+  .btn-action {
+    padding: 6px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid transparent;
+  }
+
+  .btn-action-stop {
+    background: rgba(239, 68, 68, 0.06);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+  }
+  .btn-action-stop:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #fecaca;
+  }
+
+  .btn-action-restart {
+    background: rgba(59, 130, 246, 0.06);
+    border-color: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+  }
+  .btn-action-restart:hover {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.45);
+    color: #bfdbfe;
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 48px;
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.01);
+    border: 1px dashed rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-lg);
+  }
+
+  .empty-icon {
+    font-size: 2.2rem;
+    margin-bottom: 12px;
+    opacity: 0.4;
+  }
+
+  /* Toast Notifications */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    font-weight: 500;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    backdrop-filter: blur(12px);
+  }
+
+  #toast.show {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #toast.success {
+    background: rgba(16, 185, 129, 0.9);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #fff;
+  }
+
+  #toast.error {
+    background: rgba(239, 68, 68, 0.9);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fff;
+  }
+
+  #toast.info {
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(255,255,255,0.08);
+    color: #f1f5f9;
+  }
+
+  /* Premium Scheduled Time Picker styles */
+  .quick-time-selectors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .btn-quick-time {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+  }
+
+  .btn-quick-time:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.35);
+    color: #818cf8;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.1);
+  }
+
+  .btn-quick-time:active {
+    transform: translateY(1px);
+  }
+
+  .schedule-helper-text {
+    font-size: 0.76rem;
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.4;
+    transition: var(--transition);
+    border: 1px solid transparent;
+  }
+
+  /* Custom Interactive Premium Calendar & Time Picker */
+  .custom-datetime-picker-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  .datetime-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+  }
+
+  .datetime-trigger:hover {
+    border-color: #6366f1;
+    background: rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 0 4px var(--input-focus);
+  }
+
+  .datetime-trigger .trigger-icon {
+    margin-right: 8px;
+    font-size: 1.1rem;
+    filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.3));
+  }
+
+  .datetime-trigger .trigger-value {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  .datetime-trigger .trigger-arrow {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    transition: transform 0.3s ease;
+  }
+
+  .custom-datetime-picker-wrapper.active .trigger-arrow {
+    transform: rotate(180deg);
+  }
+
+  .picker-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 100%;
+    background: rgba(8, 10, 24, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    z-index: 100;
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .calendar-section {
+    flex: 1.35;
+    padding: 16px;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .time-section {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    height: 290px;
+  }
+
+  .calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .calendar-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .cal-nav-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: var(--transition);
+  }
+
+  .cal-nav-btn:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: #818cf8;
+  }
+
+  .calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+
+  .cal-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+  }
+
+  .cal-day:hover:not(.disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+  }
+
+  .cal-day.today {
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #818cf8;
+    font-weight: 600;
+  }
+
+  .cal-day.selected {
+    background: var(--primary-gradient) !important;
+    color: #fff !important;
+    font-weight: 600;
+    box-shadow: 0 4px 10px var(--primary-glow);
+  }
+
+  .cal-day.disabled {
+    color: var(--text-muted);
+    opacity: 0.25;
+    cursor: not-allowed;
+    text-decoration: line-through;
+  }
+
+  .cal-day.empty {
+    cursor: default;
+  }
+
+  .time-column-header-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding-bottom: 6px;
+  }
+
+  .time-scroll-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    height: calc(100% - 24px);
+    overflow: hidden;
+  }
+
+  .time-column {
+    overflow-y: auto;
+    height: 100%;
+    padding-right: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .time-column::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .time-column::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+  }
+
+  .time-cell {
+    padding: 8px 4px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+    font-family: 'JetBrains Mono', monospace;
+    user-select: none;
+    border: 1px solid transparent;
+  }
+
+  .time-cell:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.04);
+  }
+
+  .time-cell.selected {
+    background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #fff;
+    font-weight: bold;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  }
+
+  @media (max-width: 480px) {
+    .picker-panel {
+      flex-direction: column;
+      height: auto;
+    }
+    .calendar-section {
+      border-right: none;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .time-section {
+      height: 220px;
+    }
+  }
 </style>
 </head>
 <body>
 
-<header>
-  <h1><span class="dot"></span> YouTube Live Controller</h1>
-  <span class="badge">FFmpeg -c copy</span>
-</header>
-
-<!-- Config Card -->
-<div class="card">
-  <div class="card-title">⚙️ Cấu hình luồng mới</div>
-
-  <!-- Stream Key -->
-  <div style="margin-bottom:14px">
-    <label>Stream Key (YouTube Studio)</label>
-    <input type="text" id="streamKey" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" />
-  </div>
-
-  <!-- Video File -->
-  <div style="margin-bottom:18px">
-    <label>File Video (.mp4) hoặc Link Google Drive</label>
-    <div class="file-row">
-      <input type="text" id="videoPath" placeholder="D:\\Video\\phim.mp4 hoặc https://drive.google.com/..." />
-      <button class="btn btn-ghost btn-sm" onclick="browse()">📂 Browse</button>
-    </div>
-  </div>
-
-  <!-- Mode Tabs -->
-  <div class="card-title">📡 Chế độ phát</div>
-  <div class="mode-tabs">
-    <div class="mode-tab active" onclick="setMode('loop')">🔁 Vòng lặp</div>
-    <div class="mode-tab" onclick="setMode('once')">▶️ Phát 1 lần</div>
-    <div class="mode-tab" onclick="setMode('scheduled')">🕐 Đặt lịch</div>
-  </div>
-
-  <!-- Loop options -->
-  <div class="mode-section visible" id="mode-loop">
-    <div>
-      <label>Số phút live (0 = không giới hạn)</label>
-      <input type="number" id="minutes" value="1440" min="0" />
-    </div>
-  </div>
-
-  <!-- Once options -->
-  <div class="mode-section" id="mode-once">
-    <p style="color:var(--text-muted);font-size:0.82rem;padding:8px 0">
-      Phát hết video rồi tự dừng. Không cần cấu hình thêm.
-    </p>
-  </div>
-
-  <!-- Scheduled options -->
-  <div class="mode-section" id="mode-scheduled">
-    <div class="row col2">
+<div class="dashboard-wrapper">
+  
+  <!-- Header -->
+  <header>
+    <div class="header-title-area">
+      <div class="header-logo-glow"></div>
       <div>
-        <label>Thời gian bắt đầu</label>
-        <input type="datetime-local" id="schedTime" />
-      </div>
-      <div>
-        <label>Số phút live (vòng lặp sau khi bật)</label>
-        <input type="number" id="schedMinutes" value="1440" min="0" />
+        <h1>VỆ BINH CYBER-SHIELD 🛡️</h1>
+        <div class="header-subtitle">
+          <span>Hệ Thống Livestream YT</span>
+        </div>
       </div>
     </div>
-  </div>
-
-  <!-- Start Button -->
-  <div style="margin-top:20px">
-    <button class="btn btn-live btn-lg" id="btnStart" onclick="startStream()">
-      🔴 BẮT ĐẦU LIVE
-    </button>
-  </div>
-</div>
-
-<!-- Active Streams Card -->
-<div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-    <div class="card-title" style="margin-bottom:0">📋 Luồng đang chạy</div>
-    <div style="display:flex;align-items:center;gap:10px">
-      <span style="font-size:0.75rem;color:var(--text-muted)" id="streamCount">0 luồng</span>
-      <button class="btn btn-ghost btn-sm" id="btnClear" onclick="clearDone()" style="padding:4px 10px;font-size:0.72rem">🗑 Dọn dẹp</button>
+    
+    <div class="system-stats-bar">
+      <span id="demoBadge" class="sys-badge" style="display:none; background:rgba(239, 68, 68, 0.08); border-color:rgba(239, 68, 68, 0.2); color:#f87171; font-weight:600;"><span style="color:#ef4444;">●</span> MOCK DATA (DEMO)</span>
+      <span class="sys-badge"><span style="color:#6366f1">●</span> FIFO Muxer</span>
+      <span class="sys-badge"><span style="color:#a855f7">●</span> Auto-Healing</span>
+      <span class="sys-badge live-status"><span style="color:#10b981">●</span> Hybrid A+B Protection</span>
     </div>
-  </div>
-  <div class="streams-list" id="streamsList">
-    <div class="empty-state">
-      <div class="icon">📡</div>
-      Chưa có luồng nào. Bấm BẮT ĐẦU LIVE để khởi động.
+  </header>
+
+  <!-- Dashboard Main Grid -->
+  <div class="dashboard-grid">
+    
+    <!-- Left Column Wrapper: Configuration & Telemetry -->
+    <div class="left-column-wrapper">
+      
+      <!-- Controller Configuration -->
+      <div class="card">
+      <div class="card-header-area">
+        <div class="card-title">⚙️ Cấu hình Live mới</div>
+      </div>
+
+      <!-- YouTube Stream Key -->
+      <div class="form-group">
+        <label for="streamKey">Stream Key (YouTube Studio)</label>
+        <div class="input-wrapper">
+          <input type="password" id="streamKey" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" autocomplete="off" />
+          <button type="button" class="btn-toggle-visibility" id="toggleKeyBtn" onclick="toggleStreamKeyVisibility()" title="Hiển thị / Ẩn Stream Key">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tên gợi nhớ luồng -->
+      <div class="form-group">
+        <label for="streamTitle">Tên gợi nhớ luồng</label>
+        <input type="text" id="streamTitle" placeholder="Ví dụ: Nhạc Lofi Chill 24/7, Nhạc Tiếng Mưa..." autocomplete="off" />
+      </div>
+
+      <!-- Video File / Drive Link -->
+      <div class="form-group">
+        <label for="videoPath">
+          <span>Đường dẫn Video hoặc Link Google Drive</span>
+          <span class="drive-detect-badge" id="driveBadge">📥 Link Drive phát hiện</span>
+        </label>
+        <div class="file-input-grid">
+          <input type="text" id="videoPath" placeholder="D:\\Video\\sample.mp4 hoặc https://drive.google.com/..." autocomplete="off" />
+          <button class="btn btn-ghost btn-sm" onclick="browse()" title="Mở hộp thoại chọn file trên VPS">📂 Chọn File</button>
+        </div>
+      </div>
+
+      <!-- Mode Selector -->
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>Chế độ phát sóng</label>
+        <div class="mode-selector">
+          <div class="mode-tab active" id="tab-loop" onclick="setMode('loop')">🔁 Vòng Lặp</div>
+          <div class="mode-tab" id="tab-once" onclick="setMode('once')">▶️ Phát 1 Lần</div>
+          <div class="mode-tab" id="tab-scheduled" onclick="setMode('scheduled')">🕐 Đặt Lịch</div>
+        </div>
+      </div>
+
+      <!-- Loop mode details -->
+      <div class="mode-fields visible" id="mode-loop">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          🔄 Tự động lặp lại video vô hạn lần để duy trì luồng phát sóng 24/7 liên tục không gián đoạn.
+        </div>
+      </div>
+
+      <!-- Once mode details -->
+      <div class="mode-fields" id="mode-once">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          Phát hết toàn bộ thời lượng video một lần rồi hệ thống tự động kết thúc. Thích hợp cho phim chiếu rạp, sự kiện trực tiếp không lặp lại.
+        </div>
+      </div>
+
+      <!-- Scheduled mode details -->
+      <div class="mode-fields" id="mode-scheduled">
+        <div class="form-group">
+          <label for="schedTime">Thời gian kích hoạt (Giờ VPS)</label>
+          <div class="custom-datetime-picker-wrapper" id="customPickerWrapper">
+            <div class="datetime-trigger" onclick="toggleCustomPicker(event)" id="datetimeTrigger">
+              <span class="trigger-icon">📅</span>
+              <span class="trigger-value" id="datetimeTriggerValue">Đang tải...</span>
+              <span class="trigger-arrow">▼</span>
+            </div>
+            <div class="picker-panel" id="pickerPanel" style="display: none;" onclick="event.stopPropagation()">
+              <div class="calendar-section">
+                <div class="calendar-header">
+                  <button type="button" class="cal-nav-btn" onclick="changeMonth(-1, event)">◀</button>
+                  <span class="calendar-title" id="calTitle">Tháng --, ----</span>
+                  <button type="button" class="cal-nav-btn" onclick="changeMonth(1, event)">▶</button>
+                </div>
+                <div class="calendar-weekdays">
+                  <div>T2</div><div>T3</div><div>T4</div><div>T5</div><div>T6</div><div>T7</div><div>CN</div>
+                </div>
+                <div class="calendar-days" id="calDays"></div>
+              </div>
+              <div class="time-section">
+                <div class="time-column-header-row">
+                  <div>Giờ</div>
+                  <div>Phút</div>
+                </div>
+                <div class="time-scroll-container">
+                  <div class="time-column" id="hourCol"></div>
+                  <div class="time-column" id="minCol"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <input type="datetime-local" id="schedTime" style="display:none;" />
+          
+          <!-- Quick dynamic time buttons -->
+          <div class="quick-time-selectors">
+            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(5)">⏱️ +5 Phút</button>
+            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(15)">⏱️ +15 Phút</button>
+            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(30)">⏱️ +30 Phút</button>
+            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(60)">⏱️ +1 Giờ</button>
+            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(180)">⏱️ +3 Giờ</button>
+            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(1440)">📅 +1 Ngày</button>
+          </div>
+          
+          <!-- Elegant feedback helper -->
+          <div class="schedule-helper-text" id="scheduleHelper">
+            Đang tải dữ liệu thời gian đặt lịch...
+          </div>
+        </div>
+      </div>
+
+      <!-- Trigger Action -->
+      <div style="margin-top: 24px;">
+        <button class="btn btn-launch btn-lg" id="btnStart" onclick="startStream()">
+          🔴 KÍCH HOẠT HỆ THỐNG LIVE
+        </button>
+      </div>
     </div>
+
+    <!-- VPS System Telemetry Card -->
+    <div class="card">
+      <div class="card-header-area">
+        <div class="card-title" style="display: flex; align-items: center; gap: 8px;">
+          <div class="sys-beacon" style="width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 10px var(--blue-glow); animation: sys-beacon 2s infinite;"></div>
+          📊 Giám sát tài nguyên VPS
+        </div>
+      </div>
+      
+      <!-- 3 Circular Telemetry Rings -->
+      <div class="sys-rings-row">
+        <!-- CPU Ring -->
+        <div class="sys-ring-card">
+          <div class="sys-ring-wrapper">
+            <svg class="sys-ring-svg" viewBox="0 0 90 90">
+              <defs>
+                <linearGradient id="cpuGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#60a5fa" />
+                  <stop offset="100%" stop-color="#2563eb" />
+                </linearGradient>
+              </defs>
+              <circle class="ring-bg" cx="45" cy="45" r="36" />
+              <circle class="ring-active cpu" id="sysCpuRing" cx="45" cy="45" r="36" stroke-dasharray="226.2" stroke-dashoffset="226.2" />
+            </svg>
+            <div class="sys-ring-info">
+              <span class="sys-ring-pct" id="sysCpuPct">0%</span>
+            </div>
+          </div>
+          <span class="sys-ring-label">💻 CPU</span>
+        </div>
+
+        <!-- RAM Ring -->
+        <div class="sys-ring-card">
+          <div class="sys-ring-wrapper">
+            <svg class="sys-ring-svg" viewBox="0 0 90 90">
+              <defs>
+                <linearGradient id="ramGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#c084fc" />
+                  <stop offset="100%" stop-color="#7c3aed" />
+                </linearGradient>
+              </defs>
+              <circle class="ring-bg" cx="45" cy="45" r="36" />
+              <circle class="ring-active ram" id="sysRamRing" cx="45" cy="45" r="36" stroke-dasharray="226.2" stroke-dashoffset="226.2" />
+            </svg>
+            <div class="sys-ring-info">
+              <span class="sys-ring-pct" id="sysRamPct">0%</span>
+            </div>
+          </div>
+          <span class="sys-ring-label">🧠 RAM</span>
+          <span class="sys-ring-sub" id="sysRamSub">0.0G / 0.0G</span>
+        </div>
+
+        <!-- Disk Ring -->
+        <div class="sys-ring-card">
+          <div class="sys-ring-wrapper">
+            <svg class="sys-ring-svg" viewBox="0 0 90 90">
+              <defs>
+                <linearGradient id="diskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#34d399" />
+                  <stop offset="100%" stop-color="#059669" />
+                </linearGradient>
+              </defs>
+              <circle class="ring-bg" cx="45" cy="45" r="36" />
+              <circle class="ring-active disk" id="sysDiskRing" cx="45" cy="45" r="36" stroke-dasharray="226.2" stroke-dashoffset="226.2" />
+            </svg>
+            <div class="sys-ring-info">
+              <span class="sys-ring-pct" id="sysDiskPct">0%</span>
+            </div>
+          </div>
+          <span class="sys-ring-label">💾 DISK</span>
+          <span class="sys-ring-sub" id="sysDiskSub">0.0G / 0.0G</span>
+        </div>
+
+        <!-- Network Ring -->
+        <div class="sys-ring-card">
+          <div class="sys-ring-wrapper">
+            <svg class="sys-ring-svg" viewBox="0 0 90 90">
+              <defs>
+                <linearGradient id="netGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#fbbf24" />
+                  <stop offset="100%" stop-color="#d97706" />
+                </linearGradient>
+              </defs>
+              <circle class="ring-bg" cx="45" cy="45" r="36" />
+              <circle class="ring-active net" id="sysNetRing" cx="45" cy="45" r="36" stroke-dasharray="226.2" stroke-dashoffset="226.2" />
+            </svg>
+            <div class="sys-ring-info" style="gap: 1px;">
+              <span class="sys-ring-pct" style="font-size: 0.8rem; letter-spacing: -0.2px;" id="sysNetSpeedVal">0.0</span>
+              <span style="font-size: 0.52rem; font-weight: 700; color: var(--warning); text-transform: uppercase;" id="sysNetSpeedUnit">Mbps</span>
+            </div>
+          </div>
+          <span class="sys-ring-label">🌐 NETWORK</span>
+          <span class="sys-ring-sub" id="sysNetSub" style="font-size: 0.52rem; color: var(--text-secondary); width: 100%; overflow: hidden; text-overflow: ellipsis; max-width: 95px; letter-spacing: -0.2px;">📥 0.0M | 📤 0.0M</span>
+        </div>
+      </div>
+      
+      <!-- Detailed System List -->
+      <div class="sys-details-list">
+        <div class="sys-detail-item">
+          <span class="sys-detail-label">🖥️ OS Host</span>
+          <span class="sys-detail-value" id="sysOs">Đang tải...</span>
+        </div>
+        <div class="sys-detail-item">
+          <span class="sys-detail-label">⚡ Runtime</span>
+          <span class="sys-detail-value" id="sysNode">Đang tải...</span>
+        </div>
+        <div class="sys-detail-item">
+          <span class="sys-detail-label">⏱️ Uptime</span>
+          <span class="sys-detail-value" id="sysUptime">Đang tải...</span>
+        </div>
+        <div class="sys-detail-item">
+          <span class="sys-detail-label">⚙️ Active Streams</span>
+          <span class="sys-detail-value" id="sysActiveThreads">0 luồng active</span>
+        </div>
+        <div class="sys-detail-item">
+          <span class="sys-detail-label">📥 Tốc độ Tải (Rx)</span>
+          <span class="sys-detail-value" id="sysNetRx">Đang tải...</span>
+        </div>
+        <div class="sys-detail-item">
+          <span class="sys-detail-label">📤 Tốc độ Đẩy (Tx)</span>
+          <span class="sys-detail-value" id="sysNetTx">Đang tải...</span>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- End .left-column-wrapper -->
+
+  <!-- Right Column: Active Streams & Monitoring -->
+    <div class="card" style="min-height: 480px;">
+      <div class="card-header-area">
+        <div class="card-title">
+          📋 Trực quan luồng hoạt động
+          <span class="counter-badge" id="streamCount">0 luồng</span>
+        </div>
+        
+        <div class="right-header-tools">
+          <button class="btn btn-ghost btn-sm" id="btnClear" onclick="clearDone()" title="Xóa các luồng đã dừng hoặc kết thúc khỏi danh sách" style="padding: 6px 12px; font-size:0.75rem;">
+            🗑️ Dọn dẹp luồng rác
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Streams container -->
+      <div class="streams-container" id="streamsList">
+        <div class="empty-state">
+          <div class="empty-icon">📡</div>
+          <h3 style="font-size:0.95rem; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Chưa có luồng giám sát nào</h3>
+          <p style="font-size:0.8rem; color:var(--text-secondary);">Thiết lập cấu hình bên trái và nhấn Kích Hoạt để bắt đầu phát sóng.</p>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -337,62 +1906,457 @@
 <script>
 let currentMode = 'loop';
 
-// ── Set default datetime to now+5min ──
-(function setDefaultSchedule() {
-  const d = new Date(Date.now() + 5 * 60000);
-  d.setSeconds(0, 0);
-  document.getElementById('schedTime').value = d.toISOString().slice(0, 16);
-})();
-
-// ── Mode switching ──
-function setMode(mode) {
-  currentMode = mode;
-  document.querySelectorAll('.mode-tab').forEach((el, i) => {
-    el.classList.toggle('active', ['loop','once','scheduled'][i] === mode);
-  });
-  document.querySelectorAll('.mode-section').forEach(el => el.classList.remove('visible'));
-  document.getElementById('mode-' + mode).classList.add('visible');
+// ── Secure Toggler for Stream Key ──
+function toggleStreamKeyVisibility() {
+  const input = document.getElementById('streamKey');
+  const btn = document.getElementById('toggleKeyBtn');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"></path>
+    </svg>`;
+  } else {
+    input.type = 'password';
+    btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+      <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+    </svg>`;
+  }
 }
 
-// ── Browse file ──
+// ── Custom Premium Calendar & Time Picker States & Functions ──
+let selectedDate = new Date(Date.now() + 5 * 60000);
+selectedDate.setMinutes(Math.ceil(selectedDate.getMinutes() / 5) * 5);
+selectedDate.setSeconds(0, 0);
+
+let currentCalendarMonth = selectedDate.getMonth();
+let currentCalendarYear = selectedDate.getFullYear();
+
+// Toggle panel visibility
+function toggleCustomPicker(event) {
+  if (event) event.stopPropagation();
+  const wrapper = document.getElementById('customPickerWrapper');
+  const panel = document.getElementById('pickerPanel');
+  if (!panel || !wrapper) return;
+  
+  const isOpen = panel.style.display === 'flex';
+  if (isOpen) {
+    panel.style.display = 'none';
+    wrapper.classList.remove('active');
+  } else {
+    panel.style.display = 'flex';
+    wrapper.classList.add('active');
+    
+    // Reset calendar view to matching selectedDate month
+    currentCalendarMonth = selectedDate.getMonth();
+    currentCalendarYear = selectedDate.getFullYear();
+    
+    // Draw and scroll columns
+    renderCalendar();
+    renderHours();
+    renderMinutes();
+  }
+}
+
+// Draw calendar days grid
+function renderCalendar() {
+  const calTitle = document.getElementById('calTitle');
+  const calDays = document.getElementById('calDays');
+  if (!calTitle || !calDays) return;
+  
+  // Set Month/Year Title
+  const monthNames = ['Tháng 01', 'Tháng 02', 'Tháng 03', 'Tháng 04', 'Tháng 05', 'Tháng 06', 'Tháng 07', 'Tháng 08', 'Tháng 09', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+  calTitle.textContent = `${monthNames[currentCalendarMonth]}, ${currentCalendarYear}`;
+  
+  calDays.innerHTML = '';
+  
+  // Get first day of month (0: Sunday, 1: Monday, ... 6: Saturday)
+  const firstDay = new Date(currentCalendarYear, currentCalendarMonth, 1).getDay();
+  // Adjust so Monday is 0, Sunday is 6
+  const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1;
+  
+  // Get total days in month
+  const totalDays = new Date(currentCalendarYear, currentCalendarMonth + 1, 0).getDate();
+  
+  // Insert empty cells before 1st day of month
+  for (let i = 0; i < adjustedFirstDay; i++) {
+    const emptyCell = document.createElement('div');
+    emptyCell.className = 'cal-day empty';
+    calDays.appendChild(emptyCell);
+  }
+  
+  // Today's date to disable past dates
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  
+  // Render active month days
+  for (let day = 1; day <= totalDays; day++) {
+    const dayBtn = document.createElement('div');
+    dayBtn.className = 'cal-day';
+    dayBtn.textContent = day;
+    
+    const checkDate = new Date(currentCalendarYear, currentCalendarMonth, day);
+    
+    // Check disabled
+    if (checkDate < today) {
+      dayBtn.classList.add('disabled');
+    } else {
+      // Check selected
+      if (checkDate.getDate() === selectedDate.getDate() &&
+          checkDate.getMonth() === selectedDate.getMonth() &&
+          checkDate.getFullYear() === selectedDate.getFullYear()) {
+        dayBtn.classList.add('selected');
+      }
+      
+      // Check today
+      const now = new Date();
+      if (checkDate.getDate() === now.getDate() &&
+          checkDate.getMonth() === now.getMonth() &&
+          checkDate.getFullYear() === now.getFullYear()) {
+        dayBtn.classList.add('today');
+      }
+      
+      dayBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectDay(day);
+      });
+    }
+    
+    calDays.appendChild(dayBtn);
+  }
+}
+
+// Change month using arrows
+function changeMonth(dir, event) {
+  if (event) event.stopPropagation();
+  currentCalendarMonth += dir;
+  if (currentCalendarMonth < 0) {
+    currentCalendarMonth = 11;
+    currentCalendarYear -= 1;
+  } else if (currentCalendarMonth > 11) {
+    currentCalendarMonth = 0;
+    currentCalendarYear += 1;
+  }
+  renderCalendar();
+}
+
+// Draw Hour scrolling cells
+function renderHours() {
+  const col = document.getElementById('hourCol');
+  if (!col) return;
+  col.innerHTML = '';
+  
+  const currentHour = selectedDate.getHours();
+  
+  for (let h = 0; h < 24; h++) {
+    const cell = document.createElement('div');
+    cell.className = 'time-cell';
+    cell.textContent = String(h).padStart(2, '0');
+    
+    if (h === currentHour) {
+      cell.classList.add('selected');
+    }
+    
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectHour(h);
+    });
+    
+    col.appendChild(cell);
+    
+    // Scroll selected item into view
+    if (h === currentHour) {
+      setTimeout(() => cell.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
+    }
+  }
+}
+
+// Draw Minute scrolling cells with 5-minute steps
+function renderMinutes() {
+  const col = document.getElementById('minCol');
+  if (!col) return;
+  col.innerHTML = '';
+  
+  const currentMin = selectedDate.getMinutes();
+  
+  for (let m = 0; m < 60; m += 5) {
+    const cell = document.createElement('div');
+    cell.className = 'time-cell';
+    cell.textContent = String(m).padStart(2, '0');
+    
+    if (m === currentMin) {
+      cell.classList.add('selected');
+    }
+    
+    cell.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectMinute(m);
+    });
+    
+    col.appendChild(cell);
+    
+    // Scroll selected item into view
+    if (m === currentMin) {
+      setTimeout(() => cell.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 50);
+    }
+  }
+}
+
+// Handle Day select
+function selectDay(day) {
+  selectedDate.setDate(day);
+  selectedDate.setMonth(currentCalendarMonth);
+  selectedDate.setYear(currentCalendarYear);
+  renderCalendar();
+  syncHiddenInput();
+}
+
+// Handle Hour select
+function selectHour(h) {
+  selectedDate.setHours(h);
+  renderHours();
+  syncHiddenInput();
+}
+
+// Handle Minute select
+function selectMinute(m) {
+  selectedDate.setMinutes(m);
+  renderMinutes();
+  syncHiddenInput();
+}
+
+// Sync selection to hidden datetime-local input and update Trigger visual
+function syncHiddenInput() {
+  const input = document.getElementById('schedTime');
+  const triggerVal = document.getElementById('datetimeTriggerValue');
+  if (!input || !triggerVal) return;
+  
+  // Format local YYYY-MM-DDTHH:MM for the native input
+  const year = selectedDate.getFullYear();
+  const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+  const date = String(selectedDate.getDate()).padStart(2, '0');
+  const hours = String(selectedDate.getHours()).padStart(2, '0');
+  const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
+  
+  const localISOTime = `${year}-${month}-${date}T${hours}:${minutes}`;
+  input.value = localISOTime;
+  
+  // Build human-friendly label for Trigger
+  const today = new Date();
+  const tomorrow = new Date(Date.now() + 24 * 3600 * 1000);
+  let dayLabel = `${date}/${month}/${year}`;
+  
+  if (selectedDate.toDateString() === today.toDateString()) {
+    dayLabel = 'Hôm nay';
+  } else if (selectedDate.toDateString() === tomorrow.toDateString()) {
+    dayLabel = 'Ngày mai';
+  }
+  
+  triggerVal.textContent = `${dayLabel}, ${hours}:${minutes}`;
+  
+  // Fire relative updates below
+  updateScheduleHelper();
+}
+
+// ── Persistent Inputs from Local Storage ──
+document.addEventListener('DOMContentLoaded', () => {
+  const savedKey = localStorage.getItem('yt_stream_key');
+  if (savedKey) {
+    document.getElementById('streamKey').value = savedKey;
+  }
+  const savedTitle = localStorage.getItem('yt_stream_title');
+  if (savedTitle) {
+    document.getElementById('streamTitle').value = savedTitle;
+  }
+  const savedPath = localStorage.getItem('yt_video_path');
+  if (savedPath) {
+    document.getElementById('videoPath').value = savedPath;
+    detectDriveLink(savedPath);
+  }
+  
+  // Initialize to +5 minutes and render visual picker elements
+  adjustScheduleTime(5, true);
+  
+  // Close picker when clicking outside
+  document.addEventListener('click', (e) => {
+    const wrapper = document.getElementById('customPickerWrapper');
+    const panel = document.getElementById('pickerPanel');
+    if (wrapper && !wrapper.contains(e.target)) {
+      if (panel && panel.style.display === 'flex') {
+        panel.style.display = 'none';
+        wrapper.classList.remove('active');
+      }
+    }
+  });
+});
+
+// ── Smart Dynamic Scheduling Time Adjustments ──
+function adjustScheduleTime(mins, silent = false) {
+  const now = new Date();
+  selectedDate = new Date(now.getTime() + mins * 60000);
+  
+  // Round minutes to step of 5
+  selectedDate.setMinutes(Math.ceil(selectedDate.getMinutes() / 5) * 5);
+  selectedDate.setSeconds(0, 0);
+  
+  currentCalendarMonth = selectedDate.getMonth();
+  currentCalendarYear = selectedDate.getFullYear();
+  
+  // Sync visually
+  syncHiddenInput();
+  
+  // Render panels if open or on load
+  const panel = document.getElementById('pickerPanel');
+  if (panel && panel.style.display === 'flex') {
+    renderCalendar();
+    renderHours();
+    renderMinutes();
+  }
+  
+  if (!silent) {
+    showToast(`Đã thiết lập đặt lịch lúc ${selectedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`, 'success');
+  }
+}
+
+// ── Live Relative Time Helper for Schedules ──
+function updateScheduleHelper() {
+  const inputVal = document.getElementById('schedTime').value;
+  const helper = document.getElementById('scheduleHelper');
+  if (!helper) return;
+  
+  if (!inputVal) {
+    helper.innerHTML = `<span>⚠️</span> <span>Vui lòng chọn thời gian bắt đầu live hợp lệ!</span>`;
+    helper.style.color = '#ef4444';
+    helper.style.background = 'rgba(239, 68, 68, 0.05)';
+    helper.style.borderColor = 'rgba(239, 68, 68, 0.15)';
+    return;
+  }
+  
+  const targetDate = new Date(inputVal);
+  const now = new Date();
+  const diffMs = targetDate - now;
+  
+  if (diffMs <= 0) {
+    helper.innerHTML = `<span>⚠️</span> <span><b>Thời điểm đã qua!</b> Vui lòng thiết lập mốc thời gian ở tương lai.</span>`;
+    helper.style.color = '#f87171';
+    helper.style.background = 'rgba(239, 68, 68, 0.05)';
+    helper.style.borderColor = 'rgba(239, 68, 68, 0.15)';
+    return;
+  }
+  
+  // Extract date and time strings
+  const timeStr = targetDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = targetDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  
+  // Relative difference parsing
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffSecs / 60);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  let relativeText = '';
+  if (diffDays > 0) {
+    relativeText = `${diffDays} ngày ${diffHours % 24} giờ`;
+  } else if (diffHours > 0) {
+    relativeText = `${diffHours} giờ ${diffMins % 60} phút`;
+  } else {
+    relativeText = `${diffMins} phút`;
+  }
+  
+  // Deduce relative day tag
+  let dayTag = `ngày ${dateStr}`;
+  const tomorrow = new Date(now.getTime() + 24 * 3600 * 1000);
+  
+  if (targetDate.toDateString() === now.toDateString()) {
+    dayTag = 'Hôm nay';
+  } else if (targetDate.toDateString() === tomorrow.toDateString()) {
+    dayTag = 'Ngày mai';
+  }
+  
+  helper.innerHTML = `<span>🕐</span> <span>Hệ thống sẽ tự động phát: <b>${dayTag} vào lúc ${timeStr}</b> (sau đây <b>${relativeText}</b>).</span>`;
+  helper.style.color = '#fbbf24';
+  helper.style.background = 'rgba(245, 158, 11, 0.04)';
+  helper.style.borderColor = 'rgba(245, 158, 11, 0.12)';
+}
+
+document.getElementById('streamKey')?.addEventListener('input', (e) => {
+  localStorage.setItem('yt_stream_key', e.target.value.trim());
+});
+
+document.getElementById('videoPath')?.addEventListener('input', (e) => {
+  const val = e.target.value.trim();
+  localStorage.setItem('yt_video_path', val);
+  detectDriveLink(val);
+});
+
+function detectDriveLink(path) {
+  const badge = document.getElementById('driveBadge');
+  if (path && (path.includes('drive.google.com') || path.includes('view?usp='))) {
+    badge.classList.add('visible');
+  } else {
+    badge.classList.remove('visible');
+  }
+}
+
+// ── Toggle Broadcast Modes ──
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.id === `tab-${mode}`);
+  });
+  document.querySelectorAll('.mode-fields').forEach(field => {
+    field.classList.remove('visible');
+  });
+  document.getElementById(`mode-${mode}`).classList.add('visible');
+}
+
+// ── Open File Browse Dialog on Server ──
 async function browse() {
-  showToast('Đang mở hộp thoại chọn file...', 'info');
+  showToast('Đang mở hộp thoại chọn file trên máy chủ...', 'info');
   try {
     const r = await fetch('/api/browse', { method: 'POST' });
     const { path } = await r.json();
     if (path) {
       document.getElementById('videoPath').value = path;
-      showToast('Đã chọn: ' + path.split('\\').pop(), 'success');
+      localStorage.setItem('yt_video_path', path);
+      detectDriveLink(path);
+      showToast('Đã chọn video: ' + path.split('\\').pop().split('/').pop(), 'success');
     } else {
       showToast('Không có file nào được chọn.', 'info');
     }
   } catch (e) {
-    showToast('Lỗi khi mở dialog!', 'error');
+    showToast('Lỗi kết nối hộp thoại!', 'error');
   }
 }
 
-// ── Start stream ──
+// ── Start Stream Call ──
 async function startStream() {
   const key = document.getElementById('streamKey').value.trim();
+  const title = document.getElementById('streamTitle').value.trim();
   const file = document.getElementById('videoPath').value.trim();
 
   if (!key) { showToast('Vui lòng nhập Stream Key!', 'error'); return; }
-  if (!file) { showToast('Vui lòng chọn file video hoặc dán link Google Drive!', 'error'); return; }
+  if (!file) { showToast('Vui lòng nhập đường dẫn hoặc link Google Drive!', 'error'); return; }
+
+  // Save persistent stream configurations
+  localStorage.setItem('yt_stream_key', key);
+  localStorage.setItem('yt_stream_title', title);
+  localStorage.setItem('yt_video_path', file);
 
   const btn = document.getElementById('btnStart');
   btn.disabled = true;
-  btn.textContent = '⏳ Đang khởi động...';
+  btn.textContent = '⏳ Đang truyền tải hệ thống...';
 
-  const body = { key, file, mode: currentMode };
+  const body = { key, title, file, mode: currentMode, minutes: 0 };
 
-  if (currentMode === 'loop') {
-    body.minutes = parseInt(document.getElementById('minutes').value) || 0;
-  } else if (currentMode === 'scheduled') {
+  if (currentMode === 'scheduled') {
     body.scheduledTime = document.getElementById('schedTime').value;
-    body.minutes = parseInt(document.getElementById('schedMinutes').value) || 0;
-    if (!body.scheduledTime) { showToast('Vui lòng chọn thời gian!', 'error'); btn.disabled = false; btn.textContent = '🔴 BẮT ĐẦU LIVE'; return; }
-  } else {
-    body.minutes = 0;
+    if (!body.scheduledTime) {
+      showToast('Vui lòng nhập thời gian đặt lịch!', 'error');
+      btn.disabled = false;
+      btn.textContent = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+      return;
+    }
   }
 
   try {
@@ -407,30 +2371,35 @@ async function startStream() {
       showToast(data.error, 'error');
     } else {
       const msg = currentMode === 'scheduled'
-        ? `🕐 Đã đặt lịch! Sẽ live lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN')}`
-        : '🔴 Đã bật luồng Live!';
+        ? `🕐 Kích hoạt đặt lịch lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN')}`
+        : '🔴 Luồng Live đã được khởi kích hoạt thành công!';
       showToast(msg, 'success');
     }
   } catch (e) {
-    showToast('Không kết nối được server!', 'error');
+    showToast('Thất bại khi kết nối máy chủ Live!', 'error');
   }
 
   btn.disabled = false;
-  btn.textContent = '🔴 BẮT ĐẦU LIVE';
-}
-
-// ── Stop stream ──
-async function stopStream(id) {
-  await fetch('/api/stop', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  showToast('Đã dừng luồng #' + id, 'info');
+  btn.textContent = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
   poll();
 }
 
-// ── Restart stream ──
+// ── Stop Stream Call ──
+async function stopStream(id) {
+  try {
+    const r = await fetch('/api/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    showToast(`Đã ra lệnh dừng luồng #${id} khẩn cấp`, 'info');
+  } catch (e) {
+    showToast('Lỗi gửi lệnh dừng!', 'error');
+  }
+  poll();
+}
+
+// ── Restart Stream Call ──
 async function restartStream(id) {
   try {
     const r = await fetch('/api/restart', {
@@ -440,99 +2409,836 @@ async function restartStream(id) {
     });
     const data = await r.json();
     if (data.error) showToast(data.error, 'error');
-    else showToast('Đang khởi động lại luồng #' + id, 'success');
-  } catch(e) {
-    showToast('Lỗi kết nối server', 'error');
+    else showToast(`Đang bật lại luồng #${id}...`, 'success');
+  } catch (e) {
+    showToast('Lỗi kết nối khởi động lại!', 'error');
   }
   poll();
 }
 
-// ── Render streams ──
+// ── Clear Completed Streams ──
+async function clearDone() {
+  try {
+    const r = await fetch('/api/clear', { method: 'POST' });
+    const { cleared } = await r.json();
+    if (cleared > 0) showToast(`Đã dọn dẹp ${cleared} luồng kết thúc thành công`, 'success');
+    else showToast('Không có luồng đã tắt để dọn dẹp.', 'info');
+  } catch (e) {
+    showToast('Lỗi dọn dẹp luồng cũ!', 'error');
+  }
+  poll();
+}
+
+// ── Toggle Console Logs View ──
+function toggleLogs(id) {
+  const content = document.getElementById(`logs-content-${id}`);
+  const trigger = document.getElementById(`logs-trigger-${id}`);
+  const isExpanded = content.classList.contains('expanded');
+  
+  if (isExpanded) {
+    content.classList.remove('expanded');
+    trigger.querySelector('.acc-icon').style.transform = 'rotate(0deg)';
+  } else {
+    content.classList.add('expanded');
+    trigger.querySelector('.acc-icon').style.transform = 'rotate(180deg)';
+    
+    // Auto scroll to bottom
+    const consoleBox = document.getElementById(`console-${id}`);
+    if (consoleBox) {
+      setTimeout(() => {
+        consoleBox.scrollTop = consoleBox.scrollHeight;
+      }, 50);
+    }
+  }
+}
+
+// ── Highlight Text inside Logs ──
+function formatTerminalLog(logText) {
+  if (!logText) return '<span style="color:var(--text-muted)">[Hệ thống] Đang lắng nghe luồng dữ liệu...</span>';
+  return logText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // Warnings and Errors
+    .replace(/(failed|error|broken pipe|refused|timeout|timed out|disconnect|disconnected|mất kết nối)/ig, '<span style="color:#f87171; font-weight:bold;">$1</span>')
+    // Reconnections and Recoveries
+    .replace(/(connected|successful|success|established|established|recovery successful|phục hồi|thành công)/ig, '<span style="color:#34d399; font-weight:bold;">$1</span>')
+    // Retrying states
+    .replace(/(reconnecting|retry|trying|thử lại|đang thử)/ig, '<span style="color:#fbbf24; font-weight:bold;">$1</span>')
+    // Branch identities
+    .replace(/(slave muxer #0|máy chủ chính|máy chủ a|branch a)/ig, '<span style="color:#60a5fa; font-weight:bold;">$1</span>')
+    .replace(/(slave muxer #1|máy chủ dự phòng|máy chủ b|branch b)/ig, '<span style="color:#c084fc; font-weight:bold;">$1</span>');
+}
+
+// Helper to format bytes to human readable sizes
+function formatBytes(bytes, decimals = 1) {
+  if (bytes === 0 || !bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// Persistent state for expanded stream card telemetry details
+const expandedStreams = new Set();
+
+// Toggle stream card expand/collapse state
+function toggleStreamCard(id) {
+  const detailsEl = document.getElementById(`stream-details-${id}`);
+  const caretEl = document.getElementById(`stream-caret-${id}`);
+  const cardEl = document.getElementById(`stream-card-${id}`);
+  
+  if (!detailsEl) return;
+  
+  const isExpanded = detailsEl.classList.contains('expanded');
+  if (isExpanded) {
+    detailsEl.classList.remove('expanded');
+    if (caretEl) caretEl.style.transform = 'rotate(0deg)';
+    if (cardEl) cardEl.classList.remove('card-expanded');
+    expandedStreams.delete(id);
+  } else {
+    detailsEl.classList.add('expanded');
+    if (caretEl) caretEl.style.transform = 'rotate(180deg)';
+    if (cardEl) cardEl.classList.add('card-expanded');
+    expandedStreams.add(id);
+    
+    // Smoothly scroll the card into view
+    setTimeout(() => {
+      cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }, 150);
+  }
+}
+
+// ── Render Stream Cards ──
 function renderStreams(list) {
   const el = document.getElementById('streamsList');
   const count = document.getElementById('streamCount');
-  const active = list.filter(s => s.status === 'live' || s.status === 'scheduled' || s.status === 'launching');
+  
   count.textContent = `${list.length} luồng`;
 
   if (list.length === 0) {
-    el.innerHTML = `<div class="empty-state"><div class="icon">📡</div>Chưa có luồng nào.</div>`;
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📡</div>
+        <h3 style="font-size:0.95rem; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Chưa có luồng giám sát nào</h3>
+        <p style="font-size:0.8rem; color:var(--text-secondary);">Thiết lập cấu hình bên trái và nhấn Kích Hoạt để bắt đầu phát sóng.</p>
+      </div>`;
     return;
   }
+
+  // Preserve terminal scroll positions for open terminals
+  const scrollPositions = {};
+  list.forEach(s => {
+    const box = document.getElementById(`console-${s.id}`);
+    if (box) scrollPositions[s.id] = box.scrollTop;
+  });
 
   el.innerHTML = list.map(s => {
     const canStop = ['live', 'scheduled', 'launching', 'reconnecting', 'downloading'].includes(s.status);
     const canRestart = ['ended', 'stopped'].includes(s.status);
-    const statusLabel = { live: 'LIVE', scheduled: 'ĐẶT LỊCH', ended: 'KẾT THÚC', stopped: 'ĐÃ DỪNG', launching: 'ĐANG BẬT', reconnecting: 'ĐANG THỬ LẠI', downloading: 'ĐANG TẢI' }[s.status] || s.status;
+    
+    const statusLabel = { 
+      live: 'LIVE 🟢', 
+      scheduled: 'ĐẶT LỊCH 🕐', 
+      ended: 'KẾT THÚC ⚪', 
+      stopped: 'ĐÃ DỪNG 🛑', 
+      launching: 'KÍCH HOẠT ⏳', 
+      reconnecting: 'THỬ LẠI 🔄', 
+      downloading: 'ĐANG TẢI 📥' 
+    }[s.status] || s.status.toUpperCase();
 
-    let meta = s.keyHint + ' · ' + s.file;
+    // Mode visual text
+    const modeLabel = { loop: 'Vòng Lặp Vô Hạn', once: 'Phát Một Lần', scheduled: 'Đặt Lịch Phát' }[s.mode] || s.mode;
+
+    // Outer scoped variables for compact preview telemetry
+    let ffmpegSpeedVal = '1.00x';
+    let ffmpegBitrateVal = '2500 kbps';
+    let dlSpeedValString = '0.0';
+
+    // Build Metadata metrics
+    let metaItems = [];
+    
+    // Tên gợi nhớ luồng
+    metaItems.push(`
+      <div class="meta-item" title="Tên gợi nhớ luồng">
+        <span class="meta-icon">🏷️</span>
+        <span style="font-weight: 700; color: #818cf8;">${s.title || `Luồng #${s.id}`}</span>
+      </div>
+    `);
+    
+    // File path info
+    metaItems.push(`
+      <div class="meta-item" title="Đường dẫn nguồn: ${s.file}">
+        <span class="meta-icon">🎞️</span>
+        <span style="font-weight: 500;">${s.file}</span>
+      </div>
+    `);
+
+    // Live Uptime counter
     if (s.status === 'live' && s.startTime) {
       const elapsed = Math.floor((Date.now() - new Date(s.startTime)) / 1000);
-      meta += ' · ' + formatDuration(elapsed);
+      metaItems.push(`
+        <div class="meta-item">
+          <span class="meta-icon">⏳</span>
+          <span>Thời gian: <span class="uptime-ticker" data-start="${s.startTime}">${formatDuration(elapsed)}</span></span>
+        </div>
+      `);
     }
-    if (s.dualStream && s.status === 'live') {
-      const actA = (s.streamAActive !== false) ? '<span style="color:#22c55e">● A</span>' : '<span style="color:#ef4444">● A</span>';
-      const actB = (s.streamBActive !== false) ? '<span style="color:#22c55e">● B</span>' : '<span style="color:#ef4444">● B</span>';
-      meta += ` · ${actA} | ${actB}`;
-    }
+
+    // Scheduled Timer Countdown
     if (s.status === 'scheduled' && s.scheduledTime) {
       const remaining = Math.max(0, Math.floor((new Date(s.scheduledTime) - Date.now()) / 1000));
-      meta += ' · Bắt đầu sau <span class="countdown">' + formatDuration(remaining) + '</span>';
+      metaItems.push(`
+        <div class="meta-item">
+          <span class="meta-icon">🕐</span>
+          <span>Kích hoạt sau: <span class="countdown-ticker" data-sched="${s.scheduledTime}">${formatDuration(remaining)}</span></span>
+        </div>
+      `);
     }
 
-    return `
-      <div class="stream-item">
-        <div class="status-dot ${s.status}"></div>
-        <div class="stream-info">
-          <div class="stream-name">#${s.id} · ${modeLabel(s.mode)} ${s.dualStream ? `<span class="protection-badge" style="margin-left: 8px;">Song song A+B ⚡</span>` : ''}</div>
-          <div class="stream-meta">${meta}</div>
-          ${s.lastLog ? `<div style="font-size: 0.65rem; color: var(--yellow); margin-top: 2px;">⚠️ ${s.lastLog}</div>` : ''}
+    // Google Drive downloading parsing
+    let driveDownloadHTML = '';
+    if (s.status === 'downloading' && s.lastLog) {
+      // Parse download statistics: e.g. "Đang tải... 45% (45.3 MB/s)" or "Đang tải... 254MB (12.1 MB/s)"
+      const pctMatch = s.lastLog.match(/(\d+)%/);
+      const speedMatch = s.lastLog.match(/([\d\.]+)\s*MB\/s/);
+      
+      let pct = pctMatch ? parseInt(pctMatch[1]) : 0;
+      let speed = speedMatch ? speedMatch[1] : '0.0';
+      let speedMbps = speed !== '0.0' ? (parseFloat(speed) * 8).toFixed(1) : '0.0';
+
+      dlSpeedValString = speed;
+
+      if (s.dlPercent !== undefined && s.dlPercent !== null) {
+        pct = s.dlPercent;
+      }
+      if (s.dlSpeed !== undefined && s.dlSpeed > 0) {
+        speed = (s.dlSpeed / 1024 / 1024).toFixed(1);
+        speedMbps = (s.dlSpeed * 8 / 1024 / 1024).toFixed(1);
+      }
+
+      let progressDetailHTML = '';
+      if (s.dlBytes) {
+        const dlStr = formatBytes(s.dlBytes);
+        const totalStr = s.totalBytes ? formatBytes(s.totalBytes) : 'Không rõ';
+        progressDetailHTML = `
+          <div class="dl-progress-detail" style="margin-top: 4px;">
+            📁 Đã tải: <span class="dl-progress-detail-val">${dlStr}</span> / <span class="dl-progress-detail-val">${totalStr}</span>
+            ${pct ? `(<span class="dl-progress-detail-val">${pct}%</span>)` : ''}
+          </div>
+        `;
+      } else {
+        progressDetailHTML = `
+          <div class="dl-progress-detail" style="margin-top: 4px;">
+            📁 Đang chuẩn bị tải...
+          </div>
+        `;
+      }
+
+      driveDownloadHTML = `
+        <div class="download-zone-premium">
+          <div class="dl-left-circular">
+            <div class="dl-ring-wrapper">
+              <svg class="dl-ring-svg">
+                <defs>
+                  <linearGradient id="dlRingGrad-${s.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#c084fc" />
+                    <stop offset="100%" stop-color="#6366f1" />
+                  </linearGradient>
+                </defs>
+                <circle class="ring-bg" cx="28" cy="28" r="23" />
+                <circle class="ring-active" cx="28" cy="28" r="23" stroke-dasharray="144.5" stroke-dashoffset="${(144.5 - (pct / 100) * 144.5).toFixed(1)}" stroke="url(#dlRingGrad-${s.id})" />
+              </svg>
+              <div class="dl-ring-info">
+                <span class="dl-ring-pct">${pct}%</span>
+              </div>
+            </div>
+          </div>
+          <div class="dl-right-telemetry">
+            <div class="dl-speed-badge">🚀 BĂNG THÔNG DRIVE 1GBPS</div>
+            <div class="dl-speed-title">
+              <span class="dl-speed-number">${speed}</span>
+              <span class="dl-speed-unit">MB/s</span>
+              <span class="dl-speed-mbps">(${speedMbps} Mbps)</span>
+            </div>
+            <div class="dl-status-text">Đang kéo tệp về VPS...</div>
+            ${progressDetailHTML}
+          </div>
         </div>
-        <span class="status-badge ${s.status}">${statusLabel}</span>
-        ${canStop ? `<button class="btn-stop" onclick="stopStream(${s.id})">■ Dừng</button>` : canRestart ? `<button class="btn-restart" onclick="restartStream(${s.id})">↻ Bật lại</button>` : '<div></div>'}
+      `;
+    }
+
+    // Dual Stream Topology circuit elements (Hiển thị đẩy về YouTube & tốc độ)
+    let topologyHTML = '';
+    if (s.dualStream && ['live', 'reconnecting', 'launching'].includes(s.status)) {
+      const isAActive = s.streamAActive !== false;
+      const isBActive = s.streamBActive !== false;
+      
+      let lineClass = 'inactive';
+      if (isAActive && isBActive) lineClass = 'both-active';
+      else if (isAActive) lineClass = 'a-active';
+      else if (isBActive) lineClass = 'b-active';
+
+      // Trích xuất tốc độ mã hóa và băng thông đẩy từ log FFmpeg thực tế
+      let speedVal = '1.00x';
+      let bitrateVal = '2500 kbps';
+      if (s.lastLog) {
+        const speedMatch = s.lastLog.match(/speed=\s*([\d\.]+)x/);
+        if (speedMatch) speedVal = speedMatch[1] + 'x';
+        
+        const bitMatch = s.lastLog.match(/bitrate=\s*([\d\.]+)([kK]bits\/s|[kb/s]+)/);
+        if (bitMatch) {
+          bitrateVal = Math.round(parseFloat(bitMatch[1])) + ' kbps';
+        }
+      }
+
+      ffmpegSpeedVal = speedVal;
+      ffmpegBitrateVal = bitrateVal;
+
+      // Xác định trạng thái của Máy chủ YouTube trung tâm nhận từ 2 luồng đẩy
+      let targetStatusClass = 'inactive';
+      let targetStatusText = '🔴 OFFLINE';
+      if (isAActive && isBActive) {
+        targetStatusClass = 'active';
+        targetStatusText = '🟢 SONG SONG (DUAL)';
+      } else if (isAActive || isBActive) {
+        targetStatusClass = 'warning';
+        targetStatusText = '⚠️ ĐƠN LUỒNG (SINGLE)';
+      }
+
+      topologyHTML = `
+        <div class="topology-container" title="YouTube Dual Redundancy Topology: Mạch bảo vệ song song 2 luồng độc lập">
+          <!-- SVG Background Lines (Responsive & Animated) -->
+          <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
+            <line class="topo-line ${isAActive ? 'active' : 'inactive'}" x1="12%" y1="20%" x2="88%" y2="50%" />
+            <line class="topo-line ${isBActive ? 'active' : 'inactive'}" x1="12%" y1="80%" x2="88%" y2="50%" />
+          </svg>
+          
+          <!-- Cột bên trái: 2 Máy chủ nguồn dạng TRÒN xếp chồng dọc -->
+          <div class="topo-left-side" style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; z-index: 2; width: 45%;">
+            <!-- Máy Chủ A -->
+            <div class="topo-node-row ${isAActive ? 'active' : 'inactive'}" style="display: flex; align-items: center; gap: 10px;">
+              <div class="topology-node-circle ${isAActive ? 'active' : 'inactive'}">
+                <span style="font-size: 1.1rem; filter: drop-shadow(0 0 3px rgba(0,0,0,0.4));">🇺🇸</span>
+              </div>
+              <div class="topology-node-info">
+                <span class="topology-node-text-title">Máy Chủ A</span>
+                <span class="topology-node-text-status">${isAActive ? '🟢 ACTIVE' : '🔴 OFFLINE'}</span>
+              </div>
+            </div>
+            
+            <!-- Máy Chủ B -->
+            <div class="topo-node-row ${isBActive ? 'active' : 'inactive'}" style="display: flex; align-items: center; gap: 10px;">
+              <div class="topology-node-circle ${isBActive ? 'active' : 'inactive'}">
+                <span style="font-size: 1.1rem; filter: drop-shadow(0 0 3px rgba(0,0,0,0.4));">🇸🇬</span>
+              </div>
+              <div class="topology-node-info">
+                <span class="topology-node-text-title">Máy Chủ B</span>
+                <span class="topology-node-text-status">${isBActive ? '🟢 ACTIVE' : '🔴 OFFLINE'}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cột giữa: Nhãn băng thông đường truyền hiển thị trực tiếp đè lên mạch -->
+          <div class="topology-center-telemetry" style="position: absolute; left: 42%; width: 22%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 12px 0; z-index: 3; pointer-events: none;">
+            <div class="line-label ${isAActive ? 'active' : 'inactive'}" style="position: static; transform: none; margin-top: 10px; margin-left: auto; margin-right: auto; pointer-events: auto;">
+              ${isAActive ? `⚡ ${speedVal} | 📶 ${bitrateVal}` : '🔴 OFFLINE'}
+            </div>
+            <div class="line-label ${isBActive ? 'active' : 'inactive'}" style="position: static; transform: none; margin-bottom: 10px; margin-left: auto; margin-right: auto; pointer-events: auto;">
+              ${isBActive ? `⚡ ${speedVal} | 📶 ${bitrateVal}` : '🔴 OFFLINE'}
+            </div>
+          </div>
+
+          <!-- Cột bên phải: Máy Chủ YouTube trung tâm dạng TRÒN cực chất -->
+          <div class="topo-right-side" style="display: flex; align-items: center; gap: 10px; z-index: 2; width: 40%; justify-content: flex-end;">
+            <div class="topology-target-info" style="text-align: right; display: flex; flex-direction: column;">
+              <span class="topology-node-text-title" style="font-weight: 700; font-size: 0.72rem; letter-spacing: 0.5px;">YOUTUBE LIVE</span>
+              <span class="topology-node-text-status" style="font-size: 0.62rem; font-weight: 700; color: ${targetStatusClass === 'active' ? 'var(--success)' : targetStatusClass === 'warning' ? 'var(--warning)' : 'var(--accent)'};">
+                ${targetStatusText}
+              </span>
+            </div>
+            <div class="topology-target-circle ${targetStatusClass}">
+              <div class="target-beacon" style="position: absolute; top: 4px;"></div>
+              <span style="font-size: 1.2rem; margin-top: 2px;">📺</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check if this card is currently expanded
+    const isCardExpanded = expandedStreams.has(s.id);
+
+    // Check if terminal accordion was already expanded (keep it expanded if so)
+    const existingContentEl = document.getElementById(`logs-content-${s.id}`);
+    const isTerminalExpanded = existingContentEl ? existingContentEl.classList.contains('expanded') : false;
+
+    // Logs & Terminal area HTML
+    const logDetails = s.lastLog ? s.lastLog : 'Đang thiết lập cổng kết nối mạng...';
+    
+    // We display full logs inside the terminal if they exist, or fallback to last log
+    const consoleLogsText = s.lastLog ? s.lastLog : 'Đang bắt đầu...';
+
+    return `
+      <div class="stream-card ${s.status} ${isCardExpanded ? 'card-expanded' : ''}" id="stream-card-${s.id}">
+        
+        <!-- Interactive Compact Header -->
+        <div class="stream-card-compact-header" onclick="toggleStreamCard(${s.id})" style="cursor: pointer; user-select: none;">
+          <!-- Header row of the card -->
+          <div class="card-top-row" style="margin-bottom: 8px;">
+            <div class="stream-id-area" style="display: flex; align-items: center; gap: 8px;">
+              <span class="stream-id-pill">#${s.id}</span>
+              <span class="stream-title-text" style="font-weight: 700; color: #fff; font-size: 0.85rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${s.title || `Luồng #${s.id}`}">${s.title || `Luồng #${s.id}`}</span>
+              <span class="stream-mode-badge">${modeLabel}</span>
+            </div>
+            
+            <div class="stream-badge-badges">
+              ${s.dualStream ? '<span class="protection-badge" style="font-size:0.65rem; padding: 2px 8px;">🛡️ DUAL A+B</span>' : ''}
+              <span class="status-badge ${s.status}" style="font-size:0.65rem; padding: 2px 8px;">${statusLabel}</span>
+            </div>
+          </div>
+
+          <!-- Compact File Info Row -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 4px;">
+            <div class="compact-file-info" style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.82rem; color: var(--text-primary); font-weight: 500; transition: color 0.2s; max-width: 45%;">
+              <span>🎞️</span>
+              <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${s.file}">${s.file}</span>
+            </div>
+            
+            <!-- Compact Middle Telemetry (Hiển thị thêm thông tin cơ bản) -->
+            <div class="compact-middle-telemetry" style="display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace;">
+              ${s.status === 'live' ? `
+                <span style="color: #60a5fa; background: rgba(96, 165, 250, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(96, 165, 250, 0.15); display: inline-flex; align-items: center; gap: 4px;">
+                  ⚡ ${ffmpegSpeedVal} | 📶 ${ffmpegBitrateVal}
+                </span>
+              ` : ''}
+              ${s.status === 'downloading' ? `
+                <span style="color: #c084fc; background: rgba(168, 85, 247, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.15); display: inline-flex; align-items: center; gap: 4px;">
+                  🚀 Speed: ${dlSpeedValString} MB/s
+                </span>
+              ` : ''}
+              ${s.status === 'scheduled' && s.scheduledTime ? `
+                <span style="color: var(--warning); background: rgba(245, 158, 11, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.15); display: inline-flex; align-items: center; gap: 4px;">
+                  📅 Giờ VPS: ${new Date(s.scheduledTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              ` : ''}
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;">
+              ${s.status === 'live' && s.startTime ? `
+                <span style="font-size: 0.72rem; color: var(--success); font-family: 'JetBrains Mono', monospace;" class="compact-uptime-tag" data-start="${s.startTime}">🟢 ${formatDuration(Math.floor((Date.now() - new Date(s.startTime)) / 1000))}</span>
+              ` : ''}
+              ${s.status === 'downloading' && s.dlPercent !== null ? `
+                <span style="font-size: 0.72rem; color: #c084fc; font-family: 'JetBrains Mono', monospace;">📥 ${s.dlPercent}%</span>
+              ` : ''}
+              ${s.status === 'scheduled' && s.scheduledTime ? `
+                <span style="font-size: 0.72rem; color: var(--warning); font-family: 'JetBrains Mono', monospace;" class="compact-countdown-tag" data-sched="${s.scheduledTime}">🕐 ${formatDuration(Math.max(0, Math.floor((new Date(s.scheduledTime) - Date.now()) / 1000)))}</span>
+              ` : ''}
+              <span class="expand-caret" id="stream-caret-${s.id}" style="transition: transform 0.3s; transform: ${isCardExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}; font-size: 0.7rem; color: var(--text-secondary);">▼</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Collapsible Details Container -->
+        <div class="stream-card-details ${isCardExpanded ? 'expanded' : ''}" id="stream-details-${s.id}">
+          
+          <!-- Metadata Grid (Expanded version) -->
+          <div class="meta-grid" style="margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 10px;">
+            ${metaItems.join('')}
+          </div>
+
+          <!-- Google Drive download details -->
+          ${driveDownloadHTML}
+
+          <!-- Dual Stream graphic map -->
+          ${topologyHTML}
+
+          <!-- Error / Warning last log display if not live/ok -->
+          ${(s.lastLog && s.status !== 'downloading' && s.status !== 'live') ? `
+            <div style="font-size:0.75rem; background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.15); padding:8px 12px; border-radius:6px; color:#fbbf24; margin:10px 0; display:flex; align-items:center; gap:8px;">
+              <span style="font-size:0.95rem;">⚠️</span>
+              <span>${s.lastLog}</span>
+            </div>
+          ` : ''}
+
+          <!-- Collapsible Console Accordion -->
+          <div class="accordion-trigger" id="logs-trigger-${s.id}" onclick="event.stopPropagation(); toggleLogs(${s.id})">
+            <span>📄 NHẬT KÝ CHI TIẾT CONSOLE (FFMPEG TELEMETRY)</span>
+            <span class="acc-icon" style="transition:transform 0.3s; transform: ${isTerminalExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}; font-size: 0.6rem;">▼</span>
+          </div>
+          
+          <div class="accordion-content ${isTerminalExpanded ? 'expanded' : ''}" id="logs-content-${s.id}">
+            <div class="console-terminal" id="console-${s.id}">
+              ${formatTerminalLog(consoleLogsText)}
+            </div>
+          </div>
+
+          <!-- Actions Toolbar -->
+          <div class="card-actions-row">
+            ${canStop ? `
+              <button class="btn-action btn-action-stop" onclick="event.stopPropagation(); stopStream(${s.id})">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
+                Dừng Luồng
+              </button>
+            ` : ''}
+            ${canRestart ? `
+              <button class="btn-action btn-action-restart" onclick="event.stopPropagation(); restartStream(${s.id})">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"></path></svg>
+                Bật Lại
+              </button>
+            ` : ''}
+          </div>
+
+        </div>
+
       </div>`;
   }).join('');
+
+  // Restore scroll positions of open console boxes
+  list.forEach(s => {
+    const box = document.getElementById(`console-${s.id}`);
+    if (box && scrollPositions[s.id] !== undefined) {
+      box.scrollTop = scrollPositions[s.id];
+    }
+  });
 }
 
-function modeLabel(m) {
-  return { loop: 'Vòng lặp', once: 'Phát 1 lần', scheduled: 'Đặt lịch' }[m] || m;
-}
-
+// ── Time helper formatter ──
 function formatDuration(secs) {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   const s = secs % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  if (h > 0) return `${h} giờ ${String(m).padStart(2,'0')} phút ${String(s).padStart(2,'0')} giây`;
+  return `${String(m).padStart(2,'0')} phút ${String(s).padStart(2,'0')} giây`;
 }
 
-// ── Clear ended/stopped ──
-async function clearDone() {
-  const r = await fetch('/api/clear', { method: 'POST' });
-  const { cleared } = await r.json();
-  if (cleared > 0) showToast(`Đã xóa ${cleared} luồng đã dừng`, 'info');
-  else showToast('Không có luồng nào để dọn dẹp', 'info');
-  poll();
-}
+// ── Ticker update for live and scheduled items (without re-rendering everything) ──
+setInterval(() => {
+  document.querySelectorAll('.uptime-ticker').forEach(el => {
+    const startTime = el.getAttribute('data-start');
+    if (startTime) {
+      const elapsed = Math.floor((Date.now() - new Date(startTime)) / 1000);
+      el.textContent = formatDuration(elapsed);
+    }
+  });
 
-// ── Poll streams ──
+  document.querySelectorAll('.compact-uptime-tag').forEach(el => {
+    const startTime = el.getAttribute('data-start');
+    if (startTime) {
+      const elapsed = Math.floor((Date.now() - new Date(startTime)) / 1000);
+      el.textContent = `🟢 ${formatDuration(elapsed)}`;
+    }
+  });
+
+  document.querySelectorAll('.countdown-ticker').forEach(el => {
+    const schedTime = el.getAttribute('data-sched');
+    if (schedTime) {
+      const remaining = Math.max(0, Math.floor((new Date(schedTime) - Date.now()) / 1000));
+      el.textContent = formatDuration(remaining);
+    }
+  });
+
+  document.querySelectorAll('.compact-countdown-tag').forEach(el => {
+    const schedTime = el.getAttribute('data-sched');
+    if (schedTime) {
+      const remaining = Math.max(0, Math.floor((new Date(schedTime) - Date.now()) / 1000));
+      el.textContent = `🕐 ${formatDuration(remaining)}`;
+    }
+  });
+}, 1000);
+
+// ── Poll for Server Stream Updates (Tự động kích hoạt Mock Data nếu offline) ──
+let useMockData = false;
+let mockPercent = 45;
+let mockTimeStart11 = new Date(Date.now() - 39600000); // 11 tiếng trước
+let mockTimeSched14 = new Date(Date.now() + 2700000); // trong 45 phút nữa
+let mockTimeStart16 = new Date(Date.now() - 3600000); // 1 tiếng trước
+
 async function poll() {
   try {
+    if (useMockData) {
+      updateMockAndRender();
+      return;
+    }
     const r = await fetch('/api/streams');
+    if (!r.ok) throw new Error('API offline');
     const list = await r.json();
     renderStreams(list);
-  } catch (_) {}
+    document.getElementById('demoBadge').style.display = 'none';
+  } catch (e) {
+    useMockData = true;
+    updateMockAndRender();
+  }
 }
+
+function updateMockAndRender() {
+  document.getElementById('demoBadge').style.display = 'inline-flex';
+  
+  // Tăng ngẫu nhiên tiến độ tải video từ Drive
+  mockPercent = mockPercent + 2;
+  if (mockPercent > 100) mockPercent = 15;
+  
+  const mockStreams = [
+    {
+      id: 11,
+      file: "chill-lofi-beats-2026.mp4",
+      mode: "loop",
+      status: "live",
+      startTime: mockTimeStart11.toISOString(),
+      dualStream: true,
+      streamAActive: true,
+      streamBActive: true,
+      lastLog: `[09:15:22] [A] Connecting to rtmp://a.rtmp.youtube.com/live2...
+[09:15:24] [A] Connection successful!
+[09:15:24] [B] Connecting to rtmp://b.rtmp.youtube.com/live2?backup=1...
+[09:15:26] [B] Connection successful!
+frame=158392 fps= 30 q=-0.0 size= 234850kB time=11:00:00.56 bitrate=2432.5kbits/s speed= 1.00x
+[A] Máy chủ chính hoạt động mượt mà.
+[B] Mạch truyền dự phòng B sẵn sàng gánh tải.`
+    },
+    {
+      id: 14,
+      file: "gold-soul-afrobeat-mix.mp4",
+      mode: "scheduled",
+      status: "scheduled",
+      scheduledTime: mockTimeSched14.toISOString(),
+      lastLog: "Hệ thống đã nhận cấu hình. Đang chờ đến giờ kích hoạt lịch phát..."
+    },
+    {
+      id: 15,
+      file: "ambient-space-exploration-4k.mp4",
+      mode: "loop",
+      status: "downloading",
+      lastLog: `Đang tải video từ Google Drive về máy chủ VPS... ${mockPercent}% (45.3 MB/s)`,
+      dlPercent: mockPercent,
+      dlSpeed: 45.3 * 1024 * 1024,
+      dlBytes: Math.round((mockPercent / 100) * 4.2 * 1024 * 1024 * 1024),
+      totalBytes: 4.2 * 1024 * 1024 * 1024
+    },
+    {
+      id: 16,
+      file: "cinematic-relaxing-piano.mp4",
+      mode: "once",
+      status: "live",
+      startTime: mockTimeStart16.toISOString(),
+      dualStream: true,
+      streamAActive: false, // Máy chủ A mất kết nối, chứng minh tính năng tự hồi phục
+      streamBActive: true,
+      lastLog: `[19:30:10] [A] Connecting to rtmp://a.rtmp.youtube.com/live2...
+[19:30:15] [A] error: Connection timeout (refused)!
+⚠️ [A] Broken pipe (RTMP connection lost)! Thử kết nối lại máy chủ A lần thứ #3...
+[19:30:16] [B] Connecting to rtmp://b.rtmp.youtube.com/live2?backup=1...
+[19:30:18] [B] Connection successful!
+frame=108000 fps= 30 q=-0.0 size= 145000kB time=01:00:00.00 bitrate=2100.5kbits/s speed= 1.00x
+[B] Mạch truyền dự phòng B đã tự động gánh luồng, kết nối ổn định (speed=1.0x).`
+    }
+  ];
+  
+  renderStreams(mockStreams);
+}
+
 poll();
 setInterval(poll, 2000);
 
-// ── Toast ──
+// ── Poll for Server System Telemetry (CPU, RAM, Disk) ──
+let mockCpu = 24;
+let mockRamUsed = 6.4;
+let mockUptimeSec = 478200; // ~5.5 days
+
+function parseSpeedToMbps(speedStr) {
+  if (!speedStr) return 0;
+  const match = speedStr.match(/([\d\.]+)\s*(Mbps|Kbps|MB\/s|KB\/s|kbps|mbps)/i);
+  if (!match) return 0;
+  const val = parseFloat(match[1]);
+  const unit = match[2].toLowerCase();
+  if (unit === 'mbps') return val;
+  if (unit === 'kbps') return val / 1000;
+  if (unit === 'mb/s') return val * 8;
+  if (unit === 'kb/s') return (val * 8) / 1000;
+  return val;
+}
+
+async function pollSysInfo() {
+  try {
+    if (useMockData) {
+      updateMockSysInfo();
+      return;
+    }
+    const r = await fetch('/api/sysinfo');
+    if (!r.ok) throw new Error('Sysinfo API offline');
+    const data = await r.json();
+    
+    const C = 226.2;
+    
+    // CPU
+    document.getElementById('sysCpuPct').textContent = `${data.cpuUsage}%`;
+    const cpuOffset = C - (data.cpuUsage / 100) * C;
+    document.getElementById('sysCpuRing').style.strokeDashoffset = cpuOffset;
+    
+    // RAM
+    document.getElementById('sysRamPct').textContent = `${data.ramUsage}%`;
+    const ramOffset = C - (data.ramUsage / 100) * C;
+    document.getElementById('sysRamRing').style.strokeDashoffset = ramOffset;
+    document.getElementById('sysRamSub').textContent = `${data.ramUsed} / ${data.ramTotal}`;
+    
+    // Disk
+    document.getElementById('sysDiskPct').textContent = `${data.diskUsage}%`;
+    const diskOffset = C - (data.diskUsage / 100) * C;
+    document.getElementById('sysDiskRing').style.strokeDashoffset = diskOffset;
+    document.getElementById('sysDiskSub').textContent = `${data.diskUsed} / ${data.diskTotal}`;
+    
+    // Network Speed Ring Update
+    const rxStr = data.netSpeedRx || '0 Kbps';
+    const txStr = data.netSpeedTx || '0 Kbps';
+    const rxMbps = parseSpeedToMbps(rxStr);
+    const txMbps = parseSpeedToMbps(txStr);
+    const totalMbps = rxMbps + txMbps;
+    
+    let displayVal = '0';
+    let displayUnit = 'Mbps';
+    if (totalMbps >= 1) {
+      displayVal = totalMbps.toFixed(1);
+      displayUnit = 'Mbps';
+    } else {
+      displayVal = Math.round(totalMbps * 1000);
+      displayUnit = 'Kbps';
+    }
+    document.getElementById('sysNetSpeedVal').textContent = displayVal;
+    document.getElementById('sysNetSpeedUnit').textContent = displayUnit;
+    
+    const rxShort = rxMbps >= 1 ? rxMbps.toFixed(1) + 'M' : Math.round(rxMbps * 1000) + 'K';
+    const txShort = txMbps >= 1 ? txMbps.toFixed(1) + 'M' : Math.round(txMbps * 1000) + 'K';
+    document.getElementById('sysNetSub').textContent = `📥 ${rxShort} | 📤 ${txShort}`;
+    
+    let netPct = Math.min(100, (totalMbps / 500) * 100);
+    if (totalMbps > 0 && netPct < 2) netPct = 2;
+    const netOffset = C - (netPct / 100) * C;
+    document.getElementById('sysNetRing').style.strokeDashoffset = netOffset;
+    
+    // Static fields
+    document.getElementById('sysOs').textContent = data.platform;
+    document.getElementById('sysNode').textContent = data.nodeVersion;
+    document.getElementById('sysUptime').textContent = data.vpsUptime;
+    document.getElementById('sysActiveThreads').textContent = `${data.activeStreams} luồng active`;
+    document.getElementById('sysNetRx').textContent = data.netSpeedRx || 'Đang tải...';
+    document.getElementById('sysNetTx').textContent = data.netSpeedTx || 'Đang tải...';
+    
+  } catch (e) {
+    updateMockSysInfo();
+  }
+}
+
+function updateMockSysInfo() {
+  // Fluctuating mock values
+  mockCpu = Math.max(12, Math.min(48, mockCpu + (Math.random() > 0.5 ? 2 : -2)));
+  mockRamUsed = Math.max(5.8, Math.min(8.2, parseFloat((mockRamUsed + (Math.random() > 0.5 ? 0.05 : -0.05)).toFixed(2))));
+  const ramPct = Math.round((mockRamUsed / 16.0) * 100);
+  
+  mockUptimeSec += 3;
+  const d = Math.floor(mockUptimeSec / (3600 * 24));
+  const h = Math.floor((mockUptimeSec % (3600 * 24)) / 3600);
+  const m = Math.floor((mockUptimeSec % 3600) / 60);
+  const mockUptimeStr = `${d} ngày ${h} giờ ${m} phút`;
+  
+  const C = 226.2;
+  
+  // CPU
+  document.getElementById('sysCpuPct').textContent = `${mockCpu}%`;
+  const cpuOffset = C - (mockCpu / 100) * C;
+  document.getElementById('sysCpuRing').style.strokeDashoffset = cpuOffset;
+  
+  // RAM
+  document.getElementById('sysRamPct').textContent = `${ramPct}%`;
+  const ramOffset = C - (ramPct / 100) * C;
+  document.getElementById('sysRamRing').style.strokeDashoffset = ramOffset;
+  document.getElementById('sysRamSub').textContent = `${mockRamUsed.toFixed(1)} GB / 16.0 GB`;
+  
+  // Disk
+  document.getElementById('sysDiskPct').textContent = `32%`;
+  const diskOffset = C - (32 / 100) * C;
+  document.getElementById('sysDiskRing').style.strokeDashoffset = diskOffset;
+  document.getElementById('sysDiskSub').textContent = `38.4 GB / 120 GB`;
+  
+  // Static fields
+  document.getElementById('sysOs').textContent = 'Linux VPS (Ubuntu 22.04)';
+  document.getElementById('sysNode').textContent = 'v18.16.0';
+  document.getElementById('sysUptime').textContent = mockUptimeStr;
+  
+  // Simulated dynamic mock network values based on active cards
+  let mockNetRxKbps = 60 + Math.floor(Math.random() * 30);
+  let mockNetTxKbps = 90 + Math.floor(Math.random() * 40);
+  
+  const mockDownloadingCount = document.querySelectorAll('.stream-card.downloading').length;
+  if (mockDownloadingCount > 0) {
+    mockNetRxKbps += 320000 + Math.floor(Math.random() * 80000);
+    mockNetTxKbps += 1200 + Math.floor(Math.random() * 400);
+  }
+  
+  const mockLiveCount = document.querySelectorAll('.stream-card.live').length;
+  if (mockLiveCount > 0) {
+    mockNetTxKbps += mockLiveCount * (2300 + Math.floor(Math.random() * 500));
+    mockNetRxKbps += mockLiveCount * (40 + Math.floor(Math.random() * 20));
+  }
+  
+  const mockNetTxStr = mockNetTxKbps > 1000 ? (mockNetTxKbps / 1000).toFixed(1) + ' Mbps' : mockNetTxKbps + ' Kbps';
+  const mockNetRxStr = mockNetRxKbps > 1000 ? (mockNetRxKbps / 1000).toFixed(1) + ' Mbps' : mockNetRxKbps + ' Kbps';
+  
+  document.getElementById('sysNetRx').textContent = mockNetRxStr;
+  document.getElementById('sysNetTx').textContent = mockNetTxStr;
+
+  // Mock network ring render
+  const mockNetRxMbps = mockNetRxKbps / 1000;
+  const mockNetTxMbps = mockNetTxKbps / 1000;
+  const mockTotalMbps = mockNetRxMbps + mockNetTxMbps;
+  
+  let mockNetSpeedVal = '0';
+  let mockNetSpeedUnit = 'Mbps';
+  if (mockTotalMbps >= 1) {
+    mockNetSpeedVal = mockTotalMbps.toFixed(1);
+    mockNetSpeedUnit = 'Mbps';
+  } else {
+    mockNetSpeedVal = Math.round(mockTotalMbps * 1000);
+    mockNetSpeedUnit = 'Kbps';
+  }
+  document.getElementById('sysNetSpeedVal').textContent = mockNetSpeedVal;
+  document.getElementById('sysNetSpeedUnit').textContent = mockNetSpeedUnit;
+  
+  const mockRxShort = mockNetRxMbps >= 1 ? mockNetRxMbps.toFixed(1) + 'M' : Math.round(mockNetRxMbps * 1000) + 'K';
+  const mockTxShort = mockNetTxMbps >= 1 ? mockNetTxMbps.toFixed(1) + 'M' : Math.round(mockNetTxMbps * 1000) + 'K';
+  document.getElementById('sysNetSub').textContent = `📥 ${mockRxShort} | 📤 ${mockTxShort}`;
+  
+  let mockNetPct = Math.min(100, (mockTotalMbps / 500) * 100);
+  if (mockTotalMbps > 0 && mockNetPct < 2) mockNetPct = 2;
+  const mockNetOffset = C - (mockNetPct / 100) * C;
+  document.getElementById('sysNetRing').style.strokeDashoffset = mockNetOffset;
+  
+  // Count how many live streams in mock
+  const activeCount = document.querySelectorAll('.stream-card.live').length;
+  document.getElementById('sysActiveThreads').textContent = `${activeCount} luồng active`;
+}
+
+// Start polling system info
+pollSysInfo();
+setInterval(pollSysInfo, 3000);
+
+// ── Toast Alert system ──
 let toastTimer;
 function showToast(msg, type = 'info') {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  
+  // Icon based on type
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+  if (type === 'error') icon = '❌';
+
+  t.innerHTML = `<span>${icon}</span> <span>${msg}</span>`;
   t.className = `show ${type}`;
+  
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.className = type; }, 3500);
+  toastTimer = setTimeout(() => {
+    t.className = type;
+  }, 4000);
 }
 </script>
 </body>

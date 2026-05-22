@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aegis Guard - Hệ Thống Vệ Binh Cyber-Shield</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="space-background"></div>
+  
+  <div class="login-card">
+    <div class="logo-area">
+      <div class="logo-shield">🛡️</div>
+      <h1>VỆ BINH CYBER-SHIELD</h1>
+      <p class="subtitle">Hệ Thống Livestream YT</p>
+    </div>
+    
+    <div class="form-group">
+      <label for="vpsIp">Địa chỉ VPS máy chủ điều khiển</label>
+      <input type="text" id="vpsIp" placeholder="Ví dụ: http://103.92.28.xx:3131" autocomplete="off" />
+      <span class="input-helper">Đảm bảo nhập đầy đủ tiền tố http:// và cổng kết nối (mặc định là :3131)</span>
+    </div>
+    
+    <div class="status-box" id="statusBox" style="display: none;">
+      <span class="status-icon" id="statusIcon">⏳</span>
+      <span class="status-msg" id="statusMsg">Đang tải cấu hình kết nối...</span>
+    </div>
+    
+    <button class="btn btn-connect" id="btnConnect" onclick="connectToVps()">
+      ⚡ KẾT NỐI HỆ THỐNG
+    </button>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const savedIp = localStorage.getItem('vps_ip_address');
+      if (savedIp) {
+        document.getElementById('vpsIp').value = savedIp;
+        showStatus('⏳ Đang tự động kết nối đến máy chủ VPS...', 'info');
+        
+        // Silent connection test
+        try {
+          const testUrl = savedIp.endsWith('/') ? savedIp + 'api/streams' : savedIp + '/api/streams';
+          const res = await fetch(testUrl, { method: 'GET', signal: AbortSignal.timeout(4000) });
+          if (res.ok) {
+            showStatus('✅ Kết nối thành công! Đang tải bảng điều khiển...', 'success');
+            setTimeout(() => {
+              window.location.href = savedIp;
+            }, 1000);
+          } else {
+            showStatus('⚠️ Máy chủ phản hồi không đúng. Vui lòng kiểm tra lại địa chỉ!', 'error');
+          }
+        } catch (e) {
+          showStatus('❌ Không thể kết nối tới VPS cũ! Hãy kiểm tra mạng VPS hoặc nhập địa chỉ mới.', 'error');
+        }
+      }
+    });
+
+    async function connectToVps() {
+      let vpsIp = document.getElementById('vpsIp').value.trim();
+      const btn = document.getElementById('btnConnect');
+      
+      if (!vpsIp) {
+        showStatus('❌ Vui lòng nhập địa chỉ VPS máy chủ!', 'error');
+        return;
+      }
+
+      // Automatically add http:// if missing
+      if (!vpsIp.startsWith('http://') && !vpsIp.startsWith('https://')) {
+        vpsIp = 'http://' + vpsIp;
+        document.getElementById('vpsIp').value = vpsIp;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '⏳ ĐANG KẾT NỐI...';
+      showStatus('⏳ Đang kiểm tra cổng dịch vụ trên VPS...', 'info');
+
+      try {
+        const testUrl = vpsIp.endsWith('/') ? vpsIp + 'api/streams' : vpsIp + '/api/streams';
+        const res = await fetch(testUrl, { method: 'GET', signal: AbortSignal.timeout(6000) });
+        
+        if (res.ok) {
+          localStorage.setItem('vps_ip_address', vpsIp);
+          showStatus('✅ Kết nối thành công! Đang khởi chạy bảng điều khiển...', 'success');
+          setTimeout(() => {
+            window.location.href = vpsIp;
+          }, 800);
+        } else {
+          showStatus('⚠️ Máy chủ phản hồi mã lỗi. Vui lòng xem lại cổng hoặc API của server.js!', 'error');
+          btn.disabled = false;
+          btn.textContent = '⚡ KẾT NỐI HỆ THỐNG';
+        }
+      } catch (e) {
+        showStatus('❌ Lỗi kết nối! Đảm bảo live-controller đã chạy trên VPS và cổng 3131 đã mở.', 'error');
+        btn.disabled = false;
+        btn.textContent = '⚡ KẾT NỐI HỆ THỐNG';
+      }
+    }
+
+    function showStatus(msg, type) {
+      const box = document.getElementById('statusBox');
+      const icon = document.getElementById('statusIcon');
+      const text = document.getElementById('statusMsg');
+      
+      box.style.display = 'flex';
+      box.className = `status-box ${type}`;
+      text.innerHTML = msg;
+      
+      if (type === 'info') icon.textContent = '⏳';
+      if (type === 'success') icon.textContent = '✅';
+      if (type === 'error') icon.textContent = '❌';
+    }
+  </script>
+</body>
+</html>

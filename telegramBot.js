@@ -204,7 +204,8 @@ function initBot(actions) {
                   dualText = ' [Song song ⚡]';
                 }
               }
-              report += `${icon} *#${s.id}*${dualText}: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\`\n`;
+              const titleStr = s.title ? ` | ${s.title}` : '';
+              report += `${icon} *#${s.id}${titleStr}*${dualText}: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\`\n`;
             });
           } else {
             report += `📭 _Hiện không có luồng nào đang hoạt động._`;
@@ -294,8 +295,8 @@ function initBot(actions) {
               // Sau đó gửi từng luồng
               list.forEach(s => {
                 const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
-                
-                let msgStr = `${icon} *LUỒNG #${s.id}*\n`;
+                const titleStr = s.title ? ` | ${s.title}` : '';
+                let msgStr = `${icon} *LUỒNG #${s.id}${titleStr}*\n`;
                 msgStr += `Trạng thái: \`${s.status}\`\n`;
                 const protection = s.dualStream ? 'Song song A+B ⚡ (Bảo vệ tối đa)' : 'Đơn luồng 📡';
                 msgStr += `🛡️ Chế độ phát: \`${protection}\`\n`;
@@ -477,12 +478,12 @@ function initBot(actions) {
           handleWizard(chatId, mins, state, actions);
         }
       }
-      else if (action === 'wizdur') {
-        const dur = idStr;
+      else if (action === 'wiztitle') {
+        const title = idStr;
         const state = userStates.get(chatId);
         if (state) {
           bot.answerCallbackQuery(query.id);
-          handleWizard(chatId, dur, state, actions);
+          handleWizard(chatId, title, state, actions);
         }
       }
     } catch (e) { console.error('Lỗi nút bấm:', e.message); }
@@ -548,8 +549,21 @@ function handleWizard(chatId, text, state, actions) {
   try {
     if (state.step === 'key') {
       state.data.key = text;
+      state.step = 'title';
+      bot.sendMessage(chatId, `🏷️ *Bước 2: Đặt tên gợi nhớ cho luồng* (hoặc chọn dùng tên mặc định bên dưới):`, { 
+        parse_mode: 'Markdown',
+        reply_markup: { 
+          inline_keyboard: [
+            [{ text: '🏷️ Dùng tên mặc định', callback_data: 'wiztitle___default__' }],
+            [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+          ] 
+        }
+      });
+    }
+    else if (state.step === 'title') {
+      state.data.title = (text === '__default__') ? '' : text;
       state.step = 'link';
-      bot.sendMessage(chatId, `🔗 Bước 2: Vui lòng dán **Link Google Drive**:`, { 
+      bot.sendMessage(chatId, `🔗 *Bước 3: Vui lòng dán Link Google Drive hoặc đường dẫn video trên VPS*:`, { 
         parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: [[{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]] }
       });
@@ -559,14 +573,22 @@ function handleWizard(chatId, text, state, actions) {
       if (state.cmd.startsWith('schedule')) {
         state.step = 'date';
         const now = new Date();
-        bot.sendMessage(chatId, `📅 Bước 3: Chọn **Ngày phát** từ lịch dưới đây:`, { 
+        bot.sendMessage(chatId, `📅 *Bước 4: Chọn Ngày phát từ lịch dưới đây*:`, { 
           parse_mode: 'Markdown', 
           reply_markup: generateCalendar(now.getFullYear(), now.getMonth())
         });
       } else {
-        const result = actions.startStream({ key: state.data.key, file: state.data.link, mode: state.cmd === 'once' ? 'once' : 'loop', minutes: 0 });
+        const result = actions.startStream({ 
+          key: state.data.key, 
+          title: state.data.title,
+          file: state.data.link, 
+          mode: state.cmd === 'once' ? 'once' : 'loop', 
+          minutes: 0 
+        });
         userStates.delete(chatId);
-        bot.sendMessage(chatId, result.error ? `❌ Lỗi: \`${escapeMarkdown(result.error)}\`` : `✅ Đã tạo luồng *#${result.id}* thành công!`, { parse_mode: 'Markdown' });
+        bot.sendMessage(chatId, result.error 
+          ? `❌ Lỗi: \`${escapeMarkdown(result.error)}\`` 
+          : `✅ Đã kích hoạt luồng *#${result.id} | ${result.title || `Luồng #${result.id}`}* thành công!`, { parse_mode: 'Markdown' });
       }
     }
     else if (state.step === 'date') {
@@ -578,7 +600,7 @@ function handleWizard(chatId, text, state, actions) {
         [{ text: '16:00', callback_data: 'wiztime_16:00' }, { text: '18:00', callback_data: 'wiztime_18:00' }, { text: '20:00', callback_data: 'wiztime_20:00' }, { text: '22:00', callback_data: 'wiztime_22:00' }],
         [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
       ];
-      bot.sendMessage(chatId, `⏰ Bước 4: Chọn **Giờ phát** hoặc tự nhập (VD: 14):`, { 
+      bot.sendMessage(chatId, `⏰ *Bước 5: Chọn Giờ phát hoặc tự nhập (VD: 14)*:`, { 
         parse_mode: 'Markdown', 
         reply_markup: { inline_keyboard: quickTimes } 
       });
@@ -593,47 +615,37 @@ function handleWizard(chatId, text, state, actions) {
         [{ text: ':45', callback_data: 'wizmin_45' }, { text: ':50', callback_data: 'wizmin_50' }, { text: ':55', callback_data: 'wizmin_55' }],
         [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
       ];
-      bot.sendMessage(chatId, `⏱ Bước 5: Chọn **Phút** hoặc tự nhập (VD: 05, 15, 30):`, { 
+      bot.sendMessage(chatId, `⏱ *Bước 6: Chọn Phút hoặc tự nhập (VD: 05, 15, 30)*:`, { 
         parse_mode: 'Markdown', 
         reply_markup: { inline_keyboard: quickMins } 
       });
     }
     else if (state.step === 'minute') {
       state.data.minute = text;
-      state.step = 'duration';
-      const quickDurs = [
-        [{ text: '🔄 Phát lặp (0)', callback_data: 'wizdur_0' }, { text: '1h', callback_data: 'wizdur_60' }, { text: '6h', callback_data: 'wizdur_360' }],
-        [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
-      ];
-      bot.sendMessage(chatId, `⏳ Bước 6: Nhập **Thời lượng phát** (phút) hoặc chọn nhanh:`, { 
-        parse_mode: 'Markdown', 
-        reply_markup: { inline_keyboard: quickDurs } 
-      });
-    }
-    else if (state.step === 'duration') {
-      const minutes = parseInt(text) || 0;
       const isOnce = state.cmd === 'scheduleonce';
       const timeStr = `${String(state.data.hour).padStart(2, '0')}:${String(state.data.minute).padStart(2, '0')}`;
       const scheduledTime = `${state.data.date}T${timeStr}`;
       
       const result = actions.startStream({ 
         key: state.data.key, 
+        title: state.data.title,
         file: state.data.link, 
         mode: 'scheduled', 
         scheduledMode: isOnce ? 'once' : 'loop', 
-        minutes, 
+        minutes: 0, 
         scheduledTime 
       });
       
       userStates.delete(chatId);
       if (result.error) bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
-      else bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id}* thành công lúc \`${new Date(scheduledTime).toLocaleString('vi-VN')}\``, { parse_mode: 'Markdown' });
+      else bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH HỆ THỐNG THÀNH CÔNG!*\n━━━━━━━━━━━━━━━━━━\n🏷️ Tên luồng: \`${result.title || `Luồng #${result.id}`}\`\n⏰ Khởi phát: \`${new Date(scheduledTime).toLocaleString('vi-VN')}\`\n📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``, { parse_mode: 'Markdown' });
     }
   } catch (e) {
     userStates.delete(chatId);
     bot.sendMessage(chatId, `❌ Có lỗi xảy ra trong quá trình nhập: ${e.message}`);
   }
 }
+
 
 function updateProgress(streamId, pct, text) {
   if (!bot || !config.adminIds) return;
