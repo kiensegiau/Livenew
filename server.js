@@ -24,6 +24,17 @@ const streams = new Map();
 const BACKUP_FILE = path.join(__dirname, 'streams_backup.json');
 const DOWNLOAD_DIR = path.join(__dirname, 'downloads');
 
+// Biến lưu trữ hiệu số thời gian CPU phục vụ tính toán chính xác 100% tài nguyên
+let lastCpuTimes = null;
+let lastCpuPct = 15;
+
+// Biến lưu trữ hiệu số thời gian và lưu lượng mạng phục vụ tính toán chính xác 100% tài nguyên
+let lastNetTime = null;
+let lastRxBytes = null;
+let lastTxBytes = null;
+let lastNetRxStr = '0 Kbps';
+let lastNetTxStr = '0 Kbps';
+
 // Đảm bảo thư mục downloads tồn tại
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR, { recursive: true });
 
@@ -37,7 +48,7 @@ function saveStreams() {
   const data = Array.from(streams.values()).map(s => ({
     id: s.id, key: s.key, file: s.file, originalFile: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, 
     scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, status: s.status, dualStream: !!s.dualStream,
-    title: s.title
+    name: s.name || ''
   }));
   fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
 }
@@ -186,16 +197,16 @@ function cleanupFile(filePath, retryCount = 0) {
 
 // ─── Launch FFmpeg ────────────────────────────────────────────────────────────
 function launchFFmpeg(id, key, file, mode, minutes) {
+  let info = streams.get(id);
   // Kiểm tra file tồn tại trước khi chạy
   if (!file || !fs.existsSync(file)) {
     console.error(`[Stream #${id}] ❌ Lỗi: File video không tồn tại tại: ${file}`);
-    broadcast(`🔴 *LUỒNG #${id} THẤT BẠI!*\nLỗi: Không tìm thấy file video trên ổ đĩa.`);
-    const s = streams.get(id);
-    if (s) s.status = 'ended';
+    const telegramName = info && info.name ? `🏷️ Luồng: *${escapeMarkdown(info.name)}*\n` : '';
+    broadcast(`🔴 *LUỒNG #${id} THẤT BẠI!*\n━━━━━━━━━━━━━━━━━━\n${telegramName}Lỗi: Không tìm thấy file video trên ổ đĩa.`);
+    if (info) info.status = 'ended';
     return;
   }
 
-  let info = streams.get(id);
   if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
 
   info.dualStream = true; // Luôn luôn phát song song 2 luồng A+B để tránh mọi sự cố
@@ -278,7 +289,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   
   proc.on('error', (err) => {
     console.error(`[Stream #${id}] ❌ Lỗi khởi động FFmpeg:`, err.message);
-    broadcast(`❌ *LUỒNG #${id} KHÔNG THỂ KHỞI CHẠY!*\nLỗi: \`${err.message}\``);
+    const telegramName = info.name ? `🏷️ Luồng: *${escapeMarkdown(info.name)}*\n` : '';
+    broadcast(`❌ *LUỒNG #${id} KHÔNG THỂ KHỞI CHẠY!*\n━━━━━━━━━━━━━━━━━━\n${telegramName}Lỗi: \`${err.message}\``);
   });
 
   info.process = proc;
@@ -287,11 +299,12 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   info.startTime = new Date().toISOString();
   info.retryCount = info.retryCount || 0; // Đếm số lần retry
   const fileName = path.basename(info.file);
+  const displayName = info.name ? `🏷️ Luồng: *${escapeMarkdown(info.name)}*\n` : '';
 
   if (info.dualStream) {
-    broadcast(`🚀 *LUỒNG #${id} BẮT ĐẦU LIVE (SONG SONG A+B) ⚡*\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${fileName}\`\n📡 Chế độ: \`Song song cả 2 Máy chủ chính & dự phòng (Độ ổn định cực hạn)\`\n🛡 Trạng thái bảo vệ: \`Hoạt động song song (High Redundancy Active)\``);
+    broadcast(`🚀 *LUỒNG #${id} BẮT ĐẦU LIVE (SONG SONG A+B) ⚡*\n━━━━━━━━━━━━━━━━━━\n${displayName}🎞 Video: \`${fileName}\`\n📡 Chế độ: \`Song song cả 2 Máy chủ chính & dự phòng (Độ ổn định cực hạn)\`\n🛡 Trạng thái bảo vệ: \`Hoạt động song song (High Redundancy Active)\``);
   } else {
-    broadcast(`🟢 *LUỒNG #${id} BẮT ĐẦU LIVE!*\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${fileName}\`\n📡 Ingest Server: \`${serverName}\` (Đơn luồng)`);
+    broadcast(`🟢 *LUỒNG #${id} BẮT ĐẦU LIVE!*\n━━━━━━━━━━━━━━━━━━\n${displayName}🎞 Video: \`${fileName}\`\n📡 Ingest Server: \`${serverName}\` (Đơn luồng)`);
   }
 
   // --- CƠ CHẾ KHÔI PHỤC THÔNG MINH: RESET RETRY COUNT KHI LIVE ỔN ĐỊNH ---
@@ -312,7 +325,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     if (s) {
       s.status = 'ended';
       s.lastLog = `❌ Lỗi khởi động FFmpeg: ${err.message}`;
-      broadcast(`🔴 *LỖI KHỞI ĐỘNG LUỒNG #${id}!*\nNội dung: \`${err.message}\``);
+      const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+      broadcast(`🔴 *LỖI KHỞI ĐỘNG LUỒNG #${id}!*\n━━━━━━━━━━━━━━━━━━\n${telegramName}Nội dung: \`${err.message}\``);
       saveStreams();
     }
   });
@@ -346,11 +360,13 @@ function launchFFmpeg(id, key, file, mode, minutes) {
                 if (isFail && s.streamAActive !== false) {
                     s.streamAActive = false;
                     s.streamALog = line;
-                    broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
+                    const displayName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+                    broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n━━━━━━━━━━━━━━━━━━\n${displayName}🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
                 } else if (isSuccess && s.streamAActive === false) {
                     s.streamAActive = true;
                     s.streamALog = '';
-                    broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG A THÀNH CÔNG!* 🟢\n🇺🇸 Máy chủ chính A (Primary) đã tự động hoạt động bình thường trở lại.`);
+                    const displayName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+                    broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG A THÀNH CÔNG!* 🟢\n━━━━━━━━━━━━━━━━━━\n${displayName}🇺🇸 Máy chủ chính A (Primary) đã tự động hoạt động bình thường trở lại.`);
                 }
             }
             
@@ -362,11 +378,13 @@ function launchFFmpeg(id, key, file, mode, minutes) {
                 if (isFail && s.streamBActive !== false) {
                     s.streamBActive = false;
                     s.streamBLog = line;
-                    broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);
+                    const displayName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+                    broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n━━━━━━━━━━━━━━━━━━\n${displayName}🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);
                 } else if (isSuccess && s.streamBActive === false) {
                     s.streamBActive = true;
                     s.streamBLog = '';
-                    broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG B THÀNH CÔNG!* 🟢\n🇸🇬 Máy chủ dự phòng B (Backup) đã tự động hoạt động bình thường trở lại.`);
+                    const displayName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+                    broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG B THÀNH CÔNG!* 🟢\n━━━━━━━━━━━━━━━━━━\n${displayName}🇸🇬 Máy chủ dự phòng B (Backup) đã tự động hoạt động bình thường trở lại.`);
                 }
             }
         });
@@ -398,7 +416,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
       const maxRetryText = s.mode === 'loop' ? '∞' : maxRetry;
       const msg = `[Stream #${id}] Luồng bị ngắt (mã ${code}), đang kết nối lại lần ${s.retryCount}/${maxRetryText} sau 10 giây...`;
       console.log(msg);
-      broadcast(`🟡 *Luồng #${id} bị văng (mã ${code})*\nĐang thử kết nối lại lần ${s.retryCount}/${maxRetryText}...`);
+      const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+      broadcast(`🟡 *Luồng #${id} bị văng (mã ${code})*\n━━━━━━━━━━━━━━━━━━\n${telegramName}Đang thử kết nối lại lần ${s.retryCount}/${maxRetryText}...`);
       s.timer = setTimeout(() => {
         if (streams.has(id) && streams.get(id).status === 'reconnecting') {
            launchFFmpeg(id, key, file, mode, minutes);
@@ -406,11 +425,12 @@ function launchFFmpeg(id, key, file, mode, minutes) {
       }, 10000);
     } else {
       s.status = 'ended';
+      const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
       if(code !== 0) {
         s.lastLog = s.lastLog || `Thoát với mã ${code}`;
-        broadcast(`🔴 *LUỒNG #${id} BỊ LỖI FFmpeg!*\n🎞 Video: \`${path.basename(s.file)}\`\n💬 Chi tiết: \`${escapeMarkdown(s.lastLog)}\``);
+        broadcast(`🔴 *LUỒNG #${id} BỊ LỖI FFmpeg!*\n━━━━━━━━━━━━━━━━━━\n${telegramName}🎞 Video: \`${path.basename(s.file)}\`\n💬 Chi tiết: \`${escapeMarkdown(s.lastLog)}\``);
       } else {
-        broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n🎞 Video: \`${path.basename(s.file)}\``);
+        broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n━━━━━━━━━━━━━━━━━━\n${telegramName}🎞 Video: \`${path.basename(s.file)}\``);
       }
       // KHÔNG tự ý xóa file tạm khi luồng sập nữa để bảo vệ khả năng bật lại
       console.log(`[Stream #${id}] Luồng đã kết thúc vĩnh viễn. Giữ lại file video tạm.`);
@@ -451,7 +471,7 @@ function proceedStartStream(id) {
   }
 }
 
-function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, title }) {
+function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, name }) {
   // Nếu không có luồng nào, reset số thứ tự về 1
   if (streams.size === 0 && !id) nextId = 1;
   
@@ -465,12 +485,11 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, 
   }
 
   const info = {
-    id: streamId, key, file, originalFile: file, mode, minutes, scheduledTime,
+    id: streamId, key, file, originalFile: file, mode, minutes, scheduledTime, name: name || '',
     dualStream: true,
     status: isDrive ? 'downloading' : (mode === 'scheduled' ? 'scheduled' : 'launching'),
     startTime: null,
-    process: null, pid: null, lastLog: '', retryCount: 0,
-    title: title || `Luồng #${streamId}`
+    process: null, pid: null, lastLog: '', retryCount: 0
   };
   streams.set(streamId, info);
 
@@ -496,6 +515,7 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, 
         s.dlPercent = pct;
         s.dlSpeed = speed;
         
+        const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
         if (pct !== null) {
           s.lastLog = `Đang tải... ${pct}% (${speedMBs} MB/s)`;
           console.log(`[Stream #${streamId}] ⏳ Tiến độ: ${pct}% (${(dl/1024/1024).toFixed(2)} MB / ${(total/1024/1024).toFixed(2)} MB) | Tốc độ: ${speedMBs} MB/s (${speedMbps} Mbps)`);
@@ -503,12 +523,12 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, 
           // Tạo thanh tiến trình trực quan
           const filled = Math.round(pct / 10);
           const bar = '■'.repeat(filled) + '□'.repeat(10 - filled);
-          updateProgress(streamId, pct, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[${bar}] ${pct}%\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB\`\n⚡ Tốc độ: \`${speedMBs} MB/s\` (${speedMbps} Mbps)\n📡 Cấu hình: \`${dualText}\``);
+          updateProgress(streamId, pct, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n${telegramName}📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[${bar}] ${pct}%\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} / ${(total/1024/1024).toFixed(1)} MB\`\n⚡ Tốc độ: \`${speedMBs} MB/s\` (${speedMbps} Mbps)\n📡 Cấu hình: \`${dualText}\``);
         }
         else {
           s.lastLog = `Đang tải... ${Math.round(dl/1024/1024)}MB (${speedMBs} MB/s)`;
           console.log(`[Stream #${streamId}] ⏳ Đang tải... ${(dl/1024/1024).toFixed(2)} MB | Tốc độ: ${speedMBs} MB/s`);
-          updateProgress(streamId, null, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[Đang tải...]\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n⚡ Tốc độ: \`${speedMBs} MB/s\`\n📡 Cấu hình: \`${dualText}\``);
+          updateProgress(streamId, null, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n${telegramName}📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[Đang tải...]\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n⚡ Tốc độ: \`${speedMBs} MB/s\`\n📡 Cấu hình: \`${dualText}\``);
         }
       }
     }).then(filePath => {
@@ -518,7 +538,8 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, 
       s.lastLog = 'Tải xong, chuẩn bị live...';
       console.log(`\n[Stream #${streamId}] ✅ TẢI XONG! File được lưu tạm tại: ${filePath}`);
       console.log(`[Stream #${streamId}] 🚀 Bắt đầu kích hoạt FFmpeg...`);
-      updateProgress(streamId, 100, `✅ *LUỒNG #${streamId}* - TẢI VIDEO THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${path.basename(filePath)}\`\n🚀 Trạng thái: \`Đang kích hoạt phát Live...\``);
+      const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+      updateProgress(streamId, 100, `✅ *LUỒNG #${streamId}* - TẢI VIDEO THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━\n${telegramName}🎞 Video: \`${path.basename(filePath)}\`\n🚀 Trạng thái: \`Đang kích hoạt phát Live...\``);
       proceedStartStream(streamId);
     }).catch(err => {
       const s = streams.get(streamId);
@@ -526,7 +547,8 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, 
       s.status = 'ended';
       s.lastLog = `❌ Lỗi tải Drive: ${err.message}`;
       console.error(`\n[Stream #${streamId}] ❌ Lỗi tải Google Drive: ${err.message}`);
-      broadcast(`❌ *Lỗi tải Drive (Luồng #${streamId})*\n${err.message}`);
+      const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+      broadcast(`❌ *Lỗi tải Drive (Luồng #${streamId})*\n━━━━━━━━━━━━━━━━━━\n${telegramName}Chi tiết: \`${escapeMarkdown(err.message)}\``);
     });
     
     return { id: streamId, status: 'downloading', scheduledTime };
@@ -599,16 +621,92 @@ async function parseBody(req) {
 }
 
 function json(res, code, data) {
-  res.writeHead(code, { 'Content-Type': 'application/json' });
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(data));
 }
 
+// ─── 🔐 CẤU HÌNH BẢO MẬT & ĐĂNG NHẬP ──────────────────────────────────────────
+const crypto = require('crypto');
+const AUTH_CONFIG_PATH = path.join(__dirname, 'auth_config.json');
+let authConfig = { username: 'admin', password: 'admin' };
+let sessionToken = crypto.randomBytes(16).toString('hex');
+
+function loadAuthConfig() {
+  try {
+    if (fs.existsSync(AUTH_CONFIG_PATH)) {
+      const data = JSON.parse(fs.readFileSync(AUTH_CONFIG_PATH, 'utf8'));
+      if (data.username && data.password) {
+        authConfig = data;
+      }
+    } else {
+      saveAuthConfig();
+    }
+  } catch (e) {
+    console.error('[Auth] Lỗi tải cấu hình bảo mật:', e.message);
+  }
+}
+
+function saveAuthConfig() {
+  try {
+    fs.writeFileSync(AUTH_CONFIG_PATH, JSON.stringify(authConfig, null, 2), 'utf8');
+  } catch (e) {
+    console.error('[Auth] Lỗi lưu cấu hình bảo mật:', e.message);
+  }
+}
+
+loadAuthConfig();
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
   const { pathname } = new URL(req.url, `http://127.0.0.1:${PORT}`);
+
+  // API: Đăng nhập hệ thống
+  if (req.method === 'POST' && pathname === '/api/login') {
+    const body = await parseBody(req);
+    if (!body || !body.username || !body.password) {
+      json(res, 400, { error: 'Vui lòng điền tài khoản và mật khẩu!' });
+      return;
+    }
+    if (body.username === authConfig.username && body.password === authConfig.password) {
+      json(res, 200, { token: sessionToken });
+    } else {
+      json(res, 401, { error: 'Tài khoản hoặc mật khẩu không chính xác!' });
+    }
+    return;
+  }
+
+  // Bộ lọc bảo vệ (Auth Middleware) cho các API /api/*
+  if (pathname.startsWith('/api/') && pathname !== '/api/login') {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token !== sessionToken) {
+      json(res, 401, { error: 'Unauthorized' });
+      return;
+    }
+  }
+
+  // API: Đổi mật khẩu bảo mật
+  if (req.method === 'POST' && pathname === '/api/change-password') {
+    const body = await parseBody(req);
+    if (!body || !body.currentPassword || !body.newPassword) {
+      json(res, 400, { error: 'Thông tin không hợp lệ!' });
+      return;
+    }
+    if (body.currentPassword !== authConfig.password) {
+      json(res, 400, { error: 'Mật khẩu hiện tại không chính xác!' });
+      return;
+    }
+    authConfig.password = body.newPassword;
+    saveAuthConfig();
+
+    // Làm mới Token để buộc các phiên làm việc khác đăng nhập lại
+    sessionToken = crypto.randomBytes(16).toString('hex');
+    json(res, 200, { ok: true, msg: 'Đổi mật khẩu thành công!' });
+    return;
+  }
 
   // Serve UI
   if (pathname === '/' || pathname === '/index.html') {
@@ -673,6 +771,145 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Hàm hỗ trợ tính toán CPU phần trăm thực tế dựa trên chênh lệch thời gian CPU (CPU Time Delta)
+  function getCpuUsage() {
+    const cpus = os.cpus();
+    if (!cpus || cpus.length === 0) return lastCpuPct;
+    
+    let totalUser = 0, totalNice = 0, totalSys = 0, totalIdle = 0, totalIrq = 0;
+    for (let i = 0; i < cpus.length; i++) {
+      const t = cpus[i].times;
+      totalUser += t.user;
+      totalNice += t.nice;
+      totalSys += t.sys;
+      totalIdle += t.idle;
+      totalIrq += t.irq;
+    }
+    
+    const total = totalUser + totalNice + totalSys + totalIdle + totalIrq;
+    const idle = totalIdle;
+    
+    if (lastCpuTimes) {
+      const diffTotal = total - lastCpuTimes.total;
+      const diffIdle = idle - lastCpuTimes.idle;
+      if (diffTotal > 0) {
+        const pct = Math.round((1 - diffIdle / diffTotal) * 100);
+        lastCpuPct = Math.max(0, Math.min(100, pct));
+      }
+    }
+    
+    lastCpuTimes = { total, idle };
+    return lastCpuPct;
+  }
+
+  // Hàm hỗ trợ đọc dung lượng đĩa thực tế trên Windows & Linux không treo luồng
+  function getDiskInfo() {
+    let diskTotalStr = '120 GB';
+    let diskUsedStr = '38.2 GB';
+    let diskUsagePct = 32;
+    
+    try {
+      if (os.platform() === 'win32') {
+        // Lấy dung lượng ổ đĩa C trên Windows bằng wmic
+        const output = execSync('wmic logicaldisk where "DeviceID=\'C:\'" get FreeSpace,Size /format:list', { 
+          encoding: 'utf8', 
+          timeout: 2000, 
+          stdio: ['pipe', 'pipe', 'ignore'] 
+        });
+        const freeMatch = output.match(/FreeSpace=(\d+)/i);
+        const sizeMatch = output.match(/Size=(\d+)/i);
+        if (freeMatch && sizeMatch) {
+          const free = parseInt(freeMatch[1], 10);
+          const size = parseInt(sizeMatch[1], 10);
+          if (size > 0) {
+            const used = size - free;
+            diskUsagePct = Math.round((used / size) * 100);
+            diskTotalStr = (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+            diskUsedStr = (used / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+          }
+        }
+      } else {
+        // Lấy dung lượng thư mục gốc / trên Linux/VPS bằng df
+        const output = execSync('df -k /', { 
+          encoding: 'utf8', 
+          timeout: 2000, 
+          stdio: ['pipe', 'pipe', 'ignore'] 
+        });
+        const lines = output.trim().split('\n');
+        if (lines.length > 1) {
+          const parts = lines[1].replace(/\s+/g, ' ').split(' ');
+          if (parts.length >= 4) {
+            // df -k trả về đơn vị KB
+            const totalKB = parseInt(parts[1], 10);
+            const usedKB = parseInt(parts[2], 10);
+            if (totalKB > 0) {
+              diskUsagePct = Math.round((usedKB / totalKB) * 100);
+              diskTotalStr = (totalKB / (1024 * 1024)).toFixed(1) + ' GB';
+              diskUsedStr = (usedKB / (1024 * 1024)).toFixed(1) + ' GB';
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[System] Lỗi đọc dung lượng đĩa thật:', err.message);
+    }
+    
+    return {
+      total: diskTotalStr,
+      used: diskUsedStr,
+      usage: diskUsagePct
+    };
+  }
+
+  // Hàm hỗ trợ đọc tổng số Bytes nhận và gửi thực tế trên Windows & Linux
+  function getNetworkBytes() {
+    let rx = 0;
+    let tx = 0;
+    try {
+      if (os.platform() === 'win32') {
+        const output = execSync('powershell -Command "Get-NetAdapterStatistics | Select-Object ReceivedBytes, SentBytes | ConvertTo-Json"', {
+          encoding: 'utf8',
+          timeout: 2000,
+          stdio: ['pipe', 'pipe', 'ignore']
+        }).trim();
+        if (output) {
+          const parsed = JSON.parse(output);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(item => {
+              rx += parseInt(item.ReceivedBytes || 0, 10);
+              tx += parseInt(item.SentBytes || 0, 10);
+            });
+          } else if (parsed && typeof parsed === 'object') {
+            rx = parseInt(parsed.ReceivedBytes || 0, 10);
+            tx = parseInt(parsed.SentBytes || 0, 10);
+          }
+        }
+      } else {
+        // Đọc tệp /proc/net/dev trên Linux/VPS
+        if (fs.existsSync('/proc/net/dev')) {
+          const content = fs.readFileSync('/proc/net/dev', 'utf8');
+          const lines = content.split('\n');
+          lines.forEach(line => {
+            if (line.includes(':')) {
+              const parts = line.split(':');
+              const devName = parts[0].trim();
+              if (devName !== 'lo') {
+                const cols = parts[1].trim().replace(/\s+/g, ' ').split(' ');
+                if (cols.length >= 9) {
+                  rx += parseInt(cols[0] || 0, 10);
+                  tx += parseInt(cols[8] || 0, 10);
+                }
+              }
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[System] Lỗi đọc lưu lượng mạng thật:', err.message);
+    }
+    return { rx, tx };
+  }
+
   // API: Get VPS system telemetry
   if (req.method === 'GET' && pathname === '/api/sysinfo') {
     try {
@@ -685,38 +922,47 @@ const server = http.createServer(async (req, res) => {
       const cpuCount = cpus.length;
       const cpuModel = cpuCount > 0 ? cpus[0].model.replace(/\s+/g, ' ').trim() : 'Generic CPU';
       
-      let loadAvg = os.loadavg();
-      let cpuUsagePct = 25;
-      if (loadAvg && loadAvg.length > 0 && loadAvg[0] > 0) {
-        cpuUsagePct = Math.min(100, Math.round((loadAvg[0] / cpuCount) * 100));
-      } else {
-        cpuUsagePct = Math.floor(Math.random() * (35 - 12 + 1)) + 12; // fluctuation
+      // Lấy phần trăm CPU thực tế dựa trên hiệu số thời gian
+      const cpuUsagePct = getCpuUsage();
+      
+      // Lấy dung lượng đĩa thực tế
+      const disk = getDiskInfo();
+      
+      // Lấy lưu lượng mạng thực tế và tính toán tốc độ bằng chênh lệch Delta
+      const now = Date.now();
+      const currentNetBytes = getNetworkBytes();
+      
+      let netTxStr = lastNetTxStr;
+      let netRxStr = lastNetRxStr;
+      
+      if (lastNetTime && lastRxBytes !== null && lastTxBytes !== null) {
+        const elapsedSec = (now - lastNetTime) / 1000;
+        if (elapsedSec > 0.5) {
+          const rxDiff = currentNetBytes.rx - lastRxBytes;
+          const txDiff = currentNetBytes.tx - lastTxBytes;
+          
+          if (rxDiff >= 0 && txDiff >= 0) {
+            const rxSpeedBps = rxDiff / elapsedSec;
+            const txSpeedBps = txDiff / elapsedSec;
+            
+            // Chuyển đổi Bytes/sec sang Bits/sec (nhân 8), rồi sang Kbps (chia 1024)
+            const rxSpeedKbps = (rxSpeedBps * 8) / 1024;
+            const txSpeedKbps = (txSpeedBps * 8) / 1024;
+            
+            netRxStr = rxSpeedKbps > 1000 ? (rxSpeedKbps / 1024).toFixed(1) + ' Mbps' : Math.round(rxSpeedKbps) + ' Kbps';
+            netTxStr = txSpeedKbps > 1000 ? (txSpeedKbps / 1024).toFixed(1) + ' Mbps' : Math.round(txSpeedKbps) + ' Kbps';
+            
+            lastNetRxStr = netRxStr;
+            lastNetTxStr = netTxStr;
+          }
+        }
       }
       
-      // Calculate realistic network speeds dynamically based on active stream states
-      let netTxKbps = 0; // Upload speed (Tx)
-      let netRxKbps = 0; // Download speed (Rx)
-      for (const [, s] of streams) {
-        if (s.status === 'live') {
-          // RTMP push uses around 2300 - 2800 kbps per active live stream
-          netTxKbps += 2300 + Math.floor(Math.random() * 500);
-          netRxKbps += 40 + Math.floor(Math.random() * 20); // ack overhead
-        }
-        if (s.status === 'downloading') {
-          // Google Drive download uses around 40-50 MB/s (approx 320 - 400 Mbps)
-          netRxKbps += 320000 + Math.floor(Math.random() * 80000);
-          netTxKbps += 1200 + Math.floor(Math.random() * 400); // upload headers
-        }
-      }
+      lastNetTime = now;
+      lastRxBytes = currentNetBytes.rx;
+      lastTxBytes = currentNetBytes.tx;
       
-      // Background idle bandwidth baseline
-      netTxKbps += 90 + Math.floor(Math.random() * 40);
-      netRxKbps += 60 + Math.floor(Math.random() * 30);
-      
-      const netTxStr = netTxKbps > 1000 ? (netTxKbps / 1000).toFixed(1) + ' Mbps' : netTxKbps + ' Kbps';
-      const netRxStr = netRxKbps > 1000 ? (netRxKbps / 1000).toFixed(1) + ' Mbps' : netRxKbps + ' Kbps';
-      
-      // VPS uptime formatter
+      // Định dạng uptime VPS
       const uptimeSec = os.uptime();
       const d = Math.floor(uptimeSec / (3600 * 24));
       const h = Math.floor((uptimeSec % (3600 * 24)) / 3600);
@@ -730,9 +976,9 @@ const server = http.createServer(async (req, res) => {
         ramTotal: (totalMem / (1024 * 1024 * 1024)).toFixed(1) + ' GB',
         ramUsed: (usedMem / (1024 * 1024 * 1024)).toFixed(1) + ' GB',
         ramUsage: memUsagePct,
-        diskTotal: '120 GB',
-        diskUsed: '38.2 GB',
-        diskUsage: 32,
+        diskTotal: disk.total,
+        diskUsed: disk.used,
+        diskUsage: disk.usage,
         vpsUptime: uptimeStr,
         nodeVersion: process.version,
         netSpeedTx: netTxStr,
@@ -759,7 +1005,7 @@ const server = http.createServer(async (req, res) => {
 
       list.push({
         id: s.id,
-        title: s.title || `Luồng #${s.id}`,
+        name: s.name || '',
         keyHint: s.key.substring(0, 6) + '****',
         file: displayFile,
         mode: s.mode,

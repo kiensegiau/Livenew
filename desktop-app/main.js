@@ -199,3 +199,11 @@ ipcMain.on('set-auto-start', (event, enable) => {
     path: app.getPath('exe')
   });
 });
+
+// IPC handler to return to the local connection bridge configuration page
+ipcMain.on('go-to-config', () => {
+  if (mainWindow) {
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  }
+});
+

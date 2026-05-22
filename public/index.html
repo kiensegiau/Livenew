@@ -491,17 +491,23 @@
   .stream-card-details {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.35s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease, margin-top 0.3s ease;
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.25s ease, 
+                margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                padding-top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.3s ease;
     opacity: 0;
     margin-top: 0;
+    padding-top: 0;
+    border-top: 1px solid transparent;
   }
 
   .stream-card-details.expanded {
-    max-height: 650px;
+    max-height: 520px;
     opacity: 1;
     margin-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
     padding-top: 14px;
+    border-color: rgba(255, 255, 255, 0.06);
   }
 
   .card-top-row {
@@ -1591,9 +1597,152 @@
       height: 220px;
     }
   }
+
+  /* ==========================================
+     AUTHENTICATION SYSTEM STYLES (CYBER-SHIELD)
+     ========================================== */
+  .login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(4, 5, 9, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
+  }
+
+  .login-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .login-box {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-lg);
+    padding: 36px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 50px rgba(99, 102, 241, 0.12);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .login-box:hover {
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7), 0 0 60px rgba(99, 102, 241, 0.18);
+  }
+
+  .login-box::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .login-box-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .login-box-logo {
+    font-size: 2.8rem;
+    margin-bottom: 10px;
+    display: inline-block;
+    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.3));
+    animation: shield-pulse 3s infinite ease-in-out;
+  }
+
+  @keyframes shield-pulse {
+    0% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.3)); }
+    50% { transform: scale(1.08); filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.6)); }
+    100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.3)); }
+  }
+
+  .login-box-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    background: linear-gradient(135deg, #fff 40%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .login-box-subtitle {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .login-submit-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: var(--primary-gradient);
+    border: none;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: 0 4px 15px var(--primary-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .login-submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.55);
+  }
+
+  .login-submit-btn:active {
+    transform: translateY(0);
+  }
 </style>
 </head>
 <body>
+
+<!-- Cyber-Shield Secure Login Overlay -->
+<div class="login-overlay hidden" id="loginOverlay">
+  <div class="login-box">
+    <div class="login-box-header">
+      <div class="login-box-logo">🛡️</div>
+      <h2 class="login-box-title">VỆ BINH CYBER-SHIELD</h2>
+      <p class="login-box-subtitle">Đăng nhập máy chủ điều khiển VPS</p>
+    </div>
+    <div class="form-group">
+      <label for="loginUser">Tài khoản</label>
+      <div class="input-wrapper">
+        <input type="text" id="loginUser" placeholder="Nhập tài khoản" autocomplete="off" />
+      </div>
+    </div>
+    <div class="form-group" style="margin-top: 14px;">
+      <label for="loginPass">Mật khẩu</label>
+      <div class="input-wrapper">
+        <input type="password" id="loginPass" placeholder="Nhập mật khẩu" autocomplete="off" onkeydown="if(event.key==='Enter') submitLogin()" />
+      </div>
+    </div>
+    <button class="login-submit-btn" id="btnLoginSubmit" onclick="submitLogin()">
+      🔑 ĐĂNG NHẬP HỆ THỐNG
+    </button>
+  </div>
+</div>
 
 <div class="dashboard-wrapper">
   
@@ -1610,6 +1759,7 @@
     </div>
     
     <div class="system-stats-bar">
+      <button id="electronConfigBtn" class="sys-badge" style="display: none; cursor: pointer; background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35); color: #818cf8; font-weight: 600; padding: 6px 12px; border-radius: 20px;">⚙️ Cấu Hình VPS</button>
       <span id="demoBadge" class="sys-badge" style="display:none; background:rgba(239, 68, 68, 0.08); border-color:rgba(239, 68, 68, 0.2); color:#f87171; font-weight:600;"><span style="color:#ef4444;">●</span> MOCK DATA (DEMO)</span>
       <span class="sys-badge"><span style="color:#6366f1">●</span> FIFO Muxer</span>
       <span class="sys-badge"><span style="color:#a855f7">●</span> Auto-Healing</span>
@@ -1629,6 +1779,14 @@
         <div class="card-title">⚙️ Cấu hình Live mới</div>
       </div>
 
+      <!-- Stream Name / Tag -->
+      <div class="form-group">
+        <label for="streamName">Tên gợi nhớ luồng (Tùy chọn)</label>
+        <div class="input-wrapper">
+          <input type="text" id="streamName" placeholder="Ví dụ: Live Nhạc Chill Lofi, Live Afro Soul..." autocomplete="off" />
+        </div>
+      </div>
+
       <!-- YouTube Stream Key -->
       <div class="form-group">
         <label for="streamKey">Stream Key (YouTube Studio)</label>
@@ -1641,12 +1799,6 @@
             </svg>
           </button>
         </div>
-      </div>
-
-      <!-- Tên gợi nhớ luồng -->
-      <div class="form-group">
-        <label for="streamTitle">Tên gợi nhớ luồng</label>
-        <input type="text" id="streamTitle" placeholder="Ví dụ: Nhạc Lofi Chill 24/7, Nhạc Tiếng Mưa..." autocomplete="off" />
       </div>
 
       <!-- Video File / Drive Link -->
@@ -1673,8 +1825,9 @@
 
       <!-- Loop mode details -->
       <div class="mode-fields visible" id="mode-loop">
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-          🔄 Tự động lặp lại video vô hạn lần để duy trì luồng phát sóng 24/7 liên tục không gián đoạn.
+        <div class="form-group">
+          <label for="minutes">Số phút Live (0 = Không giới hạn)</label>
+          <input type="number" id="minutes" value="1440" min="0" />
         </div>
       </div>
 
@@ -1735,6 +1888,11 @@
           <div class="schedule-helper-text" id="scheduleHelper">
             Đang tải dữ liệu thời gian đặt lịch...
           </div>
+        </div>
+        
+        <div class="form-group" style="margin-bottom:0">
+          <label for="schedMinutes">Số phút Live sau khi khởi động</label>
+          <input type="number" id="schedMinutes" value="1440" min="0" />
         </div>
       </div>
 
@@ -1842,32 +2000,30 @@
         </div>
       </div>
       
-      <!-- Detailed System List -->
-      <div class="sys-details-list">
-        <div class="sys-detail-item">
-          <span class="sys-detail-label">🖥️ OS Host</span>
-          <span class="sys-detail-value" id="sysOs">Đang tải...</span>
+      <!-- Detailed System List Removed (Replaced by Circular Rings for Sleeker Look) -->
+    </div>
+
+    <!-- 🔒 Change Password Card -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header-area">
+        <div class="card-title">🔒 Đổi mật khẩu bảo mật</div>
+      </div>
+      <div class="form-group">
+        <label for="currentPassword">Mật khẩu hiện tại</label>
+        <div class="input-wrapper">
+          <input type="password" id="currentPassword" placeholder="Nhập mật khẩu hiện tại" autocomplete="off" />
         </div>
-        <div class="sys-detail-item">
-          <span class="sys-detail-label">⚡ Runtime</span>
-          <span class="sys-detail-value" id="sysNode">Đang tải...</span>
+      </div>
+      <div class="form-group" style="margin-top: 12px;">
+        <label for="newPassword">Mật khẩu mới</label>
+        <div class="input-wrapper">
+          <input type="password" id="newPassword" placeholder="Nhập mật khẩu mới" autocomplete="off" />
         </div>
-        <div class="sys-detail-item">
-          <span class="sys-detail-label">⏱️ Uptime</span>
-          <span class="sys-detail-value" id="sysUptime">Đang tải...</span>
-        </div>
-        <div class="sys-detail-item">
-          <span class="sys-detail-label">⚙️ Active Streams</span>
-          <span class="sys-detail-value" id="sysActiveThreads">0 luồng active</span>
-        </div>
-        <div class="sys-detail-item">
-          <span class="sys-detail-label">📥 Tốc độ Tải (Rx)</span>
-          <span class="sys-detail-value" id="sysNetRx">Đang tải...</span>
-        </div>
-        <div class="sys-detail-item">
-          <span class="sys-detail-label">📤 Tốc độ Đẩy (Tx)</span>
-          <span class="sys-detail-value" id="sysNetTx">Đang tải...</span>
-        </div>
+      </div>
+      <div style="margin-top: 16px;">
+        <button class="btn btn-ghost btn-sm" style="width: 100%; padding: 10px; font-weight: 600; border-color: rgba(239, 68, 68, 0.3); color: #f87171;" id="btnChangePassword" onclick="changePassword()">
+          🔄 Cập Nhật Mật Khẩu
+        </button>
       </div>
     </div>
 
@@ -1905,6 +2061,134 @@
 
 <script>
 let currentMode = 'loop';
+
+// ── Secure Session State & Authentication ──
+function showLoginOverlay() {
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    document.getElementById('loginUser').focus();
+  }
+}
+
+function hideLoginOverlay() {
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+  }
+}
+
+async function submitLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value.trim();
+  
+  if (!username || !password) {
+    showToast('Vui lòng điền đầy đủ tài khoản và mật khẩu!', 'error');
+    return;
+  }
+  
+  const btn = document.getElementById('btnLoginSubmit');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang xác thực...';
+  
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await res.json();
+    if (res.ok && data.token) {
+      localStorage.setItem('vps_session_token', data.token);
+      hideLoginOverlay();
+      useMockData = false;
+      showToast('Đăng nhập thành công!', 'success');
+      
+      // Clear inputs
+      document.getElementById('loginUser').value = '';
+      document.getElementById('loginPass').value = '';
+      
+      // Trigger instant polling
+      poll();
+      pollSysInfo();
+    } else {
+      showToast(data.error || 'Tài khoản hoặc mật khẩu không chính xác!', 'error');
+    }
+  } catch (e) {
+    showToast('Lỗi kết nối đến dịch vụ xác thực!', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔑 ĐĂNG NHẬP HỆ THỐNG';
+  }
+}
+
+async function changePassword() {
+  const currentPassword = document.getElementById('currentPassword').value.trim();
+  const newPassword = document.getElementById('newPassword').value.trim();
+  
+  if (!currentPassword || !newPassword) {
+    showToast('Vui lòng điền mật khẩu hiện tại và mật khẩu mới!', 'error');
+    return;
+  }
+  
+  const btn = document.getElementById('btnChangePassword');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang cập nhật...';
+  
+  try {
+    const res = await authFetch('/api/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast('Đổi mật khẩu thành công! Hãy đăng nhập lại bằng mật khẩu mới.', 'success');
+      document.getElementById('currentPassword').value = '';
+      document.getElementById('newPassword').value = '';
+      
+      // Clear current token and force login
+      localStorage.removeItem('vps_session_token');
+      showLoginOverlay();
+    } else {
+      showToast(data.error || 'Đổi mật khẩu thất bại!', 'error');
+    }
+  } catch (e) {
+    if (e.message !== 'Unauthorized') {
+      showToast('Lỗi kết nối khi đổi mật khẩu!', 'error');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Cập Nhật Mật Khẩu';
+  }
+}
+
+// Unified Auth Fetch Interceptor
+async function authFetch(url, options = {}) {
+  const token = localStorage.getItem('vps_session_token') || '';
+  if (!options.headers) {
+    options.headers = {};
+  }
+  if (token) {
+    options.headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  try {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+      localStorage.removeItem('vps_session_token');
+      showLoginOverlay();
+      throw new Error('Unauthorized');
+    }
+    return res;
+  } catch (e) {
+    if (e.message !== 'Unauthorized') {
+      console.error('[Network Error]', e);
+    }
+    throw e;
+  }
+}
 
 // ── Secure Toggler for Stream Key ──
 function toggleStreamKeyVisibility() {
@@ -2164,10 +2448,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (savedKey) {
     document.getElementById('streamKey').value = savedKey;
   }
-  const savedTitle = localStorage.getItem('yt_stream_title');
-  if (savedTitle) {
-    document.getElementById('streamTitle').value = savedTitle;
-  }
   const savedPath = localStorage.getItem('yt_video_path');
   if (savedPath) {
     document.getElementById('videoPath').value = savedPath;
@@ -2314,7 +2594,7 @@ function setMode(mode) {
 async function browse() {
   showToast('Đang mở hộp thoại chọn file trên máy chủ...', 'info');
   try {
-    const r = await fetch('/api/browse', { method: 'POST' });
+    const r = await authFetch('/api/browse', { method: 'POST' });
     const { path } = await r.json();
     if (path) {
       document.getElementById('videoPath').value = path;
@@ -2329,38 +2609,44 @@ async function browse() {
   }
 }
 
+// Helper to set text content of elements if they exist safely (avoiding crashes when removed)
+function setSafeText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
 // ── Start Stream Call ──
 async function startStream() {
   const key = document.getElementById('streamKey').value.trim();
-  const title = document.getElementById('streamTitle').value.trim();
   const file = document.getElementById('videoPath').value.trim();
+  const name = document.getElementById('streamName')?.value.trim() || '';
 
   if (!key) { showToast('Vui lòng nhập Stream Key!', 'error'); return; }
   if (!file) { showToast('Vui lòng nhập đường dẫn hoặc link Google Drive!', 'error'); return; }
-
-  // Save persistent stream configurations
-  localStorage.setItem('yt_stream_key', key);
-  localStorage.setItem('yt_stream_title', title);
-  localStorage.setItem('yt_video_path', file);
 
   const btn = document.getElementById('btnStart');
   btn.disabled = true;
   btn.textContent = '⏳ Đang truyền tải hệ thống...';
 
-  const body = { key, title, file, mode: currentMode, minutes: 0 };
+  const body = { key, file, name, mode: currentMode };
 
-  if (currentMode === 'scheduled') {
+  if (currentMode === 'loop') {
+    body.minutes = parseInt(document.getElementById('minutes').value) || 0;
+  } else if (currentMode === 'scheduled') {
     body.scheduledTime = document.getElementById('schedTime').value;
+    body.minutes = parseInt(document.getElementById('schedMinutes').value) || 0;
     if (!body.scheduledTime) {
       showToast('Vui lòng nhập thời gian đặt lịch!', 'error');
       btn.disabled = false;
       btn.textContent = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
       return;
     }
+  } else {
+    body.minutes = 0;
   }
 
   try {
-    const r = await fetch('/api/start', {
+    const r = await authFetch('/api/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -2374,6 +2660,9 @@ async function startStream() {
         ? `🕐 Kích hoạt đặt lịch lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN')}`
         : '🔴 Luồng Live đã được khởi kích hoạt thành công!';
       showToast(msg, 'success');
+      // Clear stream name field
+      const nameInput = document.getElementById('streamName');
+      if (nameInput) nameInput.value = '';
     }
   } catch (e) {
     showToast('Thất bại khi kết nối máy chủ Live!', 'error');
@@ -2387,7 +2676,7 @@ async function startStream() {
 // ── Stop Stream Call ──
 async function stopStream(id) {
   try {
-    const r = await fetch('/api/stop', {
+    const r = await authFetch('/api/stop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
@@ -2402,7 +2691,7 @@ async function stopStream(id) {
 // ── Restart Stream Call ──
 async function restartStream(id) {
   try {
-    const r = await fetch('/api/restart', {
+    const r = await authFetch('/api/restart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
@@ -2419,7 +2708,7 @@ async function restartStream(id) {
 // ── Clear Completed Streams ──
 async function clearDone() {
   try {
-    const r = await fetch('/api/clear', { method: 'POST' });
+    const r = await authFetch('/api/clear', { method: 'POST' });
     const { cleared } = await r.json();
     if (cleared > 0) showToast(`Đã dọn dẹp ${cleared} luồng kết thúc thành công`, 'success');
     else showToast('Không có luồng đã tắt để dọn dẹp.', 'info');
@@ -2559,14 +2848,16 @@ function renderStreams(list) {
     // Build Metadata metrics
     let metaItems = [];
     
-    // Tên gợi nhớ luồng
-    metaItems.push(`
-      <div class="meta-item" title="Tên gợi nhớ luồng">
-        <span class="meta-icon">🏷️</span>
-        <span style="font-weight: 700; color: #818cf8;">${s.title || `Luồng #${s.id}`}</span>
-      </div>
-    `);
-    
+    // Stream name
+    if (s.name) {
+      metaItems.push(`
+        <div class="meta-item" style="border-color: rgba(99, 102, 241, 0.2);" title="Tên gợi nhớ: ${s.name}">
+          <span class="meta-icon">🏷️</span>
+          <span style="font-weight: 600; color: #818cf8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Tên luồng: ${s.name}</span>
+        </div>
+      `);
+    }
+
     // File path info
     metaItems.push(`
       <div class="meta-item" title="Đường dẫn nguồn: ${s.file}">
@@ -2787,9 +3078,9 @@ function renderStreams(list) {
         <div class="stream-card-compact-header" onclick="toggleStreamCard(${s.id})" style="cursor: pointer; user-select: none;">
           <!-- Header row of the card -->
           <div class="card-top-row" style="margin-bottom: 8px;">
-            <div class="stream-id-area" style="display: flex; align-items: center; gap: 8px;">
+            <div class="stream-id-area">
               <span class="stream-id-pill">#${s.id}</span>
-              <span class="stream-title-text" style="font-weight: 700; color: #fff; font-size: 0.85rem; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${s.title || `Luồng #${s.id}`}">${s.title || `Luồng #${s.id}`}</span>
+              ${s.name ? `<span class="stream-name-tag" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.25); padding: 2px 8px; border-radius: 6px; text-shadow: 0 0 8px rgba(99, 102, 241, 0.45); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle;" title="${s.name}">${s.name}</span>` : ''}
               <span class="stream-mode-badge">${modeLabel}</span>
             </div>
             
@@ -2812,15 +3103,26 @@ function renderStreams(list) {
                 <span style="color: #60a5fa; background: rgba(96, 165, 250, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(96, 165, 250, 0.15); display: inline-flex; align-items: center; gap: 4px;">
                   ⚡ ${ffmpegSpeedVal} | 📶 ${ffmpegBitrateVal}
                 </span>
+                <span style="color: ${s.streamAActive && s.streamBActive ? 'var(--success)' : 'var(--warning)'}; background: ${s.streamAActive && s.streamBActive ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)'}; padding: 2px 6px; border-radius: 4px; border: 1px solid ${s.streamAActive && s.streamBActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)'}; display: inline-flex; align-items: center; gap: 4px;" title="Trạng thái máy chủ: A (${s.streamAActive ? 'Hoạt động' : 'Gián đoạn'}) | B (${s.streamBActive ? 'Hoạt động' : 'Gián đoạn'})">
+                  📡 Mạch: ${s.streamAActive && s.streamBActive ? 'A+B' : s.streamAActive ? 'A' : s.streamBActive ? 'B' : 'OFF'}
+                </span>
               ` : ''}
               ${s.status === 'downloading' ? `
                 <span style="color: #c084fc; background: rgba(168, 85, 247, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(168, 85, 247, 0.15); display: inline-flex; align-items: center; gap: 4px;">
-                  🚀 Speed: ${dlSpeedValString} MB/s
+                  🚀 Tốc độ: ${dlSpeedValString} MB/s
                 </span>
+                ${s.dlBytes ? `
+                  <span style="color: #818cf8; background: rgba(129, 140, 248, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(129, 140, 248, 0.15); display: inline-flex; align-items: center; gap: 4px;">
+                    📁 ${formatBytes(s.dlBytes)} / ${s.totalBytes ? formatBytes(s.totalBytes) : 'unk'}
+                  </span>
+                ` : ''}
               ` : ''}
               ${s.status === 'scheduled' && s.scheduledTime ? `
                 <span style="color: var(--warning); background: rgba(245, 158, 11, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.15); display: inline-flex; align-items: center; gap: 4px;">
                   📅 Giờ VPS: ${new Date(s.scheduledTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                <span style="color: #818cf8; background: rgba(129, 140, 248, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(129, 140, 248, 0.15); display: inline-flex; align-items: center; gap: 4px;">
+                  ⏱️ Live: ${s.minutes > 0 ? `${s.minutes}p` : 'Vô hạn'}
                 </span>
               ` : ''}
             </div>
@@ -2961,12 +3263,13 @@ async function poll() {
       updateMockAndRender();
       return;
     }
-    const r = await fetch('/api/streams');
+    const r = await authFetch('/api/streams');
     if (!r.ok) throw new Error('API offline');
     const list = await r.json();
     renderStreams(list);
     document.getElementById('demoBadge').style.display = 'none';
   } catch (e) {
+    if (e.message === 'Unauthorized') return;
     useMockData = true;
     updateMockAndRender();
   }
@@ -2982,6 +3285,7 @@ function updateMockAndRender() {
   const mockStreams = [
     {
       id: 11,
+      name: "Live Nhạc Chill Lofi 24/7",
       file: "chill-lofi-beats-2026.mp4",
       mode: "loop",
       status: "live",
@@ -2999,6 +3303,7 @@ frame=158392 fps= 30 q=-0.0 size= 234850kB time=11:00:00.56 bitrate=2432.5kbits/
     },
     {
       id: 14,
+      name: "Afrobeat Mix 2026",
       file: "gold-soul-afrobeat-mix.mp4",
       mode: "scheduled",
       status: "scheduled",
@@ -3007,6 +3312,7 @@ frame=158392 fps= 30 q=-0.0 size= 234850kB time=11:00:00.56 bitrate=2432.5kbits/
     },
     {
       id: 15,
+      name: "Ambient Space Exploration",
       file: "ambient-space-exploration-4k.mp4",
       mode: "loop",
       status: "downloading",
@@ -3018,6 +3324,7 @@ frame=158392 fps= 30 q=-0.0 size= 234850kB time=11:00:00.56 bitrate=2432.5kbits/
     },
     {
       id: 16,
+      name: "Cinematic Relaxing Piano",
       file: "cinematic-relaxing-piano.mp4",
       mode: "once",
       status: "live",
@@ -3065,7 +3372,7 @@ async function pollSysInfo() {
       updateMockSysInfo();
       return;
     }
-    const r = await fetch('/api/sysinfo');
+    const r = await authFetch('/api/sysinfo');
     if (!r.ok) throw new Error('Sysinfo API offline');
     const data = await r.json();
     
@@ -3116,15 +3423,16 @@ async function pollSysInfo() {
     const netOffset = C - (netPct / 100) * C;
     document.getElementById('sysNetRing').style.strokeDashoffset = netOffset;
     
-    // Static fields
-    document.getElementById('sysOs').textContent = data.platform;
-    document.getElementById('sysNode').textContent = data.nodeVersion;
-    document.getElementById('sysUptime').textContent = data.vpsUptime;
-    document.getElementById('sysActiveThreads').textContent = `${data.activeStreams} luồng active`;
-    document.getElementById('sysNetRx').textContent = data.netSpeedRx || 'Đang tải...';
-    document.getElementById('sysNetTx').textContent = data.netSpeedTx || 'Đang tải...';
+    // Static fields (safe text setters)
+    setSafeText('sysOs', data.platform);
+    setSafeText('sysNode', data.nodeVersion);
+    setSafeText('sysUptime', data.vpsUptime);
+    setSafeText('sysActiveThreads', `${data.activeStreams} luồng active`);
+    setSafeText('sysNetRx', data.netSpeedRx || 'Đang tải...');
+    setSafeText('sysNetTx', data.netSpeedTx || 'Đang tải...');
     
   } catch (e) {
+    if (e.message === 'Unauthorized') return;
     updateMockSysInfo();
   }
 }
@@ -3160,10 +3468,10 @@ function updateMockSysInfo() {
   document.getElementById('sysDiskRing').style.strokeDashoffset = diskOffset;
   document.getElementById('sysDiskSub').textContent = `38.4 GB / 120 GB`;
   
-  // Static fields
-  document.getElementById('sysOs').textContent = 'Linux VPS (Ubuntu 22.04)';
-  document.getElementById('sysNode').textContent = 'v18.16.0';
-  document.getElementById('sysUptime').textContent = mockUptimeStr;
+  // Static fields (safe text setters)
+  setSafeText('sysOs', 'Linux VPS (Ubuntu 22.04)');
+  setSafeText('sysNode', 'v18.16.0');
+  setSafeText('sysUptime', mockUptimeStr);
   
   // Simulated dynamic mock network values based on active cards
   let mockNetRxKbps = 60 + Math.floor(Math.random() * 30);
@@ -3184,8 +3492,8 @@ function updateMockSysInfo() {
   const mockNetTxStr = mockNetTxKbps > 1000 ? (mockNetTxKbps / 1000).toFixed(1) + ' Mbps' : mockNetTxKbps + ' Kbps';
   const mockNetRxStr = mockNetRxKbps > 1000 ? (mockNetRxKbps / 1000).toFixed(1) + ' Mbps' : mockNetRxKbps + ' Kbps';
   
-  document.getElementById('sysNetRx').textContent = mockNetRxStr;
-  document.getElementById('sysNetTx').textContent = mockNetTxStr;
+  setSafeText('sysNetRx', mockNetRxStr);
+  setSafeText('sysNetTx', mockNetTxStr);
 
   // Mock network ring render
   const mockNetRxMbps = mockNetRxKbps / 1000;
@@ -3215,12 +3523,28 @@ function updateMockSysInfo() {
   
   // Count how many live streams in mock
   const activeCount = document.querySelectorAll('.stream-card.live').length;
-  document.getElementById('sysActiveThreads').textContent = `${activeCount} luồng active`;
+  setSafeText('sysActiveThreads', `${activeCount} luồng active`);
 }
 
 // Start polling system info
 pollSysInfo();
 setInterval(pollSysInfo, 3000);
+
+// Detect if running inside Electron and configure return button
+if (window.require) {
+  try {
+    const { ipcRenderer } = window.require('electron');
+    const configBtn = document.getElementById('electronConfigBtn');
+    if (configBtn) {
+      configBtn.style.display = 'inline-flex';
+      configBtn.addEventListener('click', () => {
+        ipcRenderer.send('go-to-config');
+      });
+    }
+  } catch (e) {
+    console.warn('Không thể khởi chạy liên kết Electron:', e);
+  }
+}
 
 // ── Toast Alert system ──
 let toastTimer;

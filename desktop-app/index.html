@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aegis Guard - Hệ Thống Vệ Binh Cyber-Shield</title>
+  <title>Vệ Binh Cyber-Shield - Aegis Command Center</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,14 +11,19 @@
   
   <div class="login-card">
     <div class="logo-area">
-      <div class="logo-shield">🛡️</div>
+      <div class="logo-shield-wrapper">
+        <div class="logo-shield">🛡️</div>
+      </div>
       <h1>VỆ BINH CYBER-SHIELD</h1>
-      <p class="subtitle">Hệ Thống Livestream YT</p>
+      <p class="subtitle">Aegis Command Center</p>
     </div>
     
     <div class="form-group">
       <label for="vpsIp">Địa chỉ VPS máy chủ điều khiển</label>
-      <input type="text" id="vpsIp" placeholder="Ví dụ: http://103.92.28.xx:3131" autocomplete="off" />
+      <div class="input-container">
+        <span class="input-icon">🌐</span>
+        <input type="text" id="vpsIp" placeholder="Ví dụ: http://103.92.28.xx:3131" autocomplete="off" />
+      </div>
       <span class="input-helper">Đảm bảo nhập đầy đủ tiền tố http:// và cổng kết nối (mặc định là :3131)</span>
     </div>
     
@@ -43,7 +48,7 @@
         try {
           const testUrl = savedIp.endsWith('/') ? savedIp + 'api/streams' : savedIp + '/api/streams';
           const res = await fetch(testUrl, { method: 'GET', signal: AbortSignal.timeout(4000) });
-          if (res.ok) {
+          if (res.ok || res.status === 401) {
             showStatus('✅ Kết nối thành công! Đang tải bảng điều khiển...', 'success');
             setTimeout(() => {
               window.location.href = savedIp;
@@ -80,7 +85,7 @@
         const testUrl = vpsIp.endsWith('/') ? vpsIp + 'api/streams' : vpsIp + '/api/streams';
         const res = await fetch(testUrl, { method: 'GET', signal: AbortSignal.timeout(6000) });
         
-        if (res.ok) {
+        if (res.ok || res.status === 401) {
           localStorage.setItem('vps_ip_address', vpsIp);
           showStatus('✅ Kết nối thành công! Đang khởi chạy bảng điều khiển...', 'success');
           setTimeout(() => {
