@@ -215,14 +215,17 @@ function launchFFmpeg(id, key, file, mode, minutes) {
 
   if (info.dualStream) {
     serverName = 'Song song cả hai Máy chủ A và B';
-    console.log(`[Stream #${id}] 🔗 Khởi chạy luồng phát SONG SONG cả 2 Máy chủ chính (A) và dự phòng (B)`);
+    console.log(`[Stream #${id}] 🔗 Khởi chạy luồng phát SONG SONG bất đồng bộ cả 2 Máy chủ chính (A) và dự phòng (B)`);
     
-    const rtmpA = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://a.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
-    const rtmpB = `[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp\\://b.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
+    // Sử dụng bộ trộn f=fifo để chống nghẽn chéo giữa 2 luồng (khi 1 luồng đứt, luồng kia không bị ảnh hưởng)
+    // Tự động thử kết nối lại sau mỗi 5 giây (attempt_recovery=1, recovery_wait_time=5) khi có sự cố mạng
+    const rtmpA = `[f=fifo:fifo_format=flv:drop_pkts_on_overflow=1:attempt_recovery=1:recovery_wait_time=5:onfail=ignore]rtmp\\://a.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
+    const rtmpB = `[f=fifo:fifo_format=flv:drop_pkts_on_overflow=1:attempt_recovery=1:recovery_wait_time=5:onfail=ignore]rtmp\\://b.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
     
     formatArgs = [
       '-map', '0',               // BẮT BUỘC: Ánh xạ toàn bộ luồng đầu vào cho tee muxer hoạt động
       '-c', 'copy',
+      '-flags', '+global_header', // Đồng bộ header toàn cục cho các bộ trộn con hoạt động ổn định
       '-tag:v', '7',             // Ép nhãn H.264 video tương thích FLV chuẩn (tránh lỗi Tag avc1 incompatible)
       '-tag:a', '10',            // Ép nhãn AAC audio tương thích FLV chuẩn (tránh lỗi Tag mp4a incompatible)
       '-bsf:a', 'aac_adtstoasc',
@@ -324,25 +327,43 @@ function launchFFmpeg(id, key, file, mode, minutes) {
         const cleanLines = errBuf.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean);
         s.lastLog = cleanLines[cleanLines.length - 1] || '';
         
-        // Phát hiện rớt kết nối từng nhánh A hoặc B của tee muxer
-        if (dataStr.includes('Slave muxer #0 failed') || errBuf.includes('Slave muxer #0 failed')) {
-            if (s.streamAActive !== false) {
-                s.streamAActive = false;
-                const rtmpLines = errBuf.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean).reverse();
-                const errLine = rtmpLines.find(l => l.includes('rtmp') || l.includes('Connection') || l.includes('failed') || l.includes('Error')) || 'Slave muxer #0 failed';
-                s.streamALog = errLine.trim();
-                broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
+        // Duyệt qua các dòng log mới nhận để phát hiện lỗi hoặc phục hồi kết nối thời gian thực từ bộ trộn FIFO
+        const newLines = dataStr.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean);
+        newLines.forEach(line => {
+            const lowerLine = line.toLowerCase();
+            
+            // --- KIỂM TRA NHÁNH A ---
+            if (lowerLine.includes('a.rtmp.youtube.com') || lowerLine.includes('slave muxer #0 failed')) {
+                const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || lowerLine.includes('timeout') || lowerLine.includes('slave muxer #0 failed');
+                const isSuccess = lowerLine.includes('connected') || lowerLine.includes('successful') || lowerLine.includes('success') || lowerLine.includes('established') || lowerLine.includes('recovery successful');
+                
+                if (isFail && s.streamAActive !== false) {
+                    s.streamAActive = false;
+                    s.streamALog = line;
+                    broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
+                } else if (isSuccess && s.streamAActive === false) {
+                    s.streamAActive = true;
+                    s.streamALog = '';
+                    broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG A THÀNH CÔNG!* 🟢\n🇺🇸 Máy chủ chính A (Primary) đã tự động hoạt động bình thường trở lại.`);
+                }
             }
-        }
-        if (dataStr.includes('Slave muxer #1 failed') || errBuf.includes('Slave muxer #1 failed')) {
-            if (s.streamBActive !== false) {
-                s.streamBActive = false;
-                const rtmpLines = errBuf.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean).reverse();
-                const errLine = rtmpLines.find(l => l.includes('rtmp') || l.includes('Connection') || l.includes('failed') || l.includes('Error')) || 'Slave muxer #1 failed';
-                s.streamBLog = errLine.trim();
-                broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);
+            
+            // --- KIỂM TRA NHÁNH B ---
+            if (lowerLine.includes('b.rtmp.youtube.com') || lowerLine.includes('slave muxer #1 failed')) {
+                const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || lowerLine.includes('timeout') || lowerLine.includes('slave muxer #1 failed');
+                const isSuccess = lowerLine.includes('connected') || lowerLine.includes('successful') || lowerLine.includes('success') || lowerLine.includes('established') || lowerLine.includes('recovery successful');
+                
+                if (isFail && s.streamBActive !== false) {
+                    s.streamBActive = false;
+                    s.streamBLog = line;
+                    broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);
+                } else if (isSuccess && s.streamBActive === false) {
+                    s.streamBActive = true;
+                    s.streamBLog = '';
+                    broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG B THÀNH CÔNG!* 🟢\n🇸🇬 Máy chủ dự phòng B (Backup) đã tự động hoạt động bình thường trở lại.`);
+                }
             }
-        }
+        });
     }
   });
 
