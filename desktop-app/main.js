@@ -46,6 +46,14 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, 'index.html'));
   }
 
+  // Handle remote URL load failures (fallback to local config page if VPS is down or IP changed)
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    if (validatedURL && validatedURL.startsWith('http')) {
+      console.log('[Electron] Failed to load remote VPS URL, falling back to local bridge configuration.');
+      mainWindow.loadFile(path.join(__dirname, 'index.html'));
+    }
+  });
+
   // Custom application menu
   const menuTemplate = [
     {
