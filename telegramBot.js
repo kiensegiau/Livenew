@@ -380,16 +380,23 @@ function initBot(actions) {
           if (!isNaN(parseInt(parts[parts.length - 1])) && !parts[parts.length - 1].includes(':')) minutes = parseInt(parts.pop());
           const timeStr = parts.pop();
           const now = new Date();
-          let datePart = now.toISOString().split('T')[0];
+          let datePart = now.toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).split(' ')[0];
           let scheduledTime = `${datePart}T${timeStr}`;
-          if (new Date(scheduledTime).getTime() <= now.getTime()) {
-            const tom = new Date(now); tom.setDate(tom.getDate() + 1);
-            datePart = tom.toISOString().split('T')[0];
+          
+          // Parse và so sánh với giờ hiện tại tuyệt đối theo múi giờ Việt Nam (+07:00)
+          const targetTime = new Date(scheduledTime + '+07:00').getTime();
+          if (targetTime <= now.getTime()) {
+            const tom = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+            datePart = tom.toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).split(' ')[0];
             scheduledTime = `${datePart}T${timeStr}`;
           }
+          
           const result = actions.startStream({ key: parts[1], file: parts.slice(2).join(' '), mode: 'scheduled', scheduledMode: isOnce ? 'once' : 'loop', minutes, scheduledTime });
           if (result.error) bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
-          else bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id} THÀNH CÔNG*\n━━━━━━━━━━━━━━━━━━\n⏰ Thời gian: \`${new Date(scheduledTime).toLocaleString('vi-VN')}\`\n📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``, { parse_mode: 'Markdown' });
+          else {
+            const displayTime = new Date(scheduledTime + '+07:00').toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+            bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id} THÀNH CÔNG*\n━━━━━━━━━━━━━━━━━━\n⏰ Thời gian: \`${displayTime}\`\n📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``, { parse_mode: 'Markdown' });
+          }
       }
 
       else if (text.startsWith('/log ')) {
@@ -647,7 +654,10 @@ function handleWizard(chatId, text, state, actions) {
       
       userStates.delete(chatId);
       if (result.error) bot.sendMessage(chatId, `❌ Lỗi: ${result.error}`);
-      else bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id}* thành công lúc \`${new Date(scheduledTime).toLocaleString('vi-VN')}\``, { parse_mode: 'Markdown' });
+      else {
+        const displayTime = new Date(scheduledTime + '+07:00').toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        bot.sendMessage(chatId, `📅 *ĐÃ ĐẶT LỊCH # ${result.id}* thành công lúc \`${displayTime}\``, { parse_mode: 'Markdown' });
+      }
     }
   } catch (e) {
     userStates.delete(chatId);

@@ -454,7 +454,10 @@ function proceedStartStream(id) {
   if (!s || s.status === 'stopped') return;
 
   if (s.mode === 'scheduled') {
-    const localISO = s.scheduledTime.length === 16 ? s.scheduledTime + ':00' : s.scheduledTime;
+    let localISO = s.scheduledTime;
+    if (!localISO.includes('Z') && !localISO.includes('+') && !/-\d{2}:\d{2}$/.test(localISO)) {
+      localISO = localISO.length === 16 ? localISO + ':00+07:00' : localISO + '+07:00';
+    }
     const delay = new Date(localISO).getTime() - Date.now();
     
     if (delay <= 0) {
@@ -487,14 +490,18 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, 
   const streamId = id || nextId++;
   const isDrive = !!extractDriveId(file);
 
+  let normalizedScheduledTime = scheduledTime;
+  if (scheduledTime && !scheduledTime.includes('Z') && !scheduledTime.includes('+') && !/-\d{2}:\d{2}$/.test(scheduledTime)) {
+    normalizedScheduledTime = scheduledTime.length === 16 ? scheduledTime + ':00+07:00' : scheduledTime + '+07:00';
+  }
+
   if (mode === 'scheduled') {
-    const localISO = scheduledTime.length === 16 ? scheduledTime + ':00' : scheduledTime;
-    const delay = new Date(localISO).getTime() - Date.now();
+    const delay = new Date(normalizedScheduledTime).getTime() - Date.now();
     if (delay <= 0) return { error: 'Thời gian đặt lịch đã qua rồi!' };
   }
 
   const info = {
-    id: streamId, key, file, originalFile: file, mode, minutes, scheduledTime, name: name || `Luồng #${streamId}`,
+    id: streamId, key, file, originalFile: file, mode, minutes, scheduledTime: normalizedScheduledTime, name: name || `Luồng #${streamId}`,
     dualStream: true,
     status: isDrive ? 'downloading' : (mode === 'scheduled' ? 'scheduled' : 'launching'),
     startTime: null,
