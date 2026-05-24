@@ -2859,12 +2859,24 @@ function renderStreams(list) {
     }[s.status] || s.status.toUpperCase();
 
     // Mode visual text
-    let modeLabel = { loop: 'Vòng Lặp Vô Hạn', once: 'Phát Một Lần', scheduled: 'Đặt Lịch Phát' }[s.mode] || s.mode;
+    let modeLabel = '';
     if (s.scheduledTime || s.mode === 'scheduled') {
       const targetMode = s.scheduledMode || (s.mode === 'scheduled' ? 'loop' : s.mode);
-      if (targetMode === 'loop') modeLabel = 'Đặt Lịch (Lặp)';
-      else if (targetMode === 'once') modeLabel = 'Đặt Lịch (Một Lần)';
-      else modeLabel = 'Đặt Lịch Phát';
+      if (targetMode === 'loop') {
+        modeLabel = s.minutes > 0 ? `Đặt Lịch (Lặp ${s.minutes}p)` : 'Đặt Lịch (Lặp)';
+      } else if (targetMode === 'once') {
+        modeLabel = 'Đặt Lịch (Một Lần)';
+      } else {
+        modeLabel = 'Đặt Lịch Phát';
+      }
+    } else {
+      if (s.mode === 'loop') {
+        modeLabel = s.minutes > 0 ? `Vòng Lặp (${s.minutes}p)` : 'Vòng Lặp Vô Hạn';
+      } else if (s.mode === 'once') {
+        modeLabel = 'Phát Một Lần';
+      } else {
+        modeLabel = s.mode;
+      }
     }
 
     // Outer scoped variables for compact preview telemetry
@@ -2937,6 +2949,16 @@ function renderStreams(list) {
         <div class="meta-item">
           <span class="meta-icon">🕐</span>
           <span>Kích hoạt sau: <span class="countdown-ticker" data-sched="${s.scheduledTime}">${formatDuration(remaining)}</span></span>
+        </div>
+      `);
+    }
+
+    // Live duration limit info
+    if (s.minutes > 0) {
+      metaItems.push(`
+        <div class="meta-item" style="border-color: rgba(245, 158, 11, 0.2);">
+          <span class="meta-icon">⏱️</span>
+          <span style="color: var(--warning); font-weight: 500;">Giới hạn Live: ${s.minutes} phút</span>
         </div>
       `);
     }
