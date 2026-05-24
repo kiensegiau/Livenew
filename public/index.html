@@ -2860,9 +2860,10 @@ function renderStreams(list) {
 
     // Mode visual text
     let modeLabel = { loop: 'Vòng Lặp Vô Hạn', once: 'Phát Một Lần', scheduled: 'Đặt Lịch Phát' }[s.mode] || s.mode;
-    if (s.scheduledTime) {
-      if (s.mode === 'loop') modeLabel = 'Đặt Lịch (Lặp)';
-      else if (s.mode === 'once') modeLabel = 'Đặt Lịch (Một Lần)';
+    if (s.scheduledTime || s.mode === 'scheduled') {
+      const targetMode = s.scheduledMode || (s.mode === 'scheduled' ? 'loop' : s.mode);
+      if (targetMode === 'loop') modeLabel = 'Đặt Lịch (Lặp)';
+      else if (targetMode === 'once') modeLabel = 'Đặt Lịch (Một Lần)';
       else modeLabel = 'Đặt Lịch Phát';
     }
 

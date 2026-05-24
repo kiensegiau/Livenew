@@ -606,11 +606,11 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
       broadcast(`❌ *Lỗi tải Drive (Luồng #${streamId})*\n━━━━━━━━━━━━━━━━━━\n${telegramName}Chi tiết: \`${escapeMarkdown(err.message)}\``);
     });
     
-    return { id: streamId, status: 'downloading', scheduledTime };
+    return { id: streamId, status: 'downloading', scheduledTime: info.scheduledTime };
   } else {
     saveStreams(); // Lưu lại ngay khi tạo luồng mới
     proceedStartStream(streamId);
-    return { id: streamId, status: info.status, scheduledTime };
+    return { id: streamId, status: info.status, scheduledTime: info.scheduledTime };
   }
 }
 
