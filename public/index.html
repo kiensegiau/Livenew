@@ -1825,9 +1825,13 @@
 
       <!-- Loop mode details -->
       <div class="mode-fields visible" id="mode-loop">
-        <div class="form-group">
-          <label for="minutes">Số phút Live (0 = Không giới hạn)</label>
-          <input type="number" id="minutes" value="1440" min="0" />
+        <div class="form-group" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="infiniteLoop" checked onchange="toggleInfiniteLoop(this)" style="width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;" />
+          <label for="infiniteLoop" style="margin: 0; cursor: pointer; font-weight: 600; color: var(--text-primary);">Phát vô hạn (Vòng lặp 24/7 không dừng)</label>
+        </div>
+        <div class="form-group" id="loopDurationGroup" style="display: none; transition: all 0.3s ease;">
+          <label for="minutes">Hẹn giờ dừng luồng (Số phút)</label>
+          <input type="number" id="minutes" value="0" min="0" placeholder="Nhập số phút muốn chạy..." />
         </div>
       </div>
 
@@ -2608,6 +2612,18 @@ function setMode(mode) {
     field.classList.remove('visible');
   });
   document.getElementById(`mode-${mode}`).classList.add('visible');
+}
+
+function toggleInfiniteLoop(checkbox) {
+  const durationGroup = document.getElementById('loopDurationGroup');
+  const minutesInput = document.getElementById('minutes');
+  if (checkbox.checked) {
+    durationGroup.style.display = 'none';
+    minutesInput.value = '0';
+  } else {
+    durationGroup.style.display = 'block';
+    minutesInput.value = '1440'; // Mặc định 24h khi bỏ chọn phát vô hạn
+  }
 }
 
 // ── Open File Browse Dialog on Server ──
