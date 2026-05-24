@@ -65,7 +65,7 @@ function loadStreams() {
           
           if (s.status === 'downloading') {
               // Nếu đang tải dở lúc sập mạng -> bắt buộc tải lại
-              startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id, dualStream: s.dualStream, name: s.name });
+              startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, id: s.id, dualStream: s.dualStream, name: s.name });
           } else if (s.status === 'scheduled') {
               proceedStartStream(s.id);
           } else {
@@ -75,7 +75,7 @@ function loadStreams() {
               } 
               // Nếu file bị xóa mất nhưng có link gốc -> tải lại để cứu rỗi
               else if (s.originalFile && s.originalFile.startsWith('http')) {
-                  startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, id: s.id, dualStream: s.dualStream, name: s.name });
+                  startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, id: s.id, dualStream: s.dualStream, name: s.name });
               } 
               // Các trường hợp khác
               else {
@@ -521,7 +521,7 @@ function proceedStartStream(id) {
   }
 }
 
-function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, name }) {
+function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, dualStream, id, name }) {
   // Nếu không có luồng nào, reset số thứ tự về 1
   if (streams.size === 0 && !id) nextId = 1;
   
