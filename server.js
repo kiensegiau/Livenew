@@ -218,6 +218,30 @@ function launchFFmpeg(id, key, file, mode, minutes) {
 
   if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
 
+  // Khởi tạo thời gian Live đầu tiên nếu có giới hạn phút
+  const totalMins = Math.max(0, parseInt(minutes) || 0);
+  let minsToRun = totalMins;
+
+  if (totalMins > 0) {
+    if (!info.firstLiveTime) {
+      info.firstLiveTime = new Date().toISOString();
+      saveStreams();
+    } else {
+      const elapsedMins = (Date.now() - new Date(info.firstLiveTime).getTime()) / 60000;
+      const remainingMins = totalMins - elapsedMins;
+      if (remainingMins <= 0.1) {
+        console.log(`[Stream #${id}] 🏁 Hết thời lượng giới hạn (${totalMins} phút). Dừng luồng.`);
+        info.status = 'ended';
+        info.lastLog = `Hoàn thành thời lượng phát ${totalMins} phút.`;
+        const displayName = info.name ? `🏷️ Luồng: *${escapeMarkdown(info.name)}*\n` : '';
+        broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n━━━━━━━━━━━━━━━━━━\n${displayName}🎞 Video: \`${path.basename(info.file)}\`\n⏱ Thời lượng: \`${totalMins} phút (Đã phát xong)\``);
+        saveStreams();
+        return;
+      }
+      minsToRun = Math.max(1, Math.round(remainingMins));
+    }
+  }
+
   info.dualStream = true; // Luôn luôn phát song song 2 luồng A+B để tránh mọi sự cố
   info.streamAActive = true;
   info.streamBActive = true;
@@ -226,7 +250,7 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   const currentRetry = info.retryCount || 0;
   const serverLetter = (currentRetry % 2 === 0) ? 'a' : 'b';
 
-  const mins = Math.max(0, parseInt(minutes) || 0);
+  const mins = minsToRun;
   const loopArg = mode === 'loop' ? ['-stream_loop', '-1'] : [];
   const timeArg = mode === 'loop' && mins > 0 ? ['-t', String(mins * 60)] : [];
 
@@ -415,6 +439,20 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     // Nếu do user bấm stop → status đã là 'stopped', không làm gì thêm
     if (s.status === 'stopped') return;
 
+    // Kiểm tra thời lượng đã hết chưa (nếu có giới hạn phút)
+    if (s.minutes > 0 && s.firstLiveTime) {
+      const elapsedMins = (Date.now() - new Date(s.firstLiveTime).getTime()) / 60000;
+      if (elapsedMins >= s.minutes - 0.5) { // Trong vòng 30 giây ranh giới hết giờ
+        console.log(`[Stream #${id}] 🏁 Đã hoàn thành thời lượng giới hạn ${s.minutes} phút. Dừng hẳn.`);
+        s.status = 'ended';
+        s.lastLog = `Hoàn thành thời lượng phát ${s.minutes} phút.`;
+        const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+        broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n━━━━━━━━━━━━━━━━━━\n${telegramName}🎞 Video: \`${path.basename(s.file)}\`\n⏱ Thời lượng: \`${s.minutes} phút (Đã phát xong)\``);
+        saveStreams();
+        return;
+      }
+    }
+
     // Thiết lập số lần thử lại tối đa (chế độ loop cho phép reconnect vô hạn)
     const maxRetry = s.mode === 'loop' ? 999 : 50;
     const isErrorOrLoop = (code !== 0) || (s.mode === 'loop');
@@ -502,6 +540,7 @@ function startStream({ key, file, mode, minutes, scheduledTime, dualStream, id, 
 
   const info = {
     id: streamId, key, file, originalFile: file, mode, minutes, scheduledTime: normalizedScheduledTime, name: name || `Luồng #${streamId}`,
+    scheduledMode: scheduledMode || 'loop',
     dualStream: true,
     status: isDrive ? 'downloading' : (mode === 'scheduled' ? 'scheduled' : 'launching'),
     startTime: null,
