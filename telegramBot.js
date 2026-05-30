@@ -94,12 +94,13 @@ function getDiskUsage() {
   });
 }
 
-let config = { token: "", adminIds: [], password: "live" };
+let config = { token: "", adminIds: [], password: "live", polling: true };
 try {
   if (fs.existsSync(CONFIG_PATH)) {
     const oldConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
     config.token = oldConfig.token || "";
     config.password = oldConfig.password || "live";
+    config.polling = oldConfig.polling !== false;
     if (oldConfig.adminId) config.adminIds = [oldConfig.adminId];
     else if (oldConfig.adminIds) config.adminIds = oldConfig.adminIds;
   }
@@ -114,7 +115,8 @@ function saveConfig() {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify({
       token: config.token,
       adminIds: config.adminIds,
-      password: config.password
+      password: config.password,
+      polling: config.polling
     }, null, 2));
   } catch (e) { console.error('Lỗi lưu config:', e.message); }
 }
@@ -126,8 +128,8 @@ function escapeMarkdown(text) {
 
 function initBot(actions) {
   // === KÍCH HOẠT KẾT NỐI TELEGRAM BOT HỆ THỐNG ===
-  if (!config.token) {
-    console.log('[Telegram Bot] ⚠️ Không có token cấu hình. Bỏ qua khởi tạo Bot.');
+  if (!config.token || config.polling === false) {
+    console.log('[Telegram Bot] ⚠️ Bỏ qua khởi tạo Bot hoặc Polling (đã tắt).');
     return;
   }
 
@@ -508,9 +510,12 @@ function initBot(actions) {
           playbackText = `🔁 Vòng lặp vô hạn`;
         }
 
+        const keyHint = s.key ? (s.key.substring(0, 6) + '****') : 'Chưa có key';
+
         let msgText = `⚙️ *CHỈNH SỬA CẤU HÌNH LUỒNG #${id}*\n━━━━━━━━━━━━━━━━━━\n`;
         msgText += `🏷️ Tên: *${escapeMarkdown(s.name || 'Mặc định')}*\n`;
         msgText += `🎞️ Video: \`${s.originalFile || s.file}\`\n`;
+        msgText += `🔑 Stream Key: \`${keyHint}\`\n`;
         msgText += `⚡ Thời điểm phát: \`${timingText}\`\n`;
         msgText += `🔁 Hình thức phát: \`${playbackText}\`\n\n`;
         msgText += `Vui lòng chọn trường thông tin bạn muốn cập nhật:`;

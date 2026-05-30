@@ -18,6 +18,7 @@ const httpAgent = new http.Agent({
 });
 
 function extractDriveId(url) {
+  if (!url || typeof url !== 'string') return null;
   let m = url.match(/\/file\/d\/([a-zA-Z0-9_\-]+)/);
   if (m) return m[1];
   m = url.match(/[?&]id=([a-zA-Z0-9_\-]+)/);

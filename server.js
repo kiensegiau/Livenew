@@ -48,7 +48,10 @@ function saveStreams() {
   const data = Array.from(streams.values()).map(s => ({
     id: s.id, key: s.key, file: s.file, originalFile: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, 
     scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, status: s.status, dualStream: !!s.dualStream,
-    name: s.name || ''
+    name: s.name || '',
+    youtubeUrl: s.youtubeUrl || '',
+    createdAt: s.createdAt || null,
+    updatedAt: s.updatedAt || null
   }));
   fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2));
 }
@@ -65,7 +68,7 @@ function loadStreams() {
           
           if (s.status === 'downloading') {
               // Nếu đang tải dở lúc sập mạng -> bắt buộc tải lại
-              startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, id: s.id, dualStream: s.dualStream, name: s.name });
+              startStream({ key: s.key, file: s.originalFile || s.file, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, id: s.id, dualStream: s.dualStream, name: s.name, youtubeUrl: s.youtubeUrl, createdAt: s.createdAt, updatedAt: s.updatedAt });
           } else if (s.status === 'scheduled') {
               proceedStartStream(s.id);
           } else {
@@ -75,7 +78,7 @@ function loadStreams() {
               } 
               // Nếu file bị xóa mất nhưng có link gốc -> tải lại để cứu rỗi
               else if (s.originalFile && s.originalFile.startsWith('http')) {
-                  startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, id: s.id, dualStream: s.dualStream, name: s.name });
+                  startStream({ key: s.key, file: s.originalFile, mode: s.mode, minutes: s.minutes, scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, id: s.id, dualStream: s.dualStream, name: s.name, youtubeUrl: s.youtubeUrl, createdAt: s.createdAt, updatedAt: s.updatedAt });
               } 
               // Các trường hợp khác
               else {
@@ -521,7 +524,14 @@ function proceedStartStream(id) {
   }
 }
 
-function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, dualStream, id, name }) {
+function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, dualStream, id, name, youtubeUrl, createdAt, updatedAt }) {
+  if (!file) {
+    return { error: 'Đường dẫn video hoặc link Google Drive không được để trống!' };
+  }
+  if (!key) {
+    return { error: 'Stream Key không được để trống!' };
+  }
+
   // Nếu không có luồng nào, reset số thứ tự về 1
   if (streams.size === 0 && !id) nextId = 1;
   
@@ -544,7 +554,10 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
     dualStream: true,
     status: isDrive ? 'downloading' : (mode === 'scheduled' ? 'scheduled' : 'launching'),
     startTime: null,
-    process: null, pid: null, lastLog: '', retryCount: 0
+    process: null, pid: null, lastLog: '', retryCount: 0,
+    youtubeUrl: youtubeUrl || '',
+    createdAt: createdAt || new Date().toISOString(),
+    updatedAt: updatedAt || new Date().toISOString()
   };
   streams.set(streamId, info);
 
@@ -705,7 +718,14 @@ function editStreamLocal(body) {
     }
     
     // Cập nhật các thông tin mới
-    s.name = body.name || '';
+    if (body.name !== undefined) {
+      s.name = body.name;
+    }
+    if (body.youtubeUrl !== undefined) {
+      s.youtubeUrl = body.youtubeUrl;
+    }
+    s.updatedAt = new Date().toISOString();
+    
     if (body.key) {
       s.key = body.key;
     }
@@ -755,7 +775,10 @@ function editStreamLocal(body) {
             minutes: s.minutes,
             scheduledTime: s.scheduledTime,
             scheduledMode: s.scheduledMode,
-            name: s.name
+            name: s.name,
+            youtubeUrl: s.youtubeUrl,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt
           });
         } else {
           proceedStartStream(s.id);
@@ -768,15 +791,21 @@ function editStreamLocal(body) {
       }
     }
   } else {
-    // Chỉ thay đổi thông tin phụ (Ví dụ: tên gợi nhớ luồng)
-    console.log(`[Stream #${id}] ⚙️ Chỉ cập nhật thông tin phụ (Tên luồng). Giữ luồng chạy liên tục không ngắt quãng.`);
-    s.name = body.name || '';
+    // Chỉ thay đổi thông tin phụ (Ví dụ: tên gợi nhớ luồng, link youtube)
+    console.log(`[Stream #${id}] ⚙️ Chỉ cập nhật thông tin phụ (Tên luồng, Link YouTube). Giữ luồng chạy liên tục không ngắt quãng.`);
+    if (body.name !== undefined) {
+      s.name = body.name;
+    }
+    if (body.youtubeUrl !== undefined) {
+      s.youtubeUrl = body.youtubeUrl;
+    }
+    s.updatedAt = new Date().toISOString();
     saveStreams();
     
     // Đồng bộ thông tin tên luồng lên Telegram
     const isLive = s.status === 'live';
     const statusIcon = isLive ? '🟢' : '⚪';
-    broadcast(`📝 *ĐÃ CẬP NHẬT TÊN LUỒNG #${id}* \n━━━━━━━━━━━━━━━━━━\n🏷️ Tên mới: *${escapeMarkdown(s.name || 'Không tên')}*\n📊 Trạng thái hiện tại: \`${s.status.toUpperCase()}\` (Luồng vẫn đang chạy liên tục mượt mà)`);
+    broadcast(`📝 *ĐÃ CẬP NHẬT CẤU HÌNH LUỒNG #${id}* \n━━━━━━━━━━━━━━━━━━\n🏷️ Tên mới: *${escapeMarkdown(s.name || 'Không tên')}*\n📺 Link YouTube mới: *${escapeMarkdown(s.youtubeUrl || 'Chưa điền')}*\n📊 Trạng thái hiện tại: \`${s.status.toUpperCase()}\` (Luồng vẫn đang chạy liên tục mượt mà)`);
   }
   
   return { ok: true, id };
@@ -1208,9 +1237,13 @@ const server = http.createServer(async (req, res) => {
       list.push({
         id: s.id,
         name: s.name || '',
+        key: s.key,
         keyHint: s.key.substring(0, 6) + '****',
         file: displayFile,
+        originalFile: s.originalFile || s.file,
         mode: s.mode,
+        minutes: s.minutes || 0,
+        scheduledMode: s.scheduledMode || 'loop',
         status: s.status,
         startTime: s.startTime,
         scheduledTime: s.scheduledTime,
@@ -1224,7 +1257,10 @@ const server = http.createServer(async (req, res) => {
         dlBytes: s.dlBytes || 0,
         totalBytes: s.totalBytes || 0,
         dlPercent: s.dlPercent !== undefined ? s.dlPercent : null,
-        dlSpeed: s.dlSpeed || 0
+        dlSpeed: s.dlSpeed || 0,
+        youtubeUrl: s.youtubeUrl || '',
+        createdAt: s.createdAt || null,
+        updatedAt: s.updatedAt || null
       });
     }
     json(res, 200, list);

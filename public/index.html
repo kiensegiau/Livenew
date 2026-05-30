@@ -1873,13 +1873,15 @@
         <div class="form-group">
           <label for="streamKey">Stream Key (YouTube Studio)</label>
           <div class="input-wrapper">
-            <input type="password" id="streamKey" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" autocomplete="off" />
-            <button type="button" class="btn-toggle-visibility" id="toggleKeyBtn" onclick="toggleStreamKeyVisibility()" title="Hiển thị / Ẩn Stream Key">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-              </svg>
-            </button>
+            <input type="text" id="streamKey" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" autocomplete="off" style="font-family: 'JetBrains Mono', monospace;" />
+          </div>
+        </div>
+
+        <!-- Link YouTube Livestream -->
+        <div class="form-group">
+          <label for="youtubeUrl">Link Livestream YouTube (Tùy chọn)</label>
+          <div class="input-wrapper">
+            <input type="text" id="youtubeUrl" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" />
           </div>
         </div>
 
@@ -2356,23 +2358,7 @@ async function authFetch(url, options = {}) {
   }
 }
 
-// ── Secure Toggler for Stream Key ──
-function toggleStreamKeyVisibility() {
-  const input = document.getElementById('streamKey');
-  const btn = document.getElementById('toggleKeyBtn');
-  if (input.type === 'password') {
-    input.type = 'text';
-    btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"></path>
-    </svg>`;
-  } else {
-    input.type = 'password';
-    btn.innerHTML = `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-      <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-    </svg>`;
-  }
-}
+
 
 // ── Custom Premium Calendar & Time Picker States & Functions ──
 let selectedDate = new Date(Date.now() + 5 * 60000);
@@ -2669,6 +2655,7 @@ function cancelEditSilent() {
   
   // Reset form
   document.getElementById('streamName').value = '';
+  if (document.getElementById('youtubeUrl')) document.getElementById('youtubeUrl').value = '';
   document.getElementById('streamKey').value = '';
   document.getElementById('streamKey').placeholder = 'xxxx-xxxx-xxxx-xxxx-xxxx';
   document.getElementById('videoPath').value = '';
@@ -3018,13 +3005,14 @@ function editStream(id) {
   
   // Điền dữ liệu vào form cấu hình bên trái
   document.getElementById('streamName').value = s.name || '';
+  if (document.getElementById('youtubeUrl')) document.getElementById('youtubeUrl').value = s.youtubeUrl || '';
   
   const keyInput = document.getElementById('streamKey');
-  keyInput.value = '';
-  keyInput.placeholder = 'Đã bảo mật (Để trống nếu giữ nguyên khóa cũ)';
+  keyInput.value = s.key || '';
+  keyInput.placeholder = 'xxxx-xxxx-xxxx-xxxx-xxxx';
   
-  document.getElementById('videoPath').value = s.file || '';
-  detectDriveLink(s.file || '');
+  document.getElementById('videoPath').value = s.originalFile || s.file || '';
+  detectDriveLink(s.originalFile || s.file || '');
   
   const isScheduled = s.scheduledTime || s.mode === 'scheduled';
   setTimingMode(isScheduled ? 'scheduled' : 'now');
@@ -3306,52 +3294,110 @@ function renderStreams(list) {
     // Build Metadata metrics
     let metaItems = [];
     
-    // Stream name
+    // 1. Tên luồng (Stream name)
     if (s.name) {
       metaItems.push(`
-        <div class="meta-item" style="border-color: rgba(99, 102, 241, 0.2);" title="Tên gợi nhớ: ${s.name}">
+        <div class="meta-item" style="border: 1px solid rgba(99, 102, 241, 0.2); background: rgba(99, 102, 241, 0.05); padding: 4px 8px; border-radius: 6px;" title="Tên gợi nhớ: ${s.name}">
           <span class="meta-icon">🏷️</span>
           <span style="font-weight: 600; color: #818cf8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Tên luồng: ${s.name}</span>
         </div>
       `);
     }
 
-    // File path info
+    // 2. Khóa luồng (Stream key)
+    const secureKey = s.key || '';
     metaItems.push(`
-      <div class="meta-item" title="Đường dẫn nguồn: ${s.file}">
-        <span class="meta-icon">🎞️</span>
-        <span style="font-weight: 500;">${s.file}</span>
+      <div class="meta-item" style="grid-column: 1 / -1; border: 1px solid rgba(245, 158, 11, 0.2); background: rgba(245, 158, 11, 0.05); padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;" title="Khóa luồng YouTube (Stream Key)">
+        <span class="meta-icon">🔑</span>
+        <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: #fbbf24; word-break: break-all; max-width: calc(100% - 30px); white-space: normal;">
+          Khóa: ${secureKey}
+        </span>
+        <button style="background: none; border: none; color: #fbbf24; cursor: pointer; padding: 0 4px; font-size: 0.72rem; margin-left: auto; flex-shrink: 0;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${secureKey}'); showToast('Đã sao chép Khóa luồng!', 'success');" title="Sao chép khóa luồng">📋</button>
       </div>
     `);
 
-    // Live Uptime counter
+    // 3. Đường dẫn gốc / Link Drive (Original File Path / Drive Link)
+    if (s.originalFile) {
+      const isUrl = s.originalFile.startsWith('http');
+      metaItems.push(`
+        <div class="meta-item" style="grid-column: 1 / -1; border: 1px solid rgba(168, 85, 247, 0.2); background: rgba(168, 85, 247, 0.05); padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; overflow: hidden;" title="Đường dẫn nguồn: ${s.originalFile}">
+          <span class="meta-icon">${isUrl ? '🔗' : '🖥️'}</span>
+          <span style="font-weight: 500; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100% - 30px);">
+            ${isUrl ? `Link Drive: <a href="${s.originalFile}" target="_blank" style="color: #c084fc; text-decoration: underline; font-family: 'JetBrains Mono', monospace; cursor: pointer;" onclick="event.stopPropagation();">${s.originalFile}</a>` : `Đường dẫn gốc: <code style="font-family: 'JetBrains Mono', monospace; color: #c084fc;">${s.originalFile}</code>`}
+          </span>
+          <button style="background: none; border: none; color: #c084fc; cursor: pointer; padding: 0 4px; font-size: 0.72rem; margin-left: auto; flex-shrink: 0;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${s.originalFile}'); showToast('Đã sao chép Đường dẫn gốc!', 'success');" title="Sao chép đường dẫn">📋</button>
+        </div>
+      `);
+    }
+
+    // 4. Link YouTube Livestream (YouTube Link)
+    if (s.youtubeUrl) {
+      metaItems.push(`
+        <div class="meta-item" style="grid-column: 1 / -1; border: 1px solid rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.05); padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; overflow: hidden;" title="Xem Livestream trên YouTube: ${s.youtubeUrl}">
+          <span class="meta-icon">🔴</span>
+          <span style="font-weight: 600; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100% - 30px);">
+            Link YouTube: <a href="${s.youtubeUrl}" target="_blank" style="color: #ff8b8b; text-decoration: underline; cursor: pointer; font-family: 'JetBrains Mono', monospace;" onclick="event.stopPropagation();">${s.youtubeUrl}</a>
+          </span>
+          <button style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 0 4px; font-size: 0.72rem; margin-left: auto; flex-shrink: 0;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${s.youtubeUrl}'); showToast('Đã sao chép Link YouTube!', 'success');" title="Sao chép link YouTube">📋</button>
+        </div>
+      `);
+    } else {
+      metaItems.push(`
+        <div class="meta-item" style="grid-column: 1 / -1; border: 1px dashed rgba(255, 255, 255, 0.1); padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; gap: 8px; opacity: 0.6;" title="Chưa cấu hình Link YouTube Live">
+          <span class="meta-icon">🔴</span>
+          <span style="font-weight: 400; font-size: 0.78rem; color: var(--text-muted); font-style: italic;">
+            Link YouTube Live: Chưa cấu hình (Nhấn Sửa Cấu Hình để thêm)
+          </span>
+        </div>
+      `);
+    }
+
+    // 5. Thời gian tạo & sửa (Timestamps)
+    if (s.createdAt) {
+      metaItems.push(`
+        <div class="meta-item" style="border: 1px solid rgba(16, 185, 129, 0.15); background: rgba(16, 185, 129, 0.03); padding: 4px 8px; border-radius: 6px;" title="Thời điểm khởi tạo luồng">
+          <span class="meta-icon">📅</span>
+          <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 500;">Tạo lúc: ${new Date(s.createdAt).toLocaleString('vi-VN')}</span>
+        </div>
+      `);
+    }
+    if (s.updatedAt) {
+      metaItems.push(`
+        <div class="meta-item" style="border: 1px solid rgba(99, 102, 241, 0.15); background: rgba(99, 102, 241, 0.03); padding: 4px 8px; border-radius: 6px;" title="Thời điểm cập nhật cấu hình cuối">
+          <span class="meta-icon">🔄</span>
+          <span style="font-size: 0.75rem; color: #c7d2fe; font-weight: 500;">Sửa lúc: ${new Date(s.updatedAt).toLocaleString('vi-VN')}</span>
+        </div>
+      `);
+    }
+
+    // 6. Thời gian Live (Uptime counter)
     if (s.status === 'live' && s.startTime) {
       const elapsed = Math.floor((Date.now() - new Date(s.startTime)) / 1000);
       metaItems.push(`
-        <div class="meta-item">
+        <div class="meta-item" style="border: 1px solid rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.05); padding: 4px 8px; border-radius: 6px;">
           <span class="meta-icon">⏳</span>
-          <span>Thời gian: <span class="uptime-ticker" data-start="${s.startTime}">${formatDuration(elapsed)}</span></span>
+          <span style="font-weight: 500;">Đang Live: <span class="uptime-ticker" data-start="${s.startTime}">${formatDuration(elapsed)}</span></span>
         </div>
       `);
     }
 
-    // Scheduled Timer Countdown
+    // 7. Đặt lịch đếm ngược (Scheduled Timer Countdown)
     if (s.status === 'scheduled' && s.scheduledTime) {
       const remaining = Math.max(0, Math.floor((new Date(s.scheduledTime) - Date.now()) / 1000));
       metaItems.push(`
-        <div class="meta-item">
+        <div class="meta-item" style="border: 1px solid rgba(245, 158, 11, 0.2); background: rgba(245, 158, 11, 0.05); padding: 4px 8px; border-radius: 6px;">
           <span class="meta-icon">🕐</span>
-          <span>Kích hoạt sau: <span class="countdown-ticker" data-sched="${s.scheduledTime}">${formatDuration(remaining)}</span></span>
+          <span style="font-weight: 500;">Live sau: <span class="countdown-ticker" data-sched="${s.scheduledTime}">${formatDuration(remaining)}</span></span>
         </div>
       `);
     }
 
-    // Live duration limit info
+    // 8. Giới hạn thời gian phát (Live duration limit info)
     if (s.minutes > 0) {
       metaItems.push(`
-        <div class="meta-item" style="border-color: rgba(245, 158, 11, 0.2);">
+        <div class="meta-item" style="border: 1px solid rgba(245, 158, 11, 0.2); background: rgba(245, 158, 11, 0.05); padding: 4px 8px; border-radius: 6px;">
           <span class="meta-icon">⏱️</span>
-          <span style="color: var(--warning); font-weight: 500;">Giới hạn Live: ${s.minutes} phút</span>
+          <span style="color: var(--warning); font-weight: 600;">Giới hạn Live: ${s.minutes} phút</span>
         </div>
       `);
     }
@@ -3592,6 +3638,42 @@ function renderStreams(list) {
               <span class="expand-caret" id="stream-caret-${s.id}" style="transition: transform 0.3s; transform: ${isCardExpanded ? 'rotate(180deg)' : 'rotate(0deg)'}; font-size: 0.7rem; color: var(--text-secondary);">▼</span>
             </div>
           </div>
+
+          <!-- Compact Key & Links Sub-row -->
+          <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.06); padding-top: 6px; font-size: 0.76rem; font-family: 'JetBrains Mono', monospace;">
+            <div style="display: flex; align-items: center; gap: 4px; color: #fbbf24;" title="YouTube Stream Key">
+              <span>🔑</span>
+              <span style="font-weight: 500;">Key: ${s.key}</span>
+              <button style="background: none; border: none; color: #fbbf24; cursor: pointer; padding: 0 4px; font-size: 0.72rem;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${s.key}'); showToast('Đã sao chép Khóa luồng!', 'success');" title="Sao chép khóa luồng">📋</button>
+            </div>
+            
+            ${s.originalFile && s.originalFile.startsWith('http') ? `
+              <div style="display: flex; align-items: center; gap: 4px; color: #c084fc; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Google Drive Link">
+                <span>🔗</span>
+                <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Drive: <a href="${s.originalFile}" target="_blank" style="color: #c084fc; text-decoration: underline;" onclick="event.stopPropagation();">${s.originalFile}</a></span>
+                <button style="background: none; border: none; color: #c084fc; cursor: pointer; padding: 0 4px; font-size: 0.72rem;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${s.originalFile}'); showToast('Đã sao chép Đường dẫn gốc!', 'success');" title="Sao chép đường dẫn">📋</button>
+              </div>
+            ` : s.originalFile ? `
+              <div style="display: flex; align-items: center; gap: 4px; color: #c084fc; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="Original File Path">
+                <span>🖥️</span>
+                <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">File: <code style="font-size:0.72rem;">${s.originalFile}</code></span>
+                <button style="background: none; border: none; color: #c084fc; cursor: pointer; padding: 0 4px; font-size: 0.72rem;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${s.originalFile}'); showToast('Đã sao chép Đường dẫn gốc!', 'success');" title="Sao chép đường dẫn">📋</button>
+              </div>
+            ` : ''}
+
+            ${s.youtubeUrl ? `
+              <div style="display: flex; align-items: center; gap: 4px; color: #ff8b8b; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="YouTube Stream Link">
+                <span>🔴</span>
+                <span style="font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">YouTube: <a href="${s.youtubeUrl}" target="_blank" style="color: #ff8b8b; text-decoration: underline;" onclick="event.stopPropagation();">${s.youtubeUrl}</a></span>
+                <button style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 0 4px; font-size: 0.72rem;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${s.youtubeUrl}'); showToast('Đã sao chép Link YouTube!', 'success');" title="Sao chép link YouTube">📋</button>
+              </div>
+            ` : `
+              <div style="display: flex; align-items: center; gap: 4px; color: var(--text-muted); opacity: 0.6;" title="Chưa cấu hình Link YouTube">
+                <span>🔴</span>
+                <span style="font-style: italic;">YouTube: Chưa cấu hình</span>
+              </div>
+            `}
+          </div>
         </div>
 
         <!-- Collapsible Details Container -->
@@ -3734,7 +3816,6 @@ async function poll() {
 
 function updateMockAndRender() {
   document.getElementById('demoBadge').style.display = 'inline-flex';
-  currentStreamsList = mockStreams;
   
   // Tăng ngẫu nhiên tiến độ tải video từ Drive
   mockPercent = mockPercent + 2;
@@ -3744,7 +3825,13 @@ function updateMockAndRender() {
     {
       id: 11,
       name: "Live Nhạc Chill Lofi 24/7",
-      file: "chill-lofi-beats-2026.mp4",
+      key: "live-3131-lofi-keys-premium-aegis",
+      keyHint: "live-3****",
+      file: "Google Drive Video",
+      originalFile: "https://drive.google.com/file/d/1AegisLofiBeats2026DriveLink/view?usp=sharing",
+      youtubeUrl: "https://www.youtube.com/watch?v=5qap5aO4i9A",
+      createdAt: "2026-05-20T08:00:00.000Z",
+      updatedAt: "2026-05-30T10:30:00.000Z",
       mode: "loop",
       status: "live",
       startTime: mockTimeStart11.toISOString(),
@@ -3762,7 +3849,13 @@ frame=158392 fps= 30 q=-0.0 size= 234850kB time=11:00:00.56 bitrate=2432.5kbits/
     {
       id: 14,
       name: "Afrobeat Mix 2026",
-      file: "gold-soul-afrobeat-mix.mp4",
+      key: "afro-2026-soul-groove-9999",
+      keyHint: "afro-2****",
+      file: "Google Drive Video",
+      originalFile: "https://drive.google.com/file/d/1GoldSoulAfrobeatMix2026Link/view?usp=drivesdk",
+      youtubeUrl: "https://www.youtube.com/watch?v=F3f4f6Afro",
+      createdAt: "2026-05-28T14:22:15.000Z",
+      updatedAt: "2026-05-29T18:45:00.000Z",
       mode: "scheduled",
       status: "scheduled",
       scheduledTime: mockTimeSched14.toISOString(),
@@ -3771,7 +3864,13 @@ frame=158392 fps= 30 q=-0.0 size= 234850kB time=11:00:00.56 bitrate=2432.5kbits/
     {
       id: 15,
       name: "Ambient Space Exploration",
-      file: "ambient-space-exploration-4k.mp4",
+      key: "space-deep-exploration-4k-cyber",
+      keyHint: "space-****",
+      file: "Google Drive Video",
+      originalFile: "https://drive.google.com/file/d/1SpaceExploration4KPremiumDrive/view",
+      youtubeUrl: "https://www.youtube.com/watch?v=SpaceAmbientExplorer",
+      createdAt: "2026-05-30T12:00:00.000Z",
+      updatedAt: "2026-05-30T12:00:00.000Z",
       mode: "loop",
       status: "downloading",
       lastLog: `Đang tải video từ Google Drive về máy chủ VPS... ${mockPercent}% (45.3 MB/s)`,
@@ -3783,7 +3882,13 @@ frame=158392 fps= 30 q=-0.0 size= 234850kB time=11:00:00.56 bitrate=2432.5kbits/
     {
       id: 16,
       name: "Cinematic Relaxing Piano",
+      key: "piano-relaxing-classical-melody",
+      keyHint: "piano-****",
       file: "cinematic-relaxing-piano.mp4",
+      originalFile: "C:\\Users\\kien\\Music\\cinematic-relaxing-piano.mp4",
+      youtubeUrl: "",
+      createdAt: "2026-05-29T19:00:00.000Z",
+      updatedAt: "2026-05-30T09:15:30.000Z",
       mode: "once",
       status: "live",
       startTime: mockTimeStart16.toISOString(),
@@ -3800,6 +3905,7 @@ frame=108000 fps= 30 q=-0.0 size= 145000kB time=01:00:00.00 bitrate=2100.5kbits/
     }
   ];
   
+  currentStreamsList = mockStreams;
   renderStreams(mockStreams);
 }
 

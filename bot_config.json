@@ -3,5 +3,6 @@
   "adminIds": [
     1663554465
   ],
-  "password": "kienkaka"
+  "password": "kienkaka",
+  "polling": true
 }
