@@ -125,11 +125,11 @@ function escapeMarkdown(text) {
 }
 
 function initBot(actions) {
-  // === TẠM THỜI VÔ HIỆU HÓA ĐỂ TEST TRÊN MÁY TÍNH ===
-  console.log('\n[Telegram Bot] ⏸️ Đang tạm thời ngắt kết nối Bot Telegram để test trên máy tính...');
-  return;
-
-  if (!config.token) return;
+  // === KÍCH HOẠT KẾT NỐI TELEGRAM BOT HỆ THỐNG ===
+  if (!config.token) {
+    console.log('[Telegram Bot] ⚠️ Không có token cấu hình. Bỏ qua khởi tạo Bot.');
+    return;
+  }
 
   try {
     bot = new TelegramBot(config.token, { polling: true });
@@ -139,6 +139,7 @@ function initBot(actions) {
       { command: 'status', description: '📊 Xem & Điều khiển luồng' },
       { command: 'live', description: '🔄 Phát Loop (Key Link)' },
       { command: 'once', description: '▶️ Phát một lần (Key Link)' },
+      { command: 'limit', description: '⏱️ Hẹn giờ tắt (Key Link Mins)' },
       { command: 'schedule', description: '🕐 Đặt lịch (Key Link HH:mm [m])' },
       { command: 'log', description: '📝 Xem nhật ký chi tiết' },
       { command: 'admins', description: '👥 Quản lý quản trị viên' },
@@ -249,12 +250,15 @@ function initBot(actions) {
       // XỬ LÝ NHẬP LIỆU THEO BƯỚC (WIZARD MODE)
       const state = userStates.get(chatId);
       if (state && !text.startsWith('/')) {
+        if (state.cmd === 'edit') {
+          return handleEditInput(chatId, text, state, actions);
+        }
         return handleWizard(chatId, text, state, actions);
       }
 
       // Xử lý lệnh
       if (text.startsWith('/help') || text === '/start') {
-        const helpMsg = `🛠 *YouTube Live Controller*\n/status - Xem & Điều khiển luồng\n/live <key> <link> - Phát Loop\n/once <key> <link> - Phát 1 lần\n/schedule <key> <link> <HH:mm> [m] - Đặt lịch\n/scheduleonce <key> <link> <HH:mm> - Lịch phát 1 lần\n/log <id> - Xem log chi tiết\n/admins - Danh sách quản trị\n/reboot - Khởi động lại Server\n/clear - Dọn luồng rác`;
+        const helpMsg = `🛠 *YouTube Live Controller*\n/status - Xem & Điều khiển luồng\n/live <key> <link> - Phát Loop\n/once <key> <link> - Phát 1 lần\n/limit <key> <link> <m> - Hẹn giờ tắt\n/schedule <key> <link> <HH:mm> [m] - Đặt lịch\n/scheduleonce <key> <link> <HH:mm> - Lịch phát 1 lần\n/log <id> - Xem log chi tiết\n/admins - Danh sách quản trị\n/reboot - Khởi động lại Server\n/clear - Dọn luồng rác`;
         bot.sendMessage(chatId, helpMsg, { parse_mode: 'Markdown' });
       }
       
@@ -329,10 +333,15 @@ function initBot(actions) {
                 }
                 const buttons = [];
                 if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) {
-                  buttons.push([{ text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` }]);
+                  buttons.push([
+                    { text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` },
+                    { text: '⚙️ Sửa cấu hình', callback_data: `edit_${s.id}` }
+                  ]);
                 } else {
                   buttons.push([
                     { text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` },
+                    { text: '⚙️ Sửa cấu hình', callback_data: `edit_${s.id}` }
+                  ], [
                     { text: '🗑 Xóa luồng', callback_data: `delete_${s.id}` }
                   ]);
                 }
@@ -346,7 +355,7 @@ function initBot(actions) {
         }).catch(e => console.error(e));
       }
 
-      else if (text === '/live' || text === '/once') {
+      else if (text === '/live' || text === '/once' || text === '/limit') {
         userStates.set(chatId, { cmd: text.substring(1), step: 'key', data: {} });
         bot.sendMessage(chatId, `🚀 *CHẾ ĐỘ THIẾT LẬP NHANH*\nBước 1: Vui lòng dán **Stream Key** của bạn:`, { 
           parse_mode: 'Markdown',
@@ -362,16 +371,34 @@ function initBot(actions) {
         });
       }
 
-      else if (text.startsWith('/live ') || text.startsWith('/once ')) {
+      else if (text.startsWith('/live ') || text.startsWith('/once ') || text.startsWith('/limit ')) {
         const isOnce = text.startsWith('/once ');
+        const isLimit = text.startsWith('/limit ');
         const parts = text.split(/\s+/).filter(Boolean);
-        if (parts.length < 3) return bot.sendMessage(chatId, '❌ Lỗi: Bạn phải nhập theo mẫu: `/live <Key> <Link>`', { parse_mode: 'Markdown' });
-        const result = actions.startStream({ key: parts[1], file: parts.slice(2).join(' '), mode: isOnce ? 'once' : 'loop', minutes: 0 });
+        
+        if (isLimit && parts.length < 4) {
+          return bot.sendMessage(chatId, '❌ Lỗi: Bạn phải nhập theo mẫu: `/limit <Key> <Link> <Số_Phút>`', { parse_mode: 'Markdown' });
+        } else if (!isLimit && parts.length < 3) {
+          return bot.sendMessage(chatId, '❌ Lỗi: Bạn phải nhập theo mẫu: `/live <Key> <Link>`', { parse_mode: 'Markdown' });
+        }
+        
+        let minutes = 0;
+        let file = parts.slice(2).join(' ');
+        if (isLimit) {
+          minutes = parseInt(parts[parts.length - 1]) || 0;
+          if (minutes <= 0) return bot.sendMessage(chatId, '❌ Lỗi: Số phút hẹn giờ phải lớn hơn 0!');
+          parts.pop(); // Remove minutes
+          file = parts.slice(2).join(' ');
+        }
+        
+        const result = actions.startStream({ key: parts[1], file: file, mode: isOnce ? 'once' : 'loop', minutes: minutes });
         if (result.error) {
           bot.sendMessage(chatId, `❌ Lỗi: \`${escapeMarkdown(result.error)}\``, { parse_mode: 'Markdown' });
         } else {
           const displayFile = result.file ? path.basename(result.file) : 'Google Drive Video';
-          bot.sendMessage(chatId, `🚀 *ĐÃ TẠO LUỒNG #${result.id} THÀNH CÔNG*\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${displayFile}\`\n🔄 Chế độ: \`${isOnce ? 'Phát 1 lần' : 'Phát lặp'}\`\n📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``, { parse_mode: 'Markdown' });
+          let playModeText = isOnce ? 'Phát một lần' : 'Phát lặp vô hạn';
+          if (isLimit) playModeText = `Hẹn giờ tắt (${minutes} phút)`;
+          bot.sendMessage(chatId, `🚀 *ĐÃ TẠO LUỒNG #${result.id} THÀNH CÔNG*\n━━━━━━━━━━━━━━━━━━\n🎞 Video: \`${displayFile}\`\n🔄 Chế độ: \`${playModeText}\`\n📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``, { parse_mode: 'Markdown' });
         }
       }
 
@@ -432,8 +459,11 @@ function initBot(actions) {
     try {
       const chatId = query.message.chat.id;
       if (!config.adminIds.includes(chatId)) return;
-      const [action, idStr] = query.data.split('_');
+      const parts = query.data.split('_');
+      const action = parts[0];
+      const idStr = parts.slice(1).join('_');
       const id = parseInt(idStr);
+      
       if (action === 'stop') {
         if (actions.stopStream(id)) {
           bot.answerCallbackQuery(query.id, { text: `Đã dừng #${id}` });
@@ -452,6 +482,161 @@ function initBot(actions) {
           bot.editMessageText(`🗑 *LUỒNG #${id}* Đã được gỡ bỏ khỏi danh sách.`, { chat_id: chatId, message_id: query.message.message_id, parse_mode: 'Markdown' });
         }
       } 
+      else if (action === 'edit') {
+        const list = actions.getStreams();
+        const s = list.find(x => x.id === id);
+        if (!s) return bot.answerCallbackQuery(query.id, { text: 'Không tìm thấy luồng!' });
+        
+        bot.answerCallbackQuery(query.id);
+        userStates.set(chatId, { cmd: 'edit', id: id, step: 'menu', data: { ...s } });
+        
+        let timingText = '';
+        if (s.mode === 'scheduled') {
+          const displayTime = new Date(s.scheduledTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+          timingText = `🕐 Đặt lịch phát (${displayTime})`;
+        } else {
+          timingText = `⚡ Đăng ngay lập tức`;
+        }
+
+        let playbackText = '';
+        const finalMode = s.mode === 'scheduled' ? s.scheduledMode : s.mode;
+        if (finalMode === 'once') {
+          playbackText = `▶️ Phát một lần`;
+        } else if (s.minutes > 0) {
+          playbackText = `⏱️ Hẹn giờ tắt (${s.minutes} phút)`;
+        } else {
+          playbackText = `🔁 Vòng lặp vô hạn`;
+        }
+
+        let msgText = `⚙️ *CHỈNH SỬA CẤU HÌNH LUỒNG #${id}*\n━━━━━━━━━━━━━━━━━━\n`;
+        msgText += `🏷️ Tên: *${escapeMarkdown(s.name || 'Mặc định')}*\n`;
+        msgText += `🎞️ Video: \`${s.originalFile || s.file}\`\n`;
+        msgText += `⚡ Thời điểm phát: \`${timingText}\`\n`;
+        msgText += `🔁 Hình thức phát: \`${playbackText}\`\n\n`;
+        msgText += `Vui lòng chọn trường thông tin bạn muốn cập nhật:`;
+        
+        const menuButtons = [
+          [{ text: '📝 Đổi tên gợi nhớ', callback_data: `editfield_name_${id}` }],
+          [{ text: '🎞️ Đổi Tệp Video / Link Drive', callback_data: `editfield_file_${id}` }],
+          [{ text: '🔑 Đổi Stream Key mới', callback_data: `editfield_key_${id}` }],
+          [{ text: '⚡ Sửa Thời Điểm Phát (Đăng ngay / Đặt lịch)', callback_data: `editfield_timing_${id}` }],
+          [{ text: '🔁 Sửa Hình Thức Phát (Loop / Một Lần / Hẹn Giờ)', callback_data: `editfield_playback_${id}` }],
+          [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+        ];
+        bot.sendMessage(chatId, msgText, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: menuButtons } });
+      }
+      else if (action === 'editfield') {
+        const [field, streamIdStr] = idStr.split('_');
+        const streamId = parseInt(streamIdStr);
+        const state = userStates.get(chatId);
+        if (state && state.cmd === 'edit') {
+          state.step = `edit_${field}`;
+          bot.answerCallbackQuery(query.id);
+          
+          if (field === 'name') {
+            bot.sendMessage(chatId, `📝 *Sửa Tên Gợi Nhớ (Luồng #${streamId}):*\nNhập tên mới hoặc gửi \`/cancel\` để giữ nguyên:`, { parse_mode: 'Markdown' });
+          } else if (field === 'file') {
+            bot.sendMessage(chatId, `🎞️ *Sửa tệp Video / Drive (Luồng #${streamId}):*\nNhập đường dẫn tệp mới hoặc link Google Drive mới:`, { parse_mode: 'Markdown' });
+          } else if (field === 'key') {
+            bot.sendMessage(chatId, `🔑 *Sửa Stream Key (Luồng #${streamId}):*\nNhập khóa luồng YouTube Stream Key mới:`, { parse_mode: 'Markdown' });
+          } else if (field === 'timing') {
+            const timingSelector = [
+              [{ text: '⚡ Đăng Ngay Lập Tức', callback_data: `edittiming_now_${streamId}` }],
+              [{ text: '🕐 Đặt Lịch Phát sóng', callback_data: `edittiming_sched_${streamId}` }],
+              [{ text: '❌ Quay lại', callback_data: `edit_${streamId}` }]
+            ];
+            bot.sendMessage(chatId, `⚡ *Chọn thời điểm phát sóng mới cho Luồng #${streamId}:*`, { 
+              parse_mode: 'Markdown', 
+              reply_markup: { inline_keyboard: timingSelector } 
+            });
+          } else if (field === 'playback') {
+            const playbackSelector = [
+              [{ text: '🔁 Vòng Lặp Vô Hạn', callback_data: `editplayback_loop_${streamId}` }],
+              [{ text: '▶️ Phát Một Lần', callback_data: `editplayback_once_${streamId}` }],
+              [{ text: '⏱️ Hẹn Giờ Tắt', callback_data: `editplayback_limit_${streamId}` }],
+              [{ text: '❌ Quay lại', callback_data: `edit_${streamId}` }]
+            ];
+            bot.sendMessage(chatId, `🔁 *Chọn hình thức phát mới cho Luồng #${streamId}:*`, { 
+              parse_mode: 'Markdown', 
+              reply_markup: { inline_keyboard: playbackSelector } 
+            });
+          }
+        }
+      }
+      else if (action === 'edittiming') {
+        const [timing, streamIdStr] = idStr.split('_');
+        const streamId = parseInt(streamIdStr);
+        const state = userStates.get(chatId);
+        if (state && state.cmd === 'edit') {
+          bot.answerCallbackQuery(query.id);
+          if (timing === 'now') {
+            const currentMode = state.data.mode === 'scheduled' ? state.data.scheduledMode : state.data.mode;
+            state.data.mode = currentMode || 'loop';
+            state.data.scheduledTime = null;
+            saveEditChanges(chatId, state, actions);
+          } else if (timing === 'sched') {
+            state.step = 'edit_schedule_date';
+            const now = new Date();
+            bot.sendMessage(chatId, `📅 *Đặt Lịch Phát mới (Luồng #${streamId}):*\nChọn **Ngày phát** mới từ lịch bên dưới:`, { 
+              parse_mode: 'Markdown', 
+              reply_markup: generateCalendar(now.getFullYear(), now.getMonth())
+            });
+          }
+        }
+      }
+      else if (action === 'editplayback') {
+        const [playback, streamIdStr] = idStr.split('_');
+        const streamId = parseInt(streamIdStr);
+        const state = userStates.get(chatId);
+        if (state && state.cmd === 'edit') {
+          bot.answerCallbackQuery(query.id);
+          const isScheduled = state.data.mode === 'scheduled';
+          
+          if (playback === 'loop') {
+            if (isScheduled) {
+              state.data.scheduledMode = 'loop';
+            } else {
+              state.data.mode = 'loop';
+            }
+            state.data.minutes = 0;
+            saveEditChanges(chatId, state, actions);
+          } else if (playback === 'once') {
+            if (isScheduled) {
+              state.data.scheduledMode = 'once';
+            } else {
+              state.data.mode = 'once';
+            }
+            state.data.minutes = 0;
+            saveEditChanges(chatId, state, actions);
+          } else if (playback === 'limit') {
+            if (isScheduled) {
+              state.step = 'edit_sched_minutes';
+            } else {
+              state.step = 'edit_minutes';
+            }
+            bot.sendMessage(chatId, `⏱️ *Hẹn Giờ Tắt (Luồng #${streamId}):*\nNhập số phút hoạt động trước khi tự động tắt (ví dụ: 120):`, { parse_mode: 'Markdown' });
+          }
+        }
+      }
+      else if (action === 'editschedmode') {
+        const [schedMode, streamIdStr] = idStr.split('_');
+        const state = userStates.get(chatId);
+        if (state && state.cmd === 'edit') {
+          bot.answerCallbackQuery(query.id);
+          if (schedMode === 'loop') {
+            state.data.scheduledMode = 'loop';
+            state.data.minutes = 0;
+            saveEditChanges(chatId, state, actions);
+          } else if (schedMode === 'once') {
+            state.data.scheduledMode = 'once';
+            state.data.minutes = 0;
+            saveEditChanges(chatId, state, actions);
+          } else if (schedMode === 'limit') {
+            state.step = 'edit_sched_minutes';
+            bot.sendMessage(chatId, `⏱️ *Hẹn Giờ Tắt cho Lịch Phát (Luồng #${state.id}):*\nNhập số phút hoạt động trước khi tự động tắt (ví dụ: 120):`, { parse_mode: 'Markdown' });
+          }
+        }
+      }
       // Xử lý Wizard Callbacks
       else if (action === 'cancel') {
         userStates.delete(chatId);
@@ -469,7 +654,22 @@ function initBot(actions) {
         const state = userStates.get(chatId);
         if (state) {
           bot.answerCallbackQuery(query.id);
-          handleWizard(chatId, date, state, actions);
+          if (state.cmd === 'edit') {
+            state.data.editDate = date;
+            state.step = 'edit_schedule_time';
+            const quickTimes = [
+              [{ text: '00:00', callback_data: 'wiztime_00:00' }, { text: '02:00', callback_data: 'wiztime_02:00' }, { text: '04:00', callback_data: 'wiztime_04:00' }, { text: '06:00', callback_data: 'wiztime_06:00' }],
+              [{ text: '08:00', callback_data: 'wiztime_08:00' }, { text: '10:00', callback_data: 'wiztime_10:00' }, { text: '12:00', callback_data: 'wiztime_12:00' }, { text: '14:00', callback_data: 'wiztime_14:00' }],
+              [{ text: '16:00', callback_data: 'wiztime_16:00' }, { text: '18:00', callback_data: 'wiztime_18:00' }, { text: '20:00', callback_data: 'wiztime_20:00' }, { text: '22:00', callback_data: 'wiztime_22:00' }],
+              [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+            ];
+            bot.sendMessage(chatId, `⏰ *Sửa Lịch Phát (Luồng #${state.id}):*\nChọn **Giờ phát** mới hoặc tự nhập (VD: 14):`, { 
+              parse_mode: 'Markdown', 
+              reply_markup: { inline_keyboard: quickTimes } 
+            });
+          } else {
+            handleWizard(chatId, date, state, actions);
+          }
         }
       }
       else if (action === 'wiztime') {
@@ -477,7 +677,23 @@ function initBot(actions) {
         const state = userStates.get(chatId);
         if (state) {
           bot.answerCallbackQuery(query.id);
-          handleWizard(chatId, hour, state, actions);
+          if (state.cmd === 'edit') {
+            state.data.editHour = hour;
+            state.step = 'edit_schedule_minute';
+            const quickMins = [
+              [{ text: ':00', callback_data: 'wizmin_00' }, { text: ':05', callback_data: 'wizmin_05' }, { text: ':10', callback_data: 'wizmin_10' }],
+              [{ text: ':15', callback_data: 'wizmin_15' }, { text: ':20', callback_data: 'wizmin_20' }, { text: ':25', callback_data: 'wizmin_25' }],
+              [{ text: ':30', callback_data: 'wizmin_30' }, { text: ':35', callback_data: 'wizmin_35' }, { text: ':40', callback_data: 'wizmin_40' }],
+              [{ text: ':45', callback_data: 'wizmin_45' }, { text: ':50', callback_data: 'wizmin_50' }, { text: ':55', callback_data: 'wizmin_55' }],
+              [{ text: '❌ Hủy thao tác', callback_data: 'cancel_wizard' }]
+            ];
+            bot.sendMessage(chatId, `⏱ *Sửa Lịch Phát (Luồng #${state.id}):*\nChọn **Phút phát** mới hoặc tự nhập (VD: 15):`, { 
+              parse_mode: 'Markdown', 
+              reply_markup: { inline_keyboard: quickMins } 
+            });
+          } else {
+            handleWizard(chatId, hour, state, actions);
+          }
         }
       }
       else if (action === 'wizmin') {
@@ -485,7 +701,25 @@ function initBot(actions) {
         const state = userStates.get(chatId);
         if (state) {
           bot.answerCallbackQuery(query.id);
-          handleWizard(chatId, mins, state, actions);
+          if (state.cmd === 'edit') {
+            state.data.editHour = state.data.editHour || '00';
+            state.data.editMinute = mins;
+            
+            const timeStr = `${String(state.data.editHour).padStart(2, '0')}:${String(state.data.editMinute).padStart(2, '0')}`;
+            state.data.scheduledTime = `${state.data.editDate}T${timeStr}`;
+            state.data.mode = 'scheduled';
+            
+            const schedSelector = [
+              [{ text: '🔄 Lặp Phát Lịch', callback_data: `editschedmode_loop_${state.id}` }],
+              [{ text: '▶️ Phát 1 Lần Lịch', callback_data: `editschedmode_once_${state.id}` }]
+            ];
+            bot.sendMessage(chatId, `🕐 *Sửa Đặt Lịch (Luồng #${state.id}):*\nChọn chế độ phát khi đến giờ lịch trình:`, {
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: schedSelector }
+            });
+          } else {
+            handleWizard(chatId, mins, state, actions);
+          }
         }
       }
       else if (action === 'wizdur') {
@@ -706,6 +940,121 @@ function updateProgress(streamId, pct, text) {
     });
     if (pct === 100) activeProgressMessages.delete(streamId);
   } catch (e) { console.error('Lỗi cập nhật tiến độ:', e.message); }
+}
+
+function handleEditInput(chatId, text, state, actions) {
+  try {
+    const id = state.id;
+    if (state.step === 'edit_name') {
+      state.data.name = text;
+      saveEditChanges(chatId, state, actions);
+    } 
+    else if (state.step === 'edit_file') {
+      state.data.file = text;
+      state.data.originalFile = text;
+      saveEditChanges(chatId, state, actions);
+    } 
+    else if (state.step === 'edit_key') {
+      state.data.key = text;
+      saveEditChanges(chatId, state, actions);
+    }
+    else if (state.step === 'edit_minutes') {
+      const minutes = parseInt(text) || 0;
+      if (minutes <= 0) {
+        return bot.sendMessage(chatId, '❌ Lỗi: Số phút hẹn giờ phải lớn hơn 0. Vui lòng nhập lại:');
+      }
+      state.data.mode = 'loop';
+      state.data.minutes = minutes;
+      saveEditChanges(chatId, state, actions);
+    }
+    else if (state.step === 'edit_sched_minutes') {
+      const minutes = parseInt(text) || 0;
+      if (minutes <= 0) {
+        return bot.sendMessage(chatId, '❌ Lỗi: Số phút hẹn giờ phải lớn hơn 0. Vui lòng nhập lại:');
+      }
+      state.data.scheduledMode = 'loop';
+      state.data.minutes = minutes;
+      saveEditChanges(chatId, state, actions);
+    }
+    else if (state.step === 'edit_schedule_time') {
+      state.data.editHour = text;
+      state.step = 'edit_schedule_minute';
+      bot.sendMessage(chatId, `⏱ Nhập **Phút phát** mới (0 - 59):`);
+    }
+    else if (state.step === 'edit_schedule_minute') {
+      state.data.editMinute = text;
+      
+      const timeStr = `${String(state.data.editHour).padStart(2, '0')}:${String(state.data.editMinute).padStart(2, '0')}`;
+      state.data.scheduledTime = `${state.data.editDate}T${timeStr}`;
+      state.data.mode = 'scheduled';
+      
+      const schedSelector = [
+        [{ text: '🔁 Vòng Lặp Vô Hạn', callback_data: `editschedmode_loop_${state.id}` }],
+        [{ text: '▶️ Phát Một Lần', callback_data: `editschedmode_once_${state.id}` }],
+        [{ text: '⏱️ Hẹn Giờ Tắt', callback_data: `editschedmode_limit_${state.id}` }],
+        [{ text: '❌ Quay lại menu', callback_data: `edit_${state.id}` }]
+      ];
+      bot.sendMessage(chatId, `🕐 *Sửa Đặt Lịch (Luồng #${state.id}):*\nChọn chế độ phát khi đến giờ lịch trình:`, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: schedSelector }
+      });
+    }
+  } catch (e) {
+    userStates.delete(chatId);
+    bot.sendMessage(chatId, `❌ Có lỗi khi lưu thay đổi: ${e.message}`);
+  }
+}
+
+function saveEditChanges(chatId, state, actions) {
+  try {
+    const result = actions.editStream({
+      id: state.id,
+      name: state.data.name,
+      key: state.data.key,
+      file: state.data.originalFile || state.data.file,
+      mode: state.data.mode,
+      minutes: state.data.minutes,
+      scheduledTime: state.data.scheduledTime,
+      scheduledMode: state.data.scheduledMode
+    });
+    
+    userStates.delete(chatId);
+    
+    if (result.error) {
+      bot.sendMessage(chatId, `❌ Thất bại khi lưu cấu hình: ${result.error}`);
+    } else {
+      let detailMsg = `✅ *ĐÃ CẬP NHẬT CẤU HÌNH LUỒNG #${state.id} THÀNH CÔNG!*\n━━━━━━━━━━━━━━━━━━\n`;
+      detailMsg += `🏷️ Tên mới: *${escapeMarkdown(state.data.name || 'Mặc định')}*\n`;
+      detailMsg += `🎞️ Video mới: \`${state.data.originalFile || state.data.file}\`\n`;
+      
+      let timingText = '';
+      if (state.data.mode === 'scheduled') {
+        const displayTime = new Date(state.data.scheduledTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        timingText = `🕐 Đặt lịch phát (${displayTime})`;
+      } else {
+        timingText = `⚡ Đăng ngay lập tức`;
+      }
+
+      let playbackText = '';
+      const finalMode = state.data.mode === 'scheduled' ? state.data.scheduledMode : state.data.mode;
+      if (finalMode === 'once') {
+        playbackText = `▶️ Phát một lần`;
+      } else if (state.data.minutes > 0) {
+        playbackText = `⏱️ Hẹn giờ tắt (${state.data.minutes} phút)`;
+      } else {
+        playbackText = `🔁 Vòng lặp vô hạn`;
+      }
+
+      detailMsg += `⚡ Thời điểm phát mới: \`${timingText}\`\n`;
+      detailMsg += `🔁 Hình thức phát mới: \`${playbackText}\`\n`;
+      detailMsg += `📡 Chế độ phát: \`Song song A+B ⚡ (Bảo vệ tối đa)\``;
+      
+      bot.sendMessage(chatId, detailMsg, { parse_mode: 'Markdown' });
+    }
+  } catch (e) {
+    userStates.delete(chatId);
+    bot.sendMessage(chatId, `❌ Lỗi lưu cấu hình: ${e.message}`);
+  }
 }
 
 module.exports = { initBot, broadcast, updateProgress };
