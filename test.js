@@ -25,14 +25,21 @@ let passed = 0, failed = 0;
 async function post(path, body) {
   const r = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'User-Agent': 'CyberShieldSecureAgent/1.0'
+    },
     body: JSON.stringify(body),
   });
   return r.json();
 }
 
 async function getStreams() {
-  const r = await fetch(`${BASE}/api/streams`);
+  const r = await fetch(`${BASE}/api/streams`, {
+    headers: {
+      'User-Agent': 'CyberShieldSecureAgent/1.0'
+    }
+  });
   return r.json();
 }
 

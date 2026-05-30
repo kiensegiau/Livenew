@@ -72,7 +72,8 @@
   ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
   .dashboard-wrapper {
-    max-width: 1280px;
+    max-width: 1680px;
+    width: 100%;
     margin: 0 auto;
   }
 
@@ -159,7 +160,19 @@
     align-items: start;
   }
 
+  @media (min-width: 740px) and (orientation: landscape) {
+    .dashboard-grid {
+      grid-template-columns: 320px 1fr;
+    }
+  }
+
   @media (min-width: 1024px) {
+    .dashboard-grid {
+      grid-template-columns: 380px 1fr;
+    }
+  }
+
+  @media (min-width: 1440px) {
     .dashboard-grid {
       grid-template-columns: 420px 1fr;
     }
@@ -431,9 +444,15 @@
   }
 
   .streams-container {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr;
     gap: 20px;
+  }
+
+  @media (min-width: 1280px) {
+    .streams-container {
+      grid-template-columns: repeat(auto-fit, minmax(580px, 1fr));
+    }
   }
 
   /* Beautiful Telemetry Server Card */
@@ -864,22 +883,24 @@
 
   .sys-rings-row {
     display: flex;
-    justify-content: space-around;
+    justify-content: center;
     align-items: flex-start;
-    gap: 8px;
+    gap: 12px;
     margin-bottom: 8px;
+    flex-wrap: wrap;
   }
   .sys-ring-card {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
+    min-width: 72px;
     flex: 1;
   }
   .sys-ring-wrapper {
     position: relative;
-    width: 80px;
-    height: 80px;
+    width: 76px;
+    height: 76px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1192,6 +1213,7 @@
   /* Actions Toolbar */
   .card-actions-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: 16px;
     border-top: 1px solid rgba(255, 255, 255, 0.04);
@@ -1209,8 +1231,19 @@
     transition: var(--transition);
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     border: 1px solid transparent;
+  }
+
+  @media (max-width: 480px) {
+    .card-actions-row {
+      justify-content: stretch;
+    }
+    .btn-action {
+      flex: 1;
+      min-width: 100px;
+    }
   }
 
   .btn-action-stop {
@@ -1237,6 +1270,7 @@
 
   /* Empty State */
   .empty-state {
+    grid-column: 1 / -1;
     text-align: center;
     padding: 48px;
     color: var(--text-secondary);
@@ -1714,6 +1748,82 @@
   .login-submit-btn:active {
     transform: translateY(0);
   }
+
+  /* ==========================================
+     PREMIUM MODAL CONFIG SYSTEM STYLES
+     ========================================== */
+  .modal-overlay {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(4, 5, 9, 0.75);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.3s ease, visibility 0.3s;
+  }
+
+  .modal-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .modal-content-card {
+    background: var(--panel-bg);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    width: 95%;
+    max-width: 920px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 40px rgba(99, 102, 241, 0.1);
+    transform: scale(0.95) translateY(-20px);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+  }
+
+  .modal-overlay:not(.hidden) .modal-content-card {
+    transform: scale(1) translateY(0);
+  }
+
+  .modal-close-x {
+    position: absolute;
+    top: 18px; right: 20px;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: var(--transition);
+    z-index: 10;
+  }
+  .modal-close-x:hover {
+    color: #fff;
+    transform: scale(1.15);
+  }
+
+  .modal-grid-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  @media (min-width: 640px) or (orientation: landscape) {
+    .modal-grid-layout {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .modal-grid-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
 </style>
 </head>
 <body>
@@ -1744,6 +1854,189 @@
   </div>
 </div>
 
+<!-- Cyber-Shield Premium Stream Config Modal Overlay -->
+<div class="modal-overlay hidden" id="configModal" onclick="closeConfigModal(event)">
+  <div class="modal-content-card" onclick="event.stopPropagation()">
+    <button class="modal-close-x" onclick="closeConfigModal(event)" title="Đóng cửa sổ">×</button>
+    <div class="card-header-area" style="border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 14px; margin-bottom: 20px;">
+      <div class="card-title" id="modalConfigTitle">⚙️ Cấu hình Live mới</div>
+    </div>
+
+    <!-- Responsive Horizontal Two-Column Grid Layout -->
+    <div class="modal-grid-layout">
+      
+      <!-- Cột bên trái: Thiết lập tệp & Khóa bảo mật -->
+      <div class="modal-grid-col">
+        <!-- Stream Name / Tag -->
+        <div class="form-group">
+          <label for="streamName">Tên gợi nhớ luồng (Tùy chọn)</label>
+          <div class="input-wrapper">
+            <input type="text" id="streamName" placeholder="Ví dụ: Live Nhạc Chill Lofi, Live Afro Soul..." autocomplete="off" />
+          </div>
+        </div>
+
+        <!-- YouTube Stream Key -->
+        <div class="form-group">
+          <label for="streamKey">Stream Key (YouTube Studio)</label>
+          <div class="input-wrapper">
+            <input type="password" id="streamKey" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" autocomplete="off" />
+            <button type="button" class="btn-toggle-visibility" id="toggleKeyBtn" onclick="toggleStreamKeyVisibility()" title="Hiển thị / Ẩn Stream Key">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Video File / Drive Link -->
+        <div class="form-group">
+          <label for="videoPath">
+            <span>Đường dẫn Video hoặc Link Google Drive</span>
+            <span class="drive-detect-badge" id="driveBadge">📥 Link Drive phát hiện</span>
+          </label>
+          <div class="file-input-grid">
+            <input type="text" id="videoPath" placeholder="D:\\Video\\sample.mp4 hoặc https://drive.google.com/..." autocomplete="off" />
+            <button class="btn btn-ghost btn-sm" onclick="browse()" title="Mở hộp thoại chọn file trên VPS">📂 Chọn File</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cột bên phải: Thiết lập thời gian & Chế độ hoạt động -->
+      <div class="modal-grid-col">
+        <!-- Thời điểm phát sóng (Timing Selector) -->
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label>Thời điểm phát sóng</label>
+          <div class="mode-selector" id="timingSelector">
+            <div class="mode-tab active" id="tab-timing-now" onclick="setTimingMode('now')">⚡ Đăng Ngay</div>
+            <div class="mode-tab" id="tab-timing-sched" onclick="setTimingMode('scheduled')">🕐 Đặt Lịch</div>
+          </div>
+        </div>
+
+        <!-- Scheduled mode details -->
+        <div class="mode-fields" id="mode-scheduled" style="display: none; margin-bottom: 20px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <label for="schedTime">Thời gian kích hoạt (Giờ VPS)</label>
+            <div class="custom-datetime-picker-wrapper" id="customPickerWrapper">
+              <div class="datetime-trigger" onclick="toggleCustomPicker(event)" id="datetimeTrigger">
+                <span class="trigger-icon">📅</span>
+                <span class="trigger-value" id="datetimeTriggerValue">Đang tải...</span>
+                <span class="trigger-arrow">▼</span>
+              </div>
+              <div class="picker-panel" id="pickerPanel" style="display: none;" onclick="event.stopPropagation()">
+                <div class="calendar-section">
+                  <div class="calendar-header">
+                    <button type="button" class="cal-nav-btn" onclick="changeMonth(-1, event)">◀</button>
+                    <span class="calendar-title" id="calTitle">Tháng --, ----</span>
+                    <button type="button" class="cal-nav-btn" onclick="changeMonth(1, event)">▶</button>
+                  </div>
+                  <div class="calendar-weekdays">
+                    <div>T2</div><div>T3</div><div>T4</div><div>T5</div><div>T6</div><div>T7</div><div>CN</div>
+                  </div>
+                  <div class="calendar-days" id="calDays"></div>
+                </div>
+                <div class="time-section">
+                  <div class="time-column-header-row">
+                    <div>Giờ</div>
+                    <div>Phút</div>
+                  </div>
+                  <div class="time-scroll-container">
+                    <div class="time-column" id="hourCol"></div>
+                    <div class="time-column" id="minCol"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <input type="datetime-local" id="schedTime" style="display:none;" />
+            
+            <!-- Elegant feedback helper -->
+            <div class="schedule-helper-text" id="scheduleHelper" style="margin-bottom:0;">
+              Đang tải dữ liệu thời gian đặt lịch...
+            </div>
+          </div>
+        </div>
+
+        <!-- Hình thức phát (Playback Mode Selector) -->
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label>Hình thức phát</label>
+          <div class="mode-selector" id="playbackSelector">
+            <div class="mode-tab active" id="tab-playback-loop" onclick="setPlaybackMode('loop')">🔁 Vòng Lặp</div>
+            <div class="mode-tab" id="tab-playback-once" onclick="setPlaybackMode('once')">▶️ Phát Một Lần</div>
+            <div class="mode-tab" id="tab-playback-limit" onclick="setPlaybackMode('limit')">⏱️ Hẹn Giờ Tắt</div>
+          </div>
+        </div>
+
+        <!-- Loop mode details -->
+        <div class="mode-fields visible" id="mode-loop">
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+            🔄 Video sẽ được phát lặp lại vô hạn liên tục 24/7 không dừng. Thích hợp cho các luồng nhạc chill lofi, livestream bán hàng liên tục.
+          </div>
+          <input type="hidden" id="minutes" value="0" />
+        </div>
+
+        <!-- Once mode details -->
+        <div class="mode-fields" id="mode-once" style="display: none;">
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+            Phát hết toàn bộ thời lượng video một lần rồi hệ thống tự động kết thúc. Thích hợp cho phim chiếu rạp, sự kiện trực tiếp không lặp lại.
+          </div>
+        </div>
+
+        <!-- Limit mode details -->
+        <div class="mode-fields" id="mode-limit" style="display: none;">
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+            ⏱️ Phát lặp lại video liên tục nhưng sẽ tự động tắt và dừng phát sóng sau thời gian hẹn giờ (số phút) được thiết lập bên dưới.
+          </div>
+        </div>
+
+        <!-- Running minutes duration input box (Shown only when Hẹn Giờ Tắt is active) -->
+        <div class="form-group" id="schedMinutesGroup" style="margin-top: 14px; margin-bottom: 0; display: none;">
+          <label for="schedMinutes">Số phút Live hoạt động trước khi tắt</label>
+          <input type="number" id="schedMinutes" placeholder="Ví dụ: 120 (phút)" min="1" />
+        </div>
+      </div>
+    </div> <!-- End .modal-grid-layout -->
+
+    <!-- Trigger Action (Nằm ngoài Grid để chiếm trọn chiều ngang modal ở phía dưới) -->
+    <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
+      <button class="btn btn-launch btn-lg" id="btnStart" onclick="startStream()">
+        🔴 KÍCH HOẠT HỆ THỐNG LIVE
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Cyber-Shield Premium Password Change Modal Overlay -->
+<div class="modal-overlay hidden" id="passwordModal" onclick="closePasswordModal(event)">
+  <div class="modal-content-card" style="max-width: 480px;" onclick="event.stopPropagation()">
+    <button class="modal-close-x" onclick="closePasswordModal(event)" title="Đóng cửa sổ">×</button>
+    
+    <div class="card-header-area" style="border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 14px; margin-bottom: 24px;">
+      <div class="card-title">🔒 Đổi mật khẩu bảo mật</div>
+    </div>
+
+    <!-- Password form elements inside Modal -->
+    <div class="form-group">
+      <label for="currentPassword">Mật khẩu hiện tại</label>
+      <div class="input-wrapper">
+        <input type="password" id="currentPassword" placeholder="Nhập mật khẩu hiện tại" autocomplete="off" />
+      </div>
+    </div>
+    
+    <div class="form-group" style="margin-top: 16px;">
+      <label for="newPassword">Mật khẩu mới</label>
+      <div class="input-wrapper">
+        <input type="password" id="newPassword" placeholder="Nhập mật khẩu mới" autocomplete="off" />
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
+      <button class="btn btn-launch btn-lg" style="background: var(--purple-gradient); box-shadow: 0 8px 24px var(--purple-glow);" id="btnChangePassword" onclick="changePassword()">
+        🔄 Cập Nhật Mật Khẩu
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="dashboard-wrapper">
   
   <!-- Header -->
@@ -1759,6 +2052,7 @@
     </div>
     
     <div class="system-stats-bar">
+      <button onclick="openPasswordModal()" class="sys-badge" style="cursor: pointer; background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.35); color: #c084fc; font-weight: 600; padding: 6px 12px; border-radius: 20px; transition: var(--transition);" onmouseover="this.style.background='rgba(168, 85, 247, 0.25)'; this.style.borderColor='rgba(168, 85, 247, 0.6)';" onmouseout="this.style.background='rgba(168, 85, 247, 0.12)'; this.style.borderColor='rgba(168, 85, 247, 0.35)';">⚙️ ĐỔI MẬT KHẨU</button>
       <button id="electronConfigBtn" class="sys-badge" style="display: none; cursor: pointer; background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35); color: #818cf8; font-weight: 600; padding: 6px 12px; border-radius: 20px;">⚙️ Cấu Hình VPS</button>
       <span id="demoBadge" class="sys-badge" style="display:none; background:rgba(239, 68, 68, 0.08); border-color:rgba(239, 68, 68, 0.2); color:#f87171; font-weight:600;"><span style="color:#ef4444;">●</span> MOCK DATA (DEMO)</span>
       <span class="sys-badge"><span style="color:#6366f1">●</span> FIFO Muxer</span>
@@ -1772,145 +2066,7 @@
     
     <!-- Left Column Wrapper: Configuration & Telemetry -->
     <div class="left-column-wrapper">
-      
-      <!-- Controller Configuration -->
-      <div class="card">
-      <div class="card-header-area">
-        <div class="card-title">⚙️ Cấu hình Live mới</div>
-      </div>
-
-      <!-- Stream Name / Tag -->
-      <div class="form-group">
-        <label for="streamName">Tên gợi nhớ luồng (Tùy chọn)</label>
-        <div class="input-wrapper">
-          <input type="text" id="streamName" placeholder="Ví dụ: Live Nhạc Chill Lofi, Live Afro Soul..." autocomplete="off" />
-        </div>
-      </div>
-
-      <!-- YouTube Stream Key -->
-      <div class="form-group">
-        <label for="streamKey">Stream Key (YouTube Studio)</label>
-        <div class="input-wrapper">
-          <input type="password" id="streamKey" placeholder="xxxx-xxxx-xxxx-xxxx-xxxx" autocomplete="off" />
-          <button type="button" class="btn-toggle-visibility" id="toggleKeyBtn" onclick="toggleStreamKeyVisibility()" title="Hiển thị / Ẩn Stream Key">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Video File / Drive Link -->
-      <div class="form-group">
-        <label for="videoPath">
-          <span>Đường dẫn Video hoặc Link Google Drive</span>
-          <span class="drive-detect-badge" id="driveBadge">📥 Link Drive phát hiện</span>
-        </label>
-        <div class="file-input-grid">
-          <input type="text" id="videoPath" placeholder="D:\\Video\\sample.mp4 hoặc https://drive.google.com/..." autocomplete="off" />
-          <button class="btn btn-ghost btn-sm" onclick="browse()" title="Mở hộp thoại chọn file trên VPS">📂 Chọn File</button>
-        </div>
-      </div>
-
-      <!-- Thời điểm phát sóng (Timing Selector) -->
-      <div class="form-group" style="margin-bottom: 14px;">
-        <label>Thời điểm phát sóng</label>
-        <div class="mode-selector" id="timingSelector">
-          <div class="mode-tab active" id="tab-timing-now" onclick="setTimingMode('now')">⚡ Đăng Ngay</div>
-          <div class="mode-tab" id="tab-timing-sched" onclick="setTimingMode('scheduled')">🕐 Đặt Lịch</div>
-        </div>
-      </div>
-
-      <!-- Scheduled mode details -->
-      <div class="mode-fields" id="mode-scheduled" style="display: none; margin-bottom: 20px;">
-        <div class="form-group" style="margin-bottom:0;">
-          <label for="schedTime">Thời gian kích hoạt (Giờ VPS)</label>
-          <div class="custom-datetime-picker-wrapper" id="customPickerWrapper">
-            <div class="datetime-trigger" onclick="toggleCustomPicker(event)" id="datetimeTrigger">
-              <span class="trigger-icon">📅</span>
-              <span class="trigger-value" id="datetimeTriggerValue">Đang tải...</span>
-              <span class="trigger-arrow">▼</span>
-            </div>
-            <div class="picker-panel" id="pickerPanel" style="display: none;" onclick="event.stopPropagation()">
-              <div class="calendar-section">
-                <div class="calendar-header">
-                  <button type="button" class="cal-nav-btn" onclick="changeMonth(-1, event)">◀</button>
-                  <span class="calendar-title" id="calTitle">Tháng --, ----</span>
-                  <button type="button" class="cal-nav-btn" onclick="changeMonth(1, event)">▶</button>
-                </div>
-                <div class="calendar-weekdays">
-                  <div>T2</div><div>T3</div><div>T4</div><div>T5</div><div>T6</div><div>T7</div><div>CN</div>
-                </div>
-                <div class="calendar-days" id="calDays"></div>
-              </div>
-              <div class="time-section">
-                <div class="time-column-header-row">
-                  <div>Giờ</div>
-                  <div>Phút</div>
-                </div>
-                <div class="time-scroll-container">
-                  <div class="time-column" id="hourCol"></div>
-                  <div class="time-column" id="minCol"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <input type="datetime-local" id="schedTime" style="display:none;" />
-
-          
-          <!-- Elegant feedback helper -->
-          <div class="schedule-helper-text" id="scheduleHelper" style="margin-bottom:0;">
-            Đang tải dữ liệu thời gian đặt lịch...
-          </div>
-        </div>
-      </div>
-
-      <!-- Hình thức phát (Playback Mode Selector) -->
-      <div class="form-group" style="margin-bottom: 14px;">
-        <label>Hình thức phát</label>
-        <div class="mode-selector" id="playbackSelector">
-          <div class="mode-tab active" id="tab-playback-loop" onclick="setPlaybackMode('loop')">🔁 Vòng Lặp</div>
-          <div class="mode-tab" id="tab-playback-once" onclick="setPlaybackMode('once')">▶️ Phát Một Lần</div>
-          <div class="mode-tab" id="tab-playback-limit" onclick="setPlaybackMode('limit')">⏱️ Hẹn Giờ Tắt</div>
-        </div>
-      </div>
-
-      <!-- Loop mode details -->
-      <div class="mode-fields visible" id="mode-loop">
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-          🔄 Video sẽ được phát lặp lại vô hạn liên tục 24/7 không dừng. Thích hợp cho các luồng nhạc chill lofi, livestream bán hàng liên tục.
-        </div>
-        <input type="hidden" id="minutes" value="0" />
-      </div>
-
-      <!-- Once mode details -->
-      <div class="mode-fields" id="mode-once" style="display: none;">
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-          Phát hết toàn bộ thời lượng video một lần rồi hệ thống tự động kết thúc. Thích hợp cho phim chiếu rạp, sự kiện trực tiếp không lặp lại.
-        </div>
-      </div>
-
-      <!-- Limit mode details -->
-      <div class="mode-fields" id="mode-limit" style="display: none;">
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-          ⏱️ Phát lặp lại video liên tục nhưng sẽ tự động tắt và dừng phát sóng sau thời gian hẹn giờ (số phút) được thiết lập bên dưới.
-        </div>
-      </div>
-
-      <!-- Running minutes duration input box (Shown only when Hẹn Giờ Tắt is active) -->
-      <div class="form-group" id="schedMinutesGroup" style="margin-top: 14px; margin-bottom: 14px; display: none;">
-        <label for="schedMinutes">Số phút Live hoạt động trước khi tắt</label>
-        <input type="number" id="schedMinutes" placeholder="Ví dụ: 120 (phút)" min="1" />
-      </div>
-
-      <!-- Trigger Action -->
-      <div style="margin-top: 24px;">
-        <button class="btn btn-launch btn-lg" id="btnStart" onclick="startStream()">
-          🔴 KÍCH HOẠT HỆ THỐNG LIVE
-        </button>
-      </div>
-    </div>
+      <!-- Cấu hình Live mới đã được chuyển vào Modal overlay để giao diện gọn gàng hơn -->
 
     <!-- VPS System Telemetry Card -->
     <div class="card">
@@ -2011,29 +2167,7 @@
       <!-- Detailed System List Removed (Replaced by Circular Rings for Sleeker Look) -->
     </div>
 
-    <!-- 🔒 Change Password Card -->
-    <div class="card" style="margin-top: 20px;">
-      <div class="card-header-area">
-        <div class="card-title">🔒 Đổi mật khẩu bảo mật</div>
-      </div>
-      <div class="form-group">
-        <label for="currentPassword">Mật khẩu hiện tại</label>
-        <div class="input-wrapper">
-          <input type="password" id="currentPassword" placeholder="Nhập mật khẩu hiện tại" autocomplete="off" />
-        </div>
-      </div>
-      <div class="form-group" style="margin-top: 12px;">
-        <label for="newPassword">Mật khẩu mới</label>
-        <div class="input-wrapper">
-          <input type="password" id="newPassword" placeholder="Nhập mật khẩu mới" autocomplete="off" />
-        </div>
-      </div>
-      <div style="margin-top: 16px;">
-        <button class="btn btn-ghost btn-sm" style="width: 100%; padding: 10px; font-weight: 600; border-color: rgba(239, 68, 68, 0.3); color: #f87171;" id="btnChangePassword" onclick="changePassword()">
-          🔄 Cập Nhật Mật Khẩu
-        </button>
-      </div>
-    </div>
+
 
   </div> <!-- End .left-column-wrapper -->
 
@@ -2046,6 +2180,9 @@
         </div>
         
         <div class="right-header-tools">
+          <button class="btn btn-launch btn-sm" onclick="openConfigModal()" style="padding: 6px 14px; font-size: 0.75rem; background: var(--primary-gradient); box-shadow: 0 4px 12px var(--primary-glow); margin-right: 8px;">
+            ➕ THÊM LUỒNG LIVE
+          </button>
           <button class="btn btn-ghost btn-sm" id="btnClear" onclick="clearDone()" title="Xóa các luồng đã dừng hoặc kết thúc khỏi danh sách" style="padding: 6px 12px; font-size:0.75rem;">
             🗑️ Dọn dẹp luồng rác
           </button>
@@ -2057,7 +2194,10 @@
         <div class="empty-state">
           <div class="empty-icon">📡</div>
           <h3 style="font-size:0.95rem; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Chưa có luồng giám sát nào</h3>
-          <p style="font-size:0.8rem; color:var(--text-secondary);">Thiết lập cấu hình bên trái và nhấn Kích Hoạt để bắt đầu phát sóng.</p>
+          <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom: 12px;">Nhấn vào nút bên dưới để mở bảng cấu hình và kích hoạt luồng phát sóng mới.</p>
+          <button class="btn btn-launch btn-sm" onclick="openConfigModal()" style="padding: 8px 18px; font-size: 0.8rem; background: var(--primary-gradient); box-shadow: 0 4px 12px var(--primary-glow);">
+            ➕ KÍCH HOẠT LUỒNG MỚI
+          </button>
         </div>
       </div>
     </div>
@@ -2166,6 +2306,7 @@ async function changePassword() {
       showToast('Đổi mật khẩu thành công! Hãy đăng nhập lại bằng mật khẩu mới.', 'success');
       document.getElementById('currentPassword').value = '';
       document.getElementById('newPassword').value = '';
+      closePasswordModal();
       
       // Clear current token and force login
       localStorage.removeItem('vps_session_token');
@@ -2483,6 +2624,80 @@ function syncHiddenInput() {
   updateScheduleHelper();
 }
 
+// ── Premium Config Modal Toggle Controllers ──
+function openConfigModal() {
+  const modal = document.getElementById('configModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    // Cập nhật lại tiêu đề tùy theo trạng thái đang thêm hay đang sửa
+    const titleEl = document.getElementById('modalConfigTitle');
+    if (titleEl) {
+      titleEl.textContent = editingStreamId !== null ? `⚙️ Chỉnh sửa luồng #${editingStreamId}` : '⚙️ Cấu hình Live mới';
+    }
+  }
+}
+
+function closeConfigModal(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  const modal = document.getElementById('configModal');
+  if (modal && !modal.classList.contains('hidden')) {
+    modal.classList.add('hidden');
+    if (editingStreamId !== null) {
+      cancelEditSilent();
+    }
+  }
+}
+
+function openPasswordModal() {
+  const modal = document.getElementById('passwordModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    document.getElementById('currentPassword').focus();
+  }
+}
+
+function closePasswordModal(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  const modal = document.getElementById('passwordModal');
+  if (modal && !modal.classList.contains('hidden')) {
+    modal.classList.add('hidden');
+    document.getElementById('currentPassword').value = '';
+    document.getElementById('newPassword').value = '';
+  }
+}
+
+function cancelEditSilent() {
+  editingStreamId = null;
+  
+  // Reset form
+  document.getElementById('streamName').value = '';
+  document.getElementById('streamKey').value = '';
+  document.getElementById('streamKey').placeholder = 'xxxx-xxxx-xxxx-xxxx-xxxx';
+  document.getElementById('videoPath').value = '';
+  detectDriveLink('');
+  setTimingMode('now');
+  setPlaybackMode('loop');
+  document.getElementById('schedTime').value = '';
+  document.getElementById('schedMinutes').value = '';
+  
+  // Khôi phục nút kích hoạt ban đầu
+  const btn = document.getElementById('btnStart');
+  if (btn) {
+    btn.className = 'btn btn-launch btn-lg';
+    btn.style.background = '';
+    btn.style.boxShadow = '';
+    btn.innerHTML = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+  }
+  
+  // Xóa nút hủy
+  const cancelBtn = document.getElementById('btnCancelEdit');
+  if (cancelBtn) cancelBtn.remove();
+}
+
 // ── Persistent Inputs from Local Storage ──
 document.addEventListener('DOMContentLoaded', () => {
   const savedKey = localStorage.getItem('yt_stream_key');
@@ -2787,6 +3002,7 @@ async function startStream() {
         const nameInput = document.getElementById('streamName');
         if (nameInput) nameInput.value = '';
       }
+      closeConfigModal();
     }
   } catch (e) {
     showToast(editingStreamId !== null ? 'Thất bại khi lưu cấu hình!' : 'Thất bại khi kết nối máy chủ Live!', 'error');
@@ -2866,37 +3082,15 @@ function editStream(id) {
     btn.parentNode.appendChild(cancelBtn);
   }
   
-  showToast(`Đang chỉnh sửa luồng #${id} ở cột bên trái`, 'info');
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  showToast(`Đang chỉnh sửa cấu hình luồng #${id}...`, 'info');
+  openConfigModal();
 }
 
 // ── Cancel Editing Mode ──
 function cancelEdit() {
-  editingStreamId = null;
-  
-  // Reset form
-  document.getElementById('streamName').value = '';
-  document.getElementById('streamKey').value = '';
-  document.getElementById('streamKey').placeholder = 'xxxx-xxxx-xxxx-xxxx-xxxx';
-  document.getElementById('videoPath').value = '';
-  detectDriveLink('');
-  setTimingMode('now');
-  setPlaybackMode('loop');
-  document.getElementById('schedTime').value = '';
-  document.getElementById('schedMinutes').value = '';
-  
-  // Khôi phục nút kích hoạt ban đầu
-  const btn = document.getElementById('btnStart');
-  btn.className = 'btn btn-launch btn-lg';
-  btn.style.background = '';
-  btn.style.boxShadow = '';
-  btn.innerHTML = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
-  
-  // Xóa nút hủy
-  const cancelBtn = document.getElementById('btnCancelEdit');
-  if (cancelBtn) cancelBtn.remove();
-  
+  cancelEditSilent();
   showToast('Đã hủy chỉnh sửa cấu hình', 'info');
+  closeConfigModal();
 }
 
 // ── Stop Stream Call ──
@@ -3356,7 +3550,7 @@ function renderStreams(list) {
 
           <!-- Compact File Info Row -->
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 4px;">
-            <div class="compact-file-info" style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.82rem; color: var(--text-primary); font-weight: 500; transition: color 0.2s; max-width: 45%;">
+            <div class="compact-file-info" style="display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.82rem; color: var(--text-primary); font-weight: 500; transition: color 0.2s; max-width: 65%;">
               <span>🎞️</span>
               <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${s.file}">${s.file}</span>
             </div>
