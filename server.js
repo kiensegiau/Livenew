@@ -826,6 +826,113 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: Edit stream
+  if (req.method === 'POST' && pathname === '/api/edit') {
+    const body = await parseBody(req);
+    if (!body) { json(res, 400, { error: 'Invalid JSON' }); return; }
+    
+    const id = Number(body.id);
+    const s = streams.get(id);
+    if (!s) { json(res, 404, { error: 'Không tìm thấy luồng' }); return; }
+    
+    const wasRunning = ['live', 'reconnecting', 'launching', 'downloading'].includes(s.status);
+    const wasScheduled = s.status === 'scheduled';
+    
+    // Kiểm tra các thay đổi cốt lõi (yêu cầu khởi động lại luồng)
+    const fileChanged = body.file && body.file !== s.originalFile;
+    const keyChanged = body.key && body.key !== s.key;
+    const modeChanged = body.mode && body.mode !== s.mode;
+    const minutesChanged = body.minutes !== undefined && Math.max(0, parseInt(body.minutes) || 0) !== s.minutes;
+    const timeChanged = body.scheduledTime && body.scheduledTime !== s.scheduledTime;
+    
+    const needsRestart = fileChanged || keyChanged || modeChanged || minutesChanged || timeChanged;
+    
+    if (needsRestart) {
+      console.log(`[Stream #${id}] ⚙️ Cấu hình cốt lõi thay đổi. Tiến hành cập nhật và điều chỉnh luồng...`);
+      // Nếu đang chạy hoặc đặt lịch, ta cần dừng lại để giải phóng tài nguyên trước
+      if (wasRunning || wasScheduled) {
+        stopStream(id);
+      }
+      
+      // Cập nhật các thông tin mới
+      s.name = body.name || '';
+      if (body.key) {
+        s.key = body.key;
+      }
+      
+      if (fileChanged) {
+        s.originalFile = body.file;
+        s.file = body.file;
+      }
+      
+      s.mode = body.mode || s.mode;
+      s.minutes = Math.max(0, parseInt(body.minutes) || 0);
+      s.scheduledTime = body.scheduledTime || s.scheduledTime;
+      s.scheduledMode = body.scheduledMode || s.scheduledMode;
+      s.dualStream = true;
+      s.retryCount = 0;
+      
+      // Xác định xem luồng mới có phải là chế độ đặt lịch hay không
+      const isNewScheduled = s.mode === 'scheduled';
+      
+      if (isNewScheduled) {
+        // Tình huống A: Chuyển sang đặt lịch (Hoặc đổi giờ đặt lịch)
+        console.log(`[Stream #${id}] Luồng được chuyển sang/thiết lập chế độ Đặt Lịch lúc ${s.scheduledTime}`);
+        s.status = 'scheduled';
+        s.lastLog = `Đã chuyển sang đặt lịch phát lúc ${new Date(s.scheduledTime).toLocaleString('vi-VN')}`;
+        saveStreams();
+        proceedStartStream(s.id); // Tự động hẹn giờ kích hoạt ở tương lai
+      } else {
+        // Tình huống B: Chạy ngay lập tức (Loop hoặc Once)
+        console.log(`[Stream #${id}] Luồng được thiết lập chạy NGAY LẬP TỨC (Chế độ: ${s.mode})`);
+        
+        // Nếu trước đó đang chạy HOẶC trước đó đặt lịch mà bây giờ chuyển sang chạy ngay
+        if (wasRunning || wasScheduled) {
+          const isDrive = !!extractDriveId(s.originalFile);
+          s.status = isDrive ? 'downloading' : 'launching';
+          s.startTime = null;
+          s.process = null;
+          s.pid = null;
+          s.lastLog = 'Đang kích hoạt luồng phát sóng mới.';
+          
+          if (isDrive) {
+            // Tải lại video Drive và tự động chạy
+            startStream({
+              id: s.id,
+              key: s.key,
+              file: s.originalFile,
+              mode: s.mode,
+              minutes: s.minutes,
+              scheduledTime: s.scheduledTime,
+              scheduledMode: s.scheduledMode,
+              name: s.name
+            });
+          } else {
+            proceedStartStream(s.id);
+          }
+        } else {
+          // Nếu trước đó đã dừng/ended, ta chỉ cập nhật cấu hình và giữ nguyên trạng thái stopped
+          s.status = 'stopped';
+          s.lastLog = 'Cấu hình đã được lưu (Luồng đang tắt).';
+          saveStreams();
+        }
+      }
+    } else {
+      // Chỉ thay đổi thông tin phụ (Ví dụ: tên gợi nhớ luồng)
+      console.log(`[Stream #${id}] ⚙️ Chỉ cập nhật thông tin phụ (Tên luồng). Giữ luồng chạy liên tục không ngắt quãng.`);
+      s.name = body.name || '';
+      saveStreams();
+      
+      // Đồng bộ thông tin tên luồng lên Telegram
+      const isLive = s.status === 'live';
+      const statusIcon = isLive ? '🟢' : '⚪';
+      broadcast(`📝 *ĐÃ CẬP NHẬT TÊN LUỒNG #${id}* \n━━━━━━━━━━━━━━━━━━\n🏷️ Tên mới: *${escapeMarkdown(s.name || 'Không tên')}*\n📊 Trạng thái hiện tại: \`${s.status.toUpperCase()}\` (Luồng vẫn đang chạy liên tục mượt mà)`);
+    }
+    
+    json(res, 200, { ok: true, id });
+    return;
+  }
+
   // API: Stop stream
   if (req.method === 'POST' && pathname === '/api/stop') {
     const body = await parseBody(req);

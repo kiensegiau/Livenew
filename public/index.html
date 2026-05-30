@@ -1813,34 +1813,18 @@
         </div>
       </div>
 
-      <!-- Mode Selector -->
-      <div class="form-group" style="margin-bottom: 12px;">
-        <label>Chế độ phát sóng</label>
-        <div class="mode-selector">
-          <div class="mode-tab active" id="tab-loop" onclick="setMode('loop')">🔁 Vòng Lặp</div>
-          <div class="mode-tab" id="tab-once" onclick="setMode('once')">▶️ Phát 1 Lần</div>
-          <div class="mode-tab" id="tab-scheduled" onclick="setMode('scheduled')">🕐 Đặt Lịch</div>
-        </div>
-      </div>
-
-      <!-- Loop mode details -->
-      <div class="mode-fields visible" id="mode-loop">
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-          🔄 Video sẽ được phát lặp lại vô hạn liên tục 24/7 không dừng. Thích hợp cho các luồng nhạc chill lofi, livestream bán hàng liên tục.
-        </div>
-        <input type="hidden" id="minutes" value="0" />
-      </div>
-
-      <!-- Once mode details -->
-      <div class="mode-fields" id="mode-once">
-        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-          Phát hết toàn bộ thời lượng video một lần rồi hệ thống tự động kết thúc. Thích hợp cho phim chiếu rạp, sự kiện trực tiếp không lặp lại.
+      <!-- Thời điểm phát sóng (Timing Selector) -->
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label>Thời điểm phát sóng</label>
+        <div class="mode-selector" id="timingSelector">
+          <div class="mode-tab active" id="tab-timing-now" onclick="setTimingMode('now')">⚡ Đăng Ngay</div>
+          <div class="mode-tab" id="tab-timing-sched" onclick="setTimingMode('scheduled')">🕐 Đặt Lịch</div>
         </div>
       </div>
 
       <!-- Scheduled mode details -->
-      <div class="mode-fields" id="mode-scheduled">
-        <div class="form-group">
+      <div class="mode-fields" id="mode-scheduled" style="display: none; margin-bottom: 20px;">
+        <div class="form-group" style="margin-bottom:0;">
           <label for="schedTime">Thời gian kích hoạt (Giờ VPS)</label>
           <div class="custom-datetime-picker-wrapper" id="customPickerWrapper">
             <div class="datetime-trigger" onclick="toggleCustomPicker(event)" id="datetimeTrigger">
@@ -1873,27 +1857,51 @@
             </div>
           </div>
           <input type="datetime-local" id="schedTime" style="display:none;" />
-          
-          <!-- Quick dynamic time buttons -->
-          <div class="quick-time-selectors">
-            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(5)">⏱️ +5 Phút</button>
-            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(15)">⏱️ +15 Phút</button>
-            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(30)">⏱️ +30 Phút</button>
-            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(60)">⏱️ +1 Giờ</button>
-            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(180)">⏱️ +3 Giờ</button>
-            <button type="button" class="btn-quick-time" onclick="adjustScheduleTime(1440)">📅 +1 Ngày</button>
-          </div>
+
           
           <!-- Elegant feedback helper -->
-          <div class="schedule-helper-text" id="scheduleHelper">
+          <div class="schedule-helper-text" id="scheduleHelper" style="margin-bottom:0;">
             Đang tải dữ liệu thời gian đặt lịch...
           </div>
         </div>
-        
-        <div class="form-group" style="margin-bottom:0">
-          <label for="schedMinutes">Số phút Live sau khi khởi động</label>
-          <input type="number" id="schedMinutes" value="1440" min="0" />
+      </div>
+
+      <!-- Hình thức phát (Playback Mode Selector) -->
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label>Hình thức phát</label>
+        <div class="mode-selector" id="playbackSelector">
+          <div class="mode-tab active" id="tab-playback-loop" onclick="setPlaybackMode('loop')">🔁 Vòng Lặp</div>
+          <div class="mode-tab" id="tab-playback-once" onclick="setPlaybackMode('once')">▶️ Phát Một Lần</div>
+          <div class="mode-tab" id="tab-playback-limit" onclick="setPlaybackMode('limit')">⏱️ Hẹn Giờ Tắt</div>
         </div>
+      </div>
+
+      <!-- Loop mode details -->
+      <div class="mode-fields visible" id="mode-loop">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          🔄 Video sẽ được phát lặp lại vô hạn liên tục 24/7 không dừng. Thích hợp cho các luồng nhạc chill lofi, livestream bán hàng liên tục.
+        </div>
+        <input type="hidden" id="minutes" value="0" />
+      </div>
+
+      <!-- Once mode details -->
+      <div class="mode-fields" id="mode-once" style="display: none;">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          Phát hết toàn bộ thời lượng video một lần rồi hệ thống tự động kết thúc. Thích hợp cho phim chiếu rạp, sự kiện trực tiếp không lặp lại.
+        </div>
+      </div>
+
+      <!-- Limit mode details -->
+      <div class="mode-fields" id="mode-limit" style="display: none;">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: var(--radius-md); padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+          ⏱️ Phát lặp lại video liên tục nhưng sẽ tự động tắt và dừng phát sóng sau thời gian hẹn giờ (số phút) được thiết lập bên dưới.
+        </div>
+      </div>
+
+      <!-- Running minutes duration input box (Shown only when Hẹn Giờ Tắt is active) -->
+      <div class="form-group" id="schedMinutesGroup" style="margin-top: 14px; margin-bottom: 14px; display: none;">
+        <label for="schedMinutes">Số phút Live hoạt động trước khi tắt</label>
+        <input type="number" id="schedMinutes" placeholder="Ví dụ: 120 (phút)" min="1" />
       </div>
 
       <!-- Trigger Action -->
@@ -2060,7 +2068,10 @@
 <div id="toast"></div>
 
 <script>
-let currentMode = 'loop';
+let currentTimingMode = 'now';
+let currentPlaybackMode = 'loop';
+let currentStreamsList = [];
+let editingStreamId = null;
 
 // ── Secure Session State & Authentication ──
 function showLoginOverlay() {
@@ -2427,6 +2438,16 @@ function selectMinute(m) {
   selectedDate.setMinutes(m);
   renderMinutes();
   syncHiddenInput();
+  
+  // Tự động đóng bảng lịch chọn sau khi đã hoàn tất chọn phút (bước chọn cuối cùng)
+  setTimeout(() => {
+    const wrapper = document.getElementById('customPickerWrapper');
+    const panel = document.getElementById('pickerPanel');
+    if (panel && wrapper && panel.style.display === 'flex') {
+      panel.style.display = 'none';
+      wrapper.classList.remove('active');
+    }
+  }, 250);
 }
 
 // Sync selection to hidden datetime-local input and update Trigger visual
@@ -2598,16 +2619,67 @@ function detectDriveLink(path) {
   }
 }
 
-// ── Toggle Broadcast Modes ──
-function setMode(mode) {
-  currentMode = mode;
-  document.querySelectorAll('.mode-tab').forEach(tab => {
-    tab.classList.toggle('active', tab.id === `tab-${mode}`);
+// ── Toggle Broadcast Timing Modes (Phát Ngay / Đặt Lịch) ──
+function setTimingMode(mode) {
+  currentTimingMode = mode;
+  document.querySelectorAll('#timingSelector .mode-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.id === `tab-timing-${mode === 'now' ? 'now' : 'sched'}`);
   });
-  document.querySelectorAll('.mode-fields').forEach(field => {
-    field.classList.remove('visible');
+  
+  const schedFields = document.getElementById('mode-scheduled');
+  if (mode === 'scheduled') {
+    schedFields.style.display = 'block';
+    setTimeout(() => schedFields.classList.add('visible'), 50);
+    updateScheduleHelper();
+  } else {
+    schedFields.classList.remove('visible');
+    schedFields.style.display = 'none';
+  }
+  updateScheduledMinutesVisibility();
+}
+
+// ── Toggle Playback Modes (Vòng Lặp / Phát Một Lần / Hẹn Giờ Tắt) ──
+function setPlaybackMode(mode) {
+  currentPlaybackMode = mode;
+  document.querySelectorAll('#playbackSelector .mode-tab').forEach(tab => {
+    tab.classList.toggle('active', tab.id === `tab-playback-${mode}`);
   });
-  document.getElementById(`mode-${mode}`).classList.add('visible');
+  
+  const loopFields = document.getElementById('mode-loop');
+  const onceFields = document.getElementById('mode-once');
+  const limitFields = document.getElementById('mode-limit');
+  
+  if (!loopFields || !onceFields || !limitFields) return;
+  
+  loopFields.style.display = mode === 'loop' ? 'block' : 'none';
+  onceFields.style.display = mode === 'once' ? 'block' : 'none';
+  limitFields.style.display = mode === 'limit' ? 'block' : 'none';
+  
+  if (mode === 'loop') {
+    loopFields.classList.add('visible');
+    onceFields.classList.remove('visible');
+    limitFields.classList.remove('visible');
+  } else if (mode === 'once') {
+    onceFields.classList.add('visible');
+    loopFields.classList.remove('visible');
+    limitFields.classList.remove('visible');
+  } else if (mode === 'limit') {
+    limitFields.classList.add('visible');
+    loopFields.classList.remove('visible');
+    onceFields.classList.remove('visible');
+  }
+  updateScheduledMinutesVisibility();
+}
+
+// ── Update Visibility for Scheduled Minutes Input ──
+function updateScheduledMinutesVisibility() {
+  const group = document.getElementById('schedMinutesGroup');
+  if (!group) return;
+  if (currentPlaybackMode === 'limit') {
+    group.style.display = 'block';
+  } else {
+    group.style.display = 'none';
+  }
 }
 
 
@@ -2642,32 +2714,59 @@ async function startStream() {
   const file = document.getElementById('videoPath').value.trim();
   const name = document.getElementById('streamName')?.value.trim() || '';
 
-  if (!key) { showToast('Vui lòng nhập Stream Key!', 'error'); return; }
+  if (editingStreamId === null && !key) { showToast('Vui lòng nhập Stream Key!', 'error'); return; }
   if (!file) { showToast('Vui lòng nhập đường dẫn hoặc link Google Drive!', 'error'); return; }
 
   const btn = document.getElementById('btnStart');
   btn.disabled = true;
-  btn.textContent = '⏳ Đang truyền tải hệ thống...';
+  btn.textContent = editingStreamId !== null ? '⏳ Đang lưu cấu hình...' : '⏳ Đang truyền tải hệ thống...';
 
-  const body = { key, file, name, mode: currentMode };
+  const body = { key, file, name };
 
-  if (currentMode === 'loop') {
-    body.minutes = parseInt(document.getElementById('minutes').value) || 0;
-  } else if (currentMode === 'scheduled') {
+  if (editingStreamId !== null) {
+    body.id = editingStreamId;
+  }
+
+  let minutes = 0;
+  if (currentPlaybackMode === 'limit') {
+    const minutesVal = document.getElementById('schedMinutes').value.trim();
+    if (!minutesVal) {
+      showToast('Vui lòng nhập số phút hoạt động trước khi tắt!', 'error');
+      btn.disabled = false;
+      btn.textContent = editingStreamId !== null ? '💾 LƯU THAY ĐỔI CẤU HÌNH LUỒNG' : '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+      return;
+    }
+    minutes = parseInt(minutesVal) || 0;
+    if (minutes <= 0) {
+      showToast('Số phút hoạt động phải lớn hơn 0!', 'error');
+      btn.disabled = false;
+      btn.textContent = editingStreamId !== null ? '💾 LƯU THAY ĐỔI CẤU HÌNH LUỒNG' : '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+      return;
+    }
+  }
+
+  const targetBackendMode = currentPlaybackMode === 'limit' ? 'loop' : currentPlaybackMode;
+
+  if (currentTimingMode === 'now') {
+    body.mode = targetBackendMode;
+    body.minutes = minutes;
+  } else if (currentTimingMode === 'scheduled') {
+    body.mode = 'scheduled';
+    body.scheduledMode = targetBackendMode;
     body.scheduledTime = document.getElementById('schedTime').value;
-    body.minutes = parseInt(document.getElementById('schedMinutes').value) || 0;
+    body.minutes = minutes;
+    
     if (!body.scheduledTime) {
       showToast('Vui lòng nhập thời gian đặt lịch!', 'error');
       btn.disabled = false;
-      btn.textContent = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+      btn.textContent = editingStreamId !== null ? '💾 LƯU THAY ĐỔI CẤU HÌNH LUỒNG' : '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
       return;
     }
-  } else {
-    body.minutes = 0;
   }
 
   try {
-    const r = await authFetch('/api/start', {
+    const endpoint = editingStreamId !== null ? '/api/edit' : '/api/start';
+    const r = await authFetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -2677,21 +2776,127 @@ async function startStream() {
     if (data.error) {
       showToast(data.error, 'error');
     } else {
-      const msg = currentMode === 'scheduled'
-        ? `🕐 Kích hoạt đặt lịch lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN')}`
-        : '🔴 Luồng Live đã được khởi kích hoạt thành công!';
-      showToast(msg, 'success');
-      // Clear stream name field
-      const nameInput = document.getElementById('streamName');
-      if (nameInput) nameInput.value = '';
+      if (editingStreamId !== null) {
+        showToast(`Đã lưu và áp dụng cấu hình mới cho luồng #${editingStreamId}!`, 'success');
+        cancelEdit();
+      } else {
+        const msg = currentTimingMode === 'scheduled'
+          ? `🕐 Kích hoạt đặt lịch lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN')}`
+          : '🔴 Luồng Live đã được khởi kích hoạt thành công!';
+        showToast(msg, 'success');
+        const nameInput = document.getElementById('streamName');
+        if (nameInput) nameInput.value = '';
+      }
     }
   } catch (e) {
-    showToast('Thất bại khi kết nối máy chủ Live!', 'error');
+    showToast(editingStreamId !== null ? 'Thất bại khi lưu cấu hình!' : 'Thất bại khi kết nối máy chủ Live!', 'error');
   }
 
   btn.disabled = false;
-  btn.textContent = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+  if (editingStreamId === null) {
+    btn.textContent = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+  }
   poll();
+}
+
+// ── Edit Stream Configuration (Load details into left form) ──
+function editStream(id) {
+  const s = currentStreamsList.find(x => x.id === id);
+  if (!s) return;
+  
+  editingStreamId = id;
+  
+  // Điền dữ liệu vào form cấu hình bên trái
+  document.getElementById('streamName').value = s.name || '';
+  
+  const keyInput = document.getElementById('streamKey');
+  keyInput.value = '';
+  keyInput.placeholder = 'Đã bảo mật (Để trống nếu giữ nguyên khóa cũ)';
+  
+  document.getElementById('videoPath').value = s.file || '';
+  detectDriveLink(s.file || '');
+  
+  const isScheduled = s.scheduledTime || s.mode === 'scheduled';
+  setTimingMode(isScheduled ? 'scheduled' : 'now');
+
+  // Khôi phục đúng hình thức phát cho Form (Vòng Lặp, Phát Một Lần, Hẹn Giờ Tắt)
+  let playMode = 'loop';
+  const rawMode = isScheduled ? s.scheduledMode || 'loop' : s.mode;
+  if (rawMode === 'loop' && s.minutes > 0) {
+    playMode = 'limit';
+  } else {
+    playMode = rawMode;
+  }
+  setPlaybackMode(playMode);
+  
+  if (isScheduled) {
+    const schedTimeInput = document.getElementById('schedTime');
+    if (s.scheduledTime) {
+      schedTimeInput.value = s.scheduledTime.substring(0, 16);
+      selectedDate = new Date(s.scheduledTime);
+      syncHiddenInput(true);
+    }
+  }
+  
+  // Điền số phút nếu là chế độ Hẹn Giờ Tắt (s.minutes > 0)
+  if (s.minutes > 0) {
+    document.getElementById('schedMinutes').value = s.minutes;
+  } else {
+    document.getElementById('schedMinutes').value = '';
+  }
+  
+  // Thay đổi giao diện nút Kích hoạt thành Lưu cấu hình
+  const btn = document.getElementById('btnStart');
+  btn.className = 'btn btn-lg';
+  btn.style.background = 'var(--purple-gradient)';
+  btn.style.boxShadow = '0 8px 24px var(--purple-glow)';
+  btn.innerHTML = '💾 LƯU THAY ĐỔI CẤU HÌNH LUỒNG';
+  
+  // Thêm nút Hủy chỉnh sửa kế bên nút lưu nếu chưa có
+  if (!document.getElementById('btnCancelEdit')) {
+    const cancelBtn = document.createElement('button');
+    cancelBtn.id = 'btnCancelEdit';
+    cancelBtn.className = 'btn btn-ghost btn-lg';
+    cancelBtn.style.marginTop = '10px';
+    cancelBtn.style.background = 'rgba(239, 68, 68, 0.08)';
+    cancelBtn.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+    cancelBtn.style.color = '#fca5a5';
+    cancelBtn.innerHTML = '❌ HỦY CHỈNH SỬA';
+    cancelBtn.onclick = cancelEdit;
+    btn.parentNode.appendChild(cancelBtn);
+  }
+  
+  showToast(`Đang chỉnh sửa luồng #${id} ở cột bên trái`, 'info');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── Cancel Editing Mode ──
+function cancelEdit() {
+  editingStreamId = null;
+  
+  // Reset form
+  document.getElementById('streamName').value = '';
+  document.getElementById('streamKey').value = '';
+  document.getElementById('streamKey').placeholder = 'xxxx-xxxx-xxxx-xxxx-xxxx';
+  document.getElementById('videoPath').value = '';
+  detectDriveLink('');
+  setTimingMode('now');
+  setPlaybackMode('loop');
+  document.getElementById('schedTime').value = '';
+  document.getElementById('schedMinutes').value = '';
+  
+  // Khôi phục nút kích hoạt ban đầu
+  const btn = document.getElementById('btnStart');
+  btn.className = 'btn btn-launch btn-lg';
+  btn.style.background = '';
+  btn.style.boxShadow = '';
+  btn.innerHTML = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
+  
+  // Xóa nút hủy
+  const cancelBtn = document.getElementById('btnCancelEdit');
+  if (cancelBtn) cancelBtn.remove();
+  
+  showToast('Đã hủy chỉnh sửa cấu hình', 'info');
 }
 
 // ── Stop Stream Call ──
@@ -3237,6 +3442,10 @@ function renderStreams(list) {
 
           <!-- Actions Toolbar -->
           <div class="card-actions-row">
+            <!-- Edit Button (Always available to edit configuration) -->
+            <button class="btn-action" style="background: rgba(168, 85, 247, 0.08); border-color: rgba(168, 85, 247, 0.25); color: #c084fc; margin-right: auto;" onclick="event.stopPropagation(); editStream(${s.id})">
+              ⚙️ Sửa Cấu Hình
+            </button>
             ${canStop ? `
               <button class="btn-action btn-action-stop" onclick="event.stopPropagation(); stopStream(${s.id})">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg>
@@ -3325,6 +3534,7 @@ async function poll() {
     const r = await authFetch('/api/streams');
     if (!r.ok) throw new Error('API offline');
     const list = await r.json();
+    currentStreamsList = list;
     renderStreams(list);
     document.getElementById('demoBadge').style.display = 'none';
   } catch (e) {
@@ -3336,6 +3546,7 @@ async function poll() {
 
 function updateMockAndRender() {
   document.getElementById('demoBadge').style.display = 'inline-flex';
+  currentStreamsList = mockStreams;
   
   // Tăng ngẫu nhiên tiến độ tải video từ Drive
   mockPercent = mockPercent + 2;
