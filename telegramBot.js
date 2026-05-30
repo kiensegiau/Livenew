@@ -125,6 +125,10 @@ function escapeMarkdown(text) {
 }
 
 function initBot(actions) {
+  // === TẠM THỜI VÔ HIỆU HÓA ĐỂ TEST TRÊN MÁY TÍNH ===
+  console.log('\n[Telegram Bot] ⏸️ Đang tạm thời ngắt kết nối Bot Telegram để test trên máy tính...');
+  return;
+
   if (!config.token) return;
 
   try {

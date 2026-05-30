@@ -264,8 +264,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     
     // Sử dụng bộ trộn f=fifo để chống nghẽn chéo giữa 2 luồng (khi 1 luồng đứt, luồng kia không bị ảnh hưởng)
     // Tự động thử kết nối lại sau mỗi 5 giây (attempt_recovery=1, recovery_wait_time=5) khi có sự cố mạng
-    const rtmpA = `[f=fifo:fifo_format=flv:drop_pkts_on_overflow=1:attempt_recovery=1:recovery_wait_time=5:onfail=ignore]rtmp\\://a.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
-    const rtmpB = `[f=fifo:fifo_format=flv:drop_pkts_on_overflow=1:attempt_recovery=1:recovery_wait_time=5:onfail=ignore]rtmp\\://b.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
+    const rtmpA = `[f=fifo:fifo_format=flv:drop_pkts_on_overflow=1:attempt_recovery=1:recovery_wait_time=5:recover_any_error=1:onfail=ignore]rtmp\\://a.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
+    const rtmpB = `[f=fifo:fifo_format=flv:drop_pkts_on_overflow=1:attempt_recovery=1:recovery_wait_time=5:recover_any_error=1:onfail=ignore]rtmp\\://b.rtmp.youtube.com/live2/${key}?tcp_nodelay=1&rw_timeout=15000000`;
     
     formatArgs = [
       '-map', '0',               // BẮT BUỘC: Ánh xạ toàn bộ luồng đầu vào cho tee muxer hoạt động
