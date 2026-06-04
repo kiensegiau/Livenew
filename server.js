@@ -221,6 +221,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
 
   if (!info) return; // Luồng đã bị xóa trước khi kịp chạy
 
+  info.lastLog = 'Đang khởi chạy luồng phát...';
+
   // Khởi tạo thời gian Live đầu tiên nếu có giới hạn phút
   const totalMins = Math.max(0, parseInt(minutes) || 0);
   let minsToRun = totalMins;
@@ -508,6 +510,8 @@ function proceedStartStream(id) {
     }
 
     s.status = 'scheduled';
+    const displayTime = new Date(localISO).toLocaleString('vi-VN');
+    s.lastLog = `Đang chờ đến giờ kích hoạt lịch phát: ${displayTime}`;
     s.timer = setTimeout(() => {
       const s2 = streams.get(id);
       if (s2 && s2.status !== 'stopped') { 
