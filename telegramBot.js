@@ -298,18 +298,19 @@ function initBot(actions) {
                 return bot.sendMessage(chatId, `${sysInfo}━━━━━━━━━━━━━━━━━━\n📭 Hiện chưa có luồng nào.`, { parse_mode: 'Markdown' });
               }
               
-              // Gửi báo cáo hệ thống trước
-              await bot.sendMessage(chatId, sysInfo, { parse_mode: 'Markdown' });
+              let fullMsg = sysInfo + `━━━━━━━━━━━━━━━━━━\n📺 *DANH SÁCH LUỒNG PHÁT:*\n\n`;
+              const allButtons = [];
 
-              // Sau đó gửi từng luồng
               list.forEach(s => {
-                const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '⬇️' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
+                const icon = s.status === 'live' ? '🟢' : (s.status === 'downloading' ? '📥' : (s.status === 'reconnecting' ? '🟡' : (s.status === 'scheduled' ? '🕐' : '⚪')));
                 
-                let msgStr = `${icon} *LUỒNG #${s.id}*${s.name ? ` - *${escapeMarkdown(s.name)}*` : ''}\n`;
-                msgStr += `Trạng thái: \`${s.status}\`\n`;
-                const protection = s.dualStream ? 'Song song A+B ⚡ (Bảo vệ tối đa)' : 'Đơn luồng 📡';
-                msgStr += `🛡️ Chế độ phát: \`${protection}\`\n`;
-                if (s.status === 'live' && s.startTime) msgStr += `⏱ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
+                let streamStr = `${icon} *LUỒNG #${s.id}*${s.name ? ` - *${escapeMarkdown(s.name)}*` : ''}\n`;
+                streamStr += `├─ Trạng thái: \`${s.status.toUpperCase()}\`\n`;
+                const protection = s.dualStream ? 'Song song A+B ⚡' : 'Đơn luồng 📡';
+                streamStr += `├─ Chế độ: \`${protection}\`\n`;
+                if (s.status === 'live' && s.startTime) {
+                  streamStr += `├─ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
+                }
                 
                 let logBrief = s.lastLog;
                 if (s.status === 'live') {
@@ -322,32 +323,35 @@ function initBot(actions) {
                 }
 
                 if (s.dualStream && s.status === 'live') {
-                  const statusA = (s.streamAActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
-                  const statusB = (s.streamBActive !== false) ? '🟢 Hoạt động' : '🔴 Mất kết nối';
-                  const logA = (s.streamAActive !== false) ? logBrief : (s.streamALog || 'Mất kết nối máy chủ chính A (Primary)');
-                  const logB = (s.streamBActive !== false) ? logBrief : (s.streamBLog || 'Mất kết nối máy chủ dự phòng B (Backup)');
-                  msgStr += `  ├─ 🇺🇸 Luồng A (Primary): \`${statusA}\`\n`;
-                  msgStr += `  │   └── 📝 Log: \`${escapeMarkdown(logA)}\`\n`;
-                  msgStr += `  └─ 🇸🇬 Luồng B (Backup): \`${statusB}\`\n`;
-                  msgStr += `      └── 📝 Log: \`${escapeMarkdown(logB)}\``;
+                  const statusA = (s.streamAActive !== false) ? '🟢 OK' : '🔴 LỖI';
+                  const statusB = (s.streamBActive !== false) ? '🟢 OK' : '🔴 LỖI';
+                  const logA = (s.streamAActive !== false) ? logBrief : (s.streamALog || 'Mất kết nối A');
+                  const logB = (s.streamBActive !== false) ? logBrief : (s.streamBLog || 'Mất kết nối B');
+                  streamStr += `├─ 🇺🇸 Server A: \`${statusA}\` (\`${escapeMarkdown(logA)}\`)\n`;
+                  streamStr += `└─ 🇸🇬 Server B: \`${statusB}\` (\`${escapeMarkdown(logB)}\`)\n\n`;
                 } else {
-                  msgStr += `📝 Log: \`${escapeMarkdown(logBrief)}\``;
+                  streamStr += `└─ Log: \`${escapeMarkdown(logBrief)}\`\n\n`;
                 }
-                const buttons = [];
+                fullMsg += streamStr;
+
+                // Thêm hàng nút bấm cho từng luồng
                 if (['live', 'launching', 'reconnecting', 'scheduled', 'downloading'].includes(s.status)) {
-                  buttons.push([
-                    { text: '🛑 Dừng ngay', callback_data: `stop_${s.id}` },
-                    { text: '⚙️ Sửa cấu hình', callback_data: `edit_${s.id}` }
+                  allButtons.push([
+                    { text: `🛑 Dừng #${s.id}`, callback_data: `stop_${s.id}` },
+                    { text: `⚙️ Sửa #${s.id}`, callback_data: `edit_${s.id}` }
                   ]);
                 } else {
-                  buttons.push([
-                    { text: '🚀 Khởi động lại', callback_data: `restart_${s.id}` },
-                    { text: '⚙️ Sửa cấu hình', callback_data: `edit_${s.id}` }
-                  ], [
-                    { text: '🗑 Xóa luồng', callback_data: `delete_${s.id}` }
+                  allButtons.push([
+                    { text: `🚀 Chạy #${s.id}`, callback_data: `restart_${s.id}` },
+                    { text: `⚙️ Sửa #${s.id}`, callback_data: `edit_${s.id}` },
+                    { text: `🗑 Xóa #${s.id}`, callback_data: `delete_${s.id}` }
                   ]);
                 }
-                bot.sendMessage(chatId, msgStr, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: buttons } });
+              });
+
+              bot.sendMessage(chatId, fullMsg, { 
+                parse_mode: 'Markdown', 
+                reply_markup: { inline_keyboard: allButtons } 
               });
             } catch(e) {
               console.error('Lỗi khi xử lý lệnh status:', e);
@@ -927,10 +931,10 @@ function updateProgress(streamId, pct, text) {
         }).catch(() => { current._sending = false; });
       } else {
         const now = Date.now();
-        const timePassed = now - (current.lastTime || 0) > 3000; // Giảm xuống 3 giây cho mượt
-        const pctJumped = typeof pct === 'number' && (pct - current.lastPct >= 2);
+        // Giới hạn tối thiểu 4 giây mới sửa tin nhắn tiến độ 1 lần để tránh bị Telegram chặn 429
+        const timePassed = now - (current.lastTime || 0) > 4000; 
         
-        if (pct === null || pct === 100 || pctJumped || timePassed) {
+        if (pct === null || pct === 100 || timePassed) {
           if (current._editing) return; // Đang sửa tin nhắn cũ, đợi tí
           current._editing = true;
           bot.editMessageText(text, { chat_id: chatId, message_id: current.messageIds[chatId], parse_mode: 'Markdown' })
