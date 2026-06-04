@@ -128,8 +128,12 @@ function escapeMarkdown(text) {
 
 function initBot(actions) {
   // === KÍCH HOẠT KẾT NỐI TELEGRAM BOT HỆ THỐNG ===
-  if (!config.token || config.polling === false) {
-    console.log('[Telegram Bot] ⚠️ Bỏ qua khởi tạo Bot hoặc Polling (đã tắt).');
+  // Tự động tắt polling khi chạy ở máy Windows (Local) để tránh tranh chấp với VPS (Linux)
+  const isLocalWindows = os.platform() === 'win32';
+  const effectivePolling = isLocalWindows ? false : config.polling;
+
+  if (!config.token || effectivePolling === false) {
+    console.log('[Telegram Bot] ⚠️ Bỏ qua khởi tạo Bot hoặc Polling (đã tắt hoặc đang chạy ở Local Windows).');
     return;
   }
 
