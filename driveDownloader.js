@@ -107,46 +107,159 @@ function getDirectDownloadInfo(url, cookieString, attempt) {
   });
 }
 
-// ── BƯỚC 2: Tải Một Phân Đoạn Bằng Lệnh Range Header ──
+// ── BƯỚC 2: Tải Một Phân Đoạn Bằng Lệnh Range Header (Có Timeout & Tự động Thử lại + Resume) ──
 function downloadChunk(directUrl, cookie, start, end, chunkPath, threadId, onProgress) {
+  const maxRetries = 6;
+  const timeoutMs = 20000; // 20s socket inactivity timeout
+
   return new Promise((resolve, reject) => {
-    const options = {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
-        'Range': `bytes=${start}-${end}`
-      },
-      agent: directUrl.startsWith('https://') ? httpsAgent : httpAgent
-    };
-    if (cookie) options.headers['Cookie'] = cookie;
+    let attempt = 0;
 
-    const transport = directUrl.startsWith('http://') ? http : https;
-    
-    // Tăng buffer size của fileStream lên 4MB để tối ưu I/O đĩa
-    const fileStream = fs.createWriteStream(chunkPath, { highWaterMark: 1024 * 1024 * 4 });
-
-    transport.get(directUrl, options, (res) => {
-      if (res.statusCode !== 206 && res.statusCode !== 200) {
-        return reject(new Error(`Luồng #${threadId} bị từ chối với Code: ${res.statusCode}`));
+    function tryDownload() {
+      attempt++;
+      
+      let existingSize = 0;
+      if (fs.existsSync(chunkPath)) {
+        try {
+          const stats = fs.statSync(chunkPath);
+          existingSize = stats.size;
+        } catch (e) {
+          existingSize = 0;
+        }
       }
 
-      res.on('data', (chunk) => {
-        fileStream.write(chunk);
-        if (onProgress) onProgress(chunk.length);
+      const expectedSize = end - start + 1;
+      if (existingSize >= expectedSize) {
+        console.log(`[Thread #${threadId}] Phân đoạn đã đầy đủ (${existingSize} bytes). Bỏ qua.`);
+        return resolve();
+      }
+
+      // Nếu file tạm bị lỗi dung lượng lớn hơn cả mong đợi -> xóa đi tải lại
+      if (existingSize > expectedSize) {
+        try { fs.unlinkSync(chunkPath); } catch(_) {}
+        existingSize = 0;
+      }
+
+      const currentStart = start + existingSize;
+      const rangeHeader = `bytes=${currentStart}-${end}`;
+      
+      if (attempt > 1) {
+        console.log(`[Thread #${threadId}] Thử lại lần ${attempt}/${maxRetries}. Range: ${rangeHeader}`);
+      }
+
+      const options = {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
+          'Range': rangeHeader
+        },
+        agent: directUrl.startsWith('https://') ? httpsAgent : httpAgent,
+        timeout: timeoutMs
+      };
+      if (cookie) options.headers['Cookie'] = cookie;
+
+      const transport = directUrl.startsWith('http://') ? http : https;
+      let fileStream;
+      let req;
+      let isDone = false;
+      let progressTimeout = null;
+
+      function resetProgressTimeout() {
+        if (progressTimeout) clearTimeout(progressTimeout);
+        progressTimeout = setTimeout(() => {
+          cleanupResources();
+          handleFailure(new Error("Hết thời gian chờ dữ liệu (Data Timeout 25s)"));
+        }, 25000);
+      }
+
+      function cleanupResources() {
+        if (progressTimeout) {
+          clearTimeout(progressTimeout);
+          progressTimeout = null;
+        }
+        if (fileStream) {
+          try { fileStream.destroy(); } catch (_) {}
+        }
+        if (req) {
+          try { req.destroy(); } catch (_) {}
+        }
+      }
+
+      // Mở fileStream ở chế độ 'a' (append) nếu đang tiếp tục tải, ngược lại dùng 'w' (write)
+      const streamFlags = existingSize > 0 ? 'a' : 'w';
+      fileStream = fs.createWriteStream(chunkPath, { flags: streamFlags, highWaterMark: 1024 * 1024 * 4 });
+
+      resetProgressTimeout();
+
+      req = transport.get(directUrl, options, (res) => {
+        if (res.statusCode !== 206 && res.statusCode !== 200) {
+          cleanupResources();
+          handleFailure(new Error(`Mã phản hồi HTTP: ${res.statusCode}`));
+          return;
+        }
+
+        res.on('data', (chunk) => {
+          if (isDone) return;
+          resetProgressTimeout();
+          fileStream.write(chunk);
+          if (onProgress) onProgress(chunk.length);
+        });
+
+        res.on('end', () => {
+          if (isDone) return;
+          fileStream.end();
+        });
+
+        res.on('error', (err) => {
+          cleanupResources();
+          handleFailure(err);
+        });
       });
 
-      res.on('end', () => {
-        fileStream.end();
+      req.on('timeout', () => {
+        cleanupResources();
+        handleFailure(new Error(`Hết thời gian chờ phản hồi Socket (${timeoutMs}ms)`));
+      });
+
+      req.on('error', (err) => {
+        cleanupResources();
+        handleFailure(err);
       });
 
       fileStream.on('finish', () => {
+        if (isDone) return;
+        isDone = true;
+        if (progressTimeout) {
+          clearTimeout(progressTimeout);
+          progressTimeout = null;
+        }
         resolve();
       });
 
       fileStream.on('error', (err) => {
-        fileStream.close();
-        reject(err);
+        cleanupResources();
+        handleFailure(err);
       });
-    }).on('error', reject);
+
+      function handleFailure(err) {
+        if (isDone) return;
+        isDone = true;
+        if (progressTimeout) {
+          clearTimeout(progressTimeout);
+          progressTimeout = null;
+        }
+        
+        console.error(`[Thread #${threadId}] Lỗi ở lần thử ${attempt}: ${err.message}`);
+        
+        if (attempt < maxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 6000); // Thử lại trễ lũy thừa tối đa 6s
+          setTimeout(tryDownload, delay);
+        } else {
+          reject(new Error(`Tải phân đoạn thất bại sau ${maxRetries} lần thử. Chi tiết: ${err.message}`));
+        }
+      }
+    }
+
+    tryDownload();
   });
 }
 
@@ -279,5 +392,6 @@ function downloadGoogleDriveFile(driveUrl, destPath, onProgress) {
 
 module.exports = {
   downloadGoogleDriveFile,
-  extractDriveId
+  extractDriveId,
+  downloadChunk
 };

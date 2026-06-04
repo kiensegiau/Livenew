@@ -2909,6 +2909,7 @@ async function startStream() {
   const key = document.getElementById('streamKey').value.trim();
   const file = document.getElementById('videoPath').value.trim();
   const name = document.getElementById('streamName')?.value.trim() || '';
+  const youtubeUrl = document.getElementById('youtubeUrl')?.value.trim() || '';
 
   if (editingStreamId === null && !key) { showToast('Vui lòng nhập Stream Key!', 'error'); return; }
   if (!file) { showToast('Vui lòng nhập đường dẫn hoặc link Google Drive!', 'error'); return; }
@@ -2917,7 +2918,7 @@ async function startStream() {
   btn.disabled = true;
   btn.textContent = editingStreamId !== null ? '⏳ Đang lưu cấu hình...' : '⏳ Đang truyền tải hệ thống...';
 
-  const body = { key, file, name };
+  const body = { key, file, name, youtubeUrl };
 
   if (editingStreamId !== null) {
     body.id = editingStreamId;
