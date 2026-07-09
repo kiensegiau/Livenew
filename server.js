@@ -159,6 +159,12 @@ let nextId = 1;
 // ─── File Browse Dialog (PowerShell → temp file) ────────────────────────────
 function browseFile() {
   return new Promise((resolve) => {
+    if (os.platform() !== 'win32') {
+      console.log('[System] Chức năng chọn file qua cửa sổ không hỗ trợ trên Linux (VPS).');
+      resolve('');
+      return;
+    }
+
     const tmpOut = path.join(os.tmpdir(), `yt_browse_${Date.now()}.txt`);
     const script = [
       'Add-Type -AssemblyName System.Windows.Forms',
@@ -173,6 +179,11 @@ function browseFile() {
     const ps = spawn('powershell', ['-STA', '-NoProfile', '-Command', script], {
       windowsHide: false,
       stdio: 'ignore'
+    });
+
+    ps.on('error', (err) => {
+      console.error('[System] Không thể chạy PowerShell:', err.message);
+      resolve('');
     });
 
     ps.on('close', () => {
