@@ -166,6 +166,41 @@ function sendToZalo(text) {
   }
 }
 
+let serverIp = 'Unknown';
+function detectPublicIp() {
+  const options = {
+    hostname: 'api.ipify.org',
+    port: 80,
+    path: '/',
+    method: 'GET',
+    timeout: 3000
+  };
+  const req = http.request(options, (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+      serverIp = data.trim();
+    });
+  });
+  req.on('error', () => {
+    try {
+      const interfaces = os.networkInterfaces();
+      for (const devName in interfaces) {
+        const iface = interfaces[devName];
+        for (let i = 0; i < iface.length; i++) {
+          const alias = iface[i];
+          if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
+            serverIp = alias.address;
+            return;
+          }
+        }
+      }
+    } catch (err) {}
+  });
+  req.end();
+}
+detectPublicIp();
+
 function escapeMarkdown(text) {
   if (!text) return '';
   return text.toString().replace(/[*_`\[]/g, '\\$&');
@@ -232,7 +267,9 @@ function initBot(actions) {
           const disk = await getDiskUsage();
           const uptimeH = (os.uptime() / 3600).toFixed(1);
 
-          let report = `📊 *BÁO CÁO HỆ THỐNG ĐỊNH KỲ*\n━━━━━━━━━━━━━━━━━━\n`;
+          let report = `📊 *BÁO CÁO HỆ THỐNG ĐỊNH KỲ*\n`;
+          report += `🖥️ IP Server: \`${serverIp}\`\n`;
+          report += `━━━━━━━━━━━━━━━━━━\n`;
           report += `⏱ Uptime: \`${uptimeH}h\` | 🧠 RAM: \`${usedMem}/${totalMem}GB\`\n`;
           report += `💽 Disk: \`${disk}\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
           report += `🌐 Mạng: ⬇️ \`${rxSpeedMbps} Mbps\` | ⬆️ \`${txSpeedMbps} Mbps\`\n`;
