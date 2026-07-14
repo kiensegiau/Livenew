@@ -4,5 +4,10 @@
     1663554465
   ],
   "password": "kienkaka",
-  "polling": true
+  "polling": true,
+  "zalo": {
+    "enabled": true,
+    "serverUrl": "http://47.84.125.230:3380/send",
+    "threadId": "6868693163359042583"
+  }
 }

@@ -521,7 +521,7 @@ function proceedStartStream(id) {
     }
 
     s.status = 'scheduled';
-    const displayTime = new Date(localISO).toLocaleString('vi-VN');
+    const displayTime = new Date(localISO).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
     s.lastLog = `Đang chờ đến giờ kích hoạt lịch phát: ${displayTime}`;
     s.timer = setTimeout(() => {
       const s2 = streams.get(id);
@@ -764,7 +764,7 @@ function editStreamLocal(body) {
       // Tình huống A: Chuyển sang đặt lịch (Hoặc đổi giờ đặt lịch)
       console.log(`[Stream #${id}] Luồng được chuyển sang/thiết lập chế độ Đặt Lịch lúc ${s.scheduledTime}`);
       s.status = 'scheduled';
-      s.lastLog = `Đã chuyển sang đặt lịch phát lúc ${new Date(s.scheduledTime).toLocaleString('vi-VN')}`;
+      s.lastLog = `Đã chuyển sang đặt lịch phát lúc ${new Date(s.scheduledTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`;
       saveStreams();
       proceedStartStream(s.id); // Tự động hẹn giờ kích hoạt ở tương lai
     } else {

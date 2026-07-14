@@ -1912,7 +1912,7 @@
         <!-- Scheduled mode details -->
         <div class="mode-fields" id="mode-scheduled" style="display: none; margin-bottom: 20px;">
           <div class="form-group" style="margin-bottom:0;">
-            <label for="schedTime">Thời gian kích hoạt (Giờ VPS)</label>
+            <label for="schedTime">Thời gian kích hoạt (Giờ VN)</label>
             <div class="custom-datetime-picker-wrapper" id="customPickerWrapper">
               <div class="datetime-trigger" onclick="toggleCustomPicker(event)" id="datetimeTrigger">
                 <span class="trigger-icon">📅</span>
@@ -2731,7 +2731,7 @@ function adjustScheduleTime(mins, silent = false) {
   }
   
   if (!silent) {
-    showToast(`Đã thiết lập đặt lịch lúc ${selectedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`, 'success');
+    showToast(`Đã thiết lập đặt lịch lúc ${selectedDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}`, 'success');
   }
 }
 
@@ -2762,8 +2762,8 @@ function updateScheduleHelper() {
   }
   
   // Extract date and time strings
-  const timeStr = targetDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-  const dateStr = targetDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+  const timeStr = targetDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
+  const dateStr = targetDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' });
   
   // Relative difference parsing
   const diffSecs = Math.floor(diffMs / 1000);
@@ -2978,7 +2978,7 @@ async function startStream() {
         cancelEdit();
       } else {
         const msg = currentTimingMode === 'scheduled'
-          ? `🕐 Kích hoạt đặt lịch lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN')}`
+          ? `🕐 Kích hoạt đặt lịch lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
           : '🔴 Luồng Live đã được khởi kích hoạt thành công!';
         showToast(msg, 'success');
         const nameInput = document.getElementById('streamName');
@@ -3358,7 +3358,7 @@ function renderStreams(list) {
       metaItems.push(`
         <div class="meta-item" style="border: 1px solid rgba(16, 185, 129, 0.15); background: rgba(16, 185, 129, 0.03); padding: 4px 8px; border-radius: 6px;" title="Thời điểm khởi tạo luồng">
           <span class="meta-icon">📅</span>
-          <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 500;">Tạo lúc: ${new Date(s.createdAt).toLocaleString('vi-VN')}</span>
+          <span style="font-size: 0.75rem; color: #a7f3d0; font-weight: 500;">Tạo lúc: ${new Date(s.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
         </div>
       `);
     }
@@ -3366,7 +3366,7 @@ function renderStreams(list) {
       metaItems.push(`
         <div class="meta-item" style="border: 1px solid rgba(99, 102, 241, 0.15); background: rgba(99, 102, 241, 0.03); padding: 4px 8px; border-radius: 6px;" title="Thời điểm cập nhật cấu hình cuối">
           <span class="meta-icon">🔄</span>
-          <span style="font-size: 0.75rem; color: #c7d2fe; font-weight: 500;">Sửa lúc: ${new Date(s.updatedAt).toLocaleString('vi-VN')}</span>
+          <span style="font-size: 0.75rem; color: #c7d2fe; font-weight: 500;">Sửa lúc: ${new Date(s.updatedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
         </div>
       `);
     }
@@ -3618,7 +3618,7 @@ function renderStreams(list) {
               ` : ''}
               ${s.status === 'scheduled' && s.scheduledTime ? `
                 <span style="color: var(--warning); background: rgba(245, 158, 11, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(245, 158, 11, 0.15); display: inline-flex; align-items: center; gap: 4px;">
-                  📅 Giờ VPS: ${new Date(s.scheduledTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                  📅 Giờ VN: ${new Date(s.scheduledTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}
                 </span>
                 <span style="color: #818cf8; background: rgba(129, 140, 248, 0.08); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(129, 140, 248, 0.15); display: inline-flex; align-items: center; gap: 4px;">
                   ⏱️ Live: ${s.minutes > 0 ? `${s.minutes}p` : 'Vô hạn'}

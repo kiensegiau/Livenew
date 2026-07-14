@@ -1,6 +1,7 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 
 const CONFIG_PATH = path.join(__dirname, 'bot_config.json');
 
@@ -94,15 +95,14 @@ function getDiskUsage() {
   });
 }
 
-let config = { token: "", adminIds: [], password: "live", polling: true };
+let config = { token: "", adminIds: [], password: "live", polling: true, zalo: { enabled: false, serverUrl: "", threadId: "" } };
 try {
   if (fs.existsSync(CONFIG_PATH)) {
     const oldConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
-    config.token = oldConfig.token || "";
-    config.password = oldConfig.password || "live";
-    config.polling = oldConfig.polling !== false;
-    if (oldConfig.adminId) config.adminIds = [oldConfig.adminId];
-    else if (oldConfig.adminIds) config.adminIds = oldConfig.adminIds;
+    config = { ...config, ...oldConfig };
+    if (oldConfig.adminId && (!config.adminIds || config.adminIds.length === 0)) {
+      config.adminIds = [oldConfig.adminId];
+    }
   }
 } catch (e) { console.error('Lỗi đọc config:', e.message); }
 
@@ -112,13 +112,58 @@ const userStates = new Map(); // Lưu trạng thái nhập liệu của người
 
 function saveConfig() {
   try {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify({
-      token: config.token,
-      adminIds: config.adminIds,
-      password: config.password,
-      polling: config.polling
-    }, null, 2));
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
   } catch (e) { console.error('Lỗi lưu config:', e.message); }
+}
+
+function sendToZalo(text) {
+  if (!config.zalo || !config.zalo.enabled || !config.zalo.serverUrl) return;
+
+  const urlStr = config.zalo.serverUrl;
+  const threadId = config.zalo.threadId;
+  if (!threadId) return;
+
+  try {
+    const url = new URL(urlStr);
+    const cleanText = text.replace(/\*/g, '').replace(/`/g, '');
+    const payload = JSON.stringify({
+      threadId: String(threadId),
+      type: "Group",
+      message: cleanText
+    });
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 80,
+      path: url.pathname + url.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(payload)
+      }
+    };
+
+    if (config.zalo.apiKey) {
+      options.headers['x-api-key'] = config.zalo.apiKey;
+    }
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        console.log(`[Zalo] Gửi báo cáo định kỳ thành công: ${data}`);
+      });
+    });
+
+    req.on('error', (e) => {
+      console.error(`[Zalo] Lỗi gửi báo cáo định kỳ: ${e.message}`);
+    });
+
+    req.write(payload);
+    req.end();
+  } catch (err) {
+    console.error('[Zalo] Lỗi khởi tạo cấu hình gửi tin nhắn:', err.message);
+  }
 }
 
 function escapeMarkdown(text) {
@@ -221,6 +266,7 @@ function initBot(actions) {
             report += `📭 _Hiện không có luồng nào đang hoạt động._`;
           }
           broadcast(report);
+          sendToZalo(report);
         } catch (e) { console.error('Lỗi báo cáo (nội):', e.message); }
       }, 1000);
     } catch (e) { console.error('Lỗi báo cáo (ngoại):', e.message); }
