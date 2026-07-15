@@ -1373,4 +1373,4 @@ function saveEditChanges(chatId, state, actions) {
   }
 }
 
-module.exports = { initBot, broadcast, updateProgress };
+module.exports = { initBot, broadcast, updateProgress, sendToZalo };

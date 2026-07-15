@@ -968,11 +968,16 @@ const server = http.createServer(async (req, res) => {
 
   // API: Test Sentinel Notification
   if (req.method === 'POST' && pathname === '/api/sentinel/test') {
-    const { broadcast, sendToZalo } = require('./telegramBot');
-    const msg = `🔔 *[SENTINEL TEST REPORT]*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server: \`Test Endpoint\`\n💬 Trạng thái test: Đã gửi thông báo liên hợp sang Zalo & Telegram thành công!`;
-    broadcast(msg);
-    sendToZalo(msg);
-    json(res, 200, { ok: true, msg: 'Đã phát lệnh test thành công!' });
+    try {
+      const { broadcast, sendToZalo } = require('./telegramBot');
+      const msg = `🔔 *[SENTINEL TEST REPORT]*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server: \`Test Endpoint\`\n💬 Trạng thái test: Đã gửi thông báo liên hợp sang Zalo & Telegram thành công!`;
+      broadcast(msg);
+      sendToZalo(msg);
+      json(res, 200, { ok: true, msg: 'Đã phát lệnh test thành công!' });
+    } catch (e) {
+      console.error('[API Test] Lỗi gửi test:', e.message);
+      json(res, 500, { error: e.message });
+    }
     return;
   }
 
