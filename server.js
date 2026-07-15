@@ -116,18 +116,28 @@ function cleanupOrphanedFiles() {
         fs.stat(fullPath, (err, stats) => {
           if (err) return;
           const ageInMs = Date.now() - stats.mtime.getTime();
-          // Bỏ qua các file mới tải hoặc sửa đổi dưới 60 phút để tránh xóa nhầm các file đang trong tiến trình tải hoặc chuẩn bị live
+          // Bỏ qua các file/thư mục mới tải hoặc sửa đổi dưới 60 phút
           if (ageInMs < 60 * 60 * 1000) {
             return;
           }
           
-          fs.unlink(fullPath, (err) => {
-            if (err) {
-              console.error(`[Cleanup] Lỗi tự động xóa file mồ côi ${file}:`, err.message);
-            } else {
-              console.log(`[Cleanup] ✅ Tự động dọn dẹp file rác mồ côi: ${file}`);
-            }
-          });
+          if (stats.isDirectory()) {
+            fs.rm(fullPath, { recursive: true, force: true }, (err) => {
+              if (err) {
+                console.error(`[Cleanup] Lỗi tự động xóa thư mục mồ côi ${file}:`, err.message);
+              } else {
+                console.log(`[Cleanup] ✅ Tự động dọn dẹp thư mục rác mồ côi: ${file}`);
+              }
+            });
+          } else {
+            fs.unlink(fullPath, (err) => {
+              if (err) {
+                console.error(`[Cleanup] Lỗi tự động xóa file mồ côi ${file}:`, err.message);
+              } else {
+                console.log(`[Cleanup] ✅ Tự động dọn dẹp file rác mồ côi: ${file}`);
+              }
+            });
+          }
         });
       }
     });
@@ -953,6 +963,16 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(data);
     });
+    return;
+  }
+
+  // API: Test Sentinel Notification
+  if (req.method === 'POST' && pathname === '/api/sentinel/test') {
+    const { broadcast, sendToZalo } = require('./telegramBot');
+    const msg = `🔔 *[SENTINEL TEST REPORT]*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server: \`Test Endpoint\`\n💬 Trạng thái test: Đã gửi thông báo liên hợp sang Zalo & Telegram thành công!`;
+    broadcast(msg);
+    sendToZalo(msg);
+    json(res, 200, { ok: true, msg: 'Đã phát lệnh test thành công!' });
     return;
   }
 

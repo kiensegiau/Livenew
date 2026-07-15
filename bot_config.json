@@ -9,5 +9,13 @@
     "enabled": true,
     "serverUrl": "http://47.84.125.230:3380/send",
     "threadId": "6868693163359042583"
+  },
+  "sentinel": {
+    "enabled": true,
+    "knownServers": [
+      "57.129.134.155",
+      "51.68.214.167"
+    ],
+    "intervalMs": 60000
   }
 }

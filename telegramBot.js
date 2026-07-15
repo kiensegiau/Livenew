@@ -207,6 +207,226 @@ function escapeMarkdown(text) {
 }
 
 function initBot(actions) {
+  // === KHỞI ĐỘNG AEGIS SENTINEL (TỰ ĐỘNG PHÁT HIỆN VÀ KIỂM TRA CHÉO GIỮA CÁC VPS) ===
+  if (config.sentinel && config.sentinel.enabled && Array.isArray(config.sentinel.knownServers)) {
+    const startSentinel = () => {
+      // Chờ phát hiện xong IP của chính mình mới bắt đầu chạy
+      if (serverIp === 'Unknown') {
+        setTimeout(startSentinel, 2000);
+        return;
+      }
+
+      // Lọc ra danh sách các server đối phương (bỏ qua IP của chính mình)
+      const peers = config.sentinel.knownServers
+        .map(ip => ip.trim())
+        .filter(ip => ip !== serverIp && ip.length > 0);
+
+      if (peers.length === 0) {
+        console.log('[Sentinel] Không tìm thấy server đối phương nào khác để kiểm tra chéo.');
+        return;
+      }
+
+      console.log(`[Sentinel] 🛡️ Hệ thống tự động bắt đầu giám sát các Peer: [${peers.join(', ')}]`);
+
+      // Quản lý trạng thái & thống kê cho từng peer
+      const peerStates = new Map();
+      peers.forEach(peerIp => {
+        peerStates.set(peerIp, {
+          status: 'online',
+          lastAlertTime: 0,
+          totalPings: 0,
+          successPings: 0,
+          failPings: 0,
+          incidents: [],
+          currentIncident: null
+        });
+      });
+
+      const ALERT_COOLDOWN_MS = 15 * 60 * 1000;
+
+      const checkAllPeers = () => {
+        peers.forEach(peerIp => {
+          try {
+            const options = {
+              hostname: peerIp,
+              port: 3131,
+              path: '/api/sysinfo',
+              method: 'GET',
+              timeout: 5000,
+              headers: {
+                'User-Agent': 'CyberShieldSecureAgent/1.0'
+              }
+            };
+
+            const req = http.request(options, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                let isSuccess = false;
+                try {
+                  if (res.statusCode === 200) {
+                    const json = JSON.parse(data);
+                    if (json && json.platform) isSuccess = true;
+                  }
+                } catch (e) {}
+                handlePeerResult(peerIp, isSuccess);
+              });
+            });
+
+            req.on('error', () => handlePeerResult(peerIp, false));
+            req.on('timeout', () => { req.destroy(); handlePeerResult(peerIp, false); });
+            req.end();
+          } catch (err) {
+            console.error(`[Sentinel] Lỗi ping tới ${peerIp}:`, err.message);
+          }
+        });
+      };
+
+      const handlePeerResult = (peerIp, isSuccess) => {
+        const state = peerStates.get(peerIp);
+        if (!state) return;
+
+        state.totalPings++;
+        if (isSuccess) {
+          state.successPings++;
+        } else {
+          state.failPings++;
+        }
+
+        const now = Date.now();
+        const peerUrlStr = `http://${peerIp}:3131`;
+        const timeStr = new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+
+        if (isSuccess) {
+          if (state.status === 'offline') {
+            state.status = 'online';
+
+            // Kết thúc sự cố hiện tại
+            if (state.currentIncident) {
+              state.currentIncident.upAt = timeStr;
+              state.currentIncident.durationSec = Math.floor((now - state.currentIncident.downTimestamp) / 1000);
+              state.incidents.push(state.currentIncident);
+              state.currentIncident = null;
+            }
+
+            const msg = `🟢 *[SENTINEL ALERT] CHẠY LẠI THÀNH CÔNG!*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerIp}*\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Trạng thái: Đã khôi phục hoạt động bình thường.`;
+            console.log(`[Sentinel] ${msg}`);
+            broadcast(msg);
+            sendToZalo(msg);
+          }
+        } else {
+          if (state.status === 'online') {
+            state.status = 'offline';
+            state.lastAlertTime = now;
+
+            // Bắt đầu sự cố mới
+            state.currentIncident = {
+              downAt: timeStr,
+              upAt: null,
+              downTimestamp: now,
+              durationSec: 0
+            };
+
+            const msg = `🚨 *[SENTINEL ALERT] MẤT KẾT NỐI SERVER!* \n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerIp}*\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Cảnh báo: Server đối phương không phản hồi! Có thể Node.js bị crash hoặc VPS đã sập.`;
+            console.error(`[Sentinel] ${msg}`);
+            broadcast(msg);
+            sendToZalo(msg);
+          } else {
+            if (now - state.lastAlertTime > ALERT_COOLDOWN_MS) {
+              state.lastAlertTime = now;
+              const msg = `⚠️ *[SENTINEL WARNING] SERVER PEER VẪN SẬP!*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerIp}*\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Trạng thái: Chưa thể khôi phục kết nối.`;
+              broadcast(msg);
+              sendToZalo(msg);
+            }
+          }
+        }
+      };
+
+      // --- LOGIC GỬI BÁO CÁO GIÁM SÁT HẰNG NGÀY LÚC 00:00 GIỜ VN ---
+      let lastDailyReportDate = '';
+      
+      const checkTimeAndSendDailyReport = () => {
+        try {
+          const vnDateObj = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+          const [datePart, timePart] = vnDateObj.split(' ');
+          const [hh, mm] = timePart.split(':');
+
+          if (hh === '00' && mm === '00' && lastDailyReportDate !== datePart) {
+            lastDailyReportDate = datePart;
+
+            const [y, m, d] = datePart.split('-');
+            const displayDate = `${d}/${m}/${y}`;
+
+            let report = `📊 *BÁO CÁO GIÁM SÁT HẰNG NGÀY (SENTINEL)*\n`;
+            report += `📅 Ngày: \`${displayDate}\`\n`;
+            report += `🖥️ IP Server: \`${serverIp}\`\n`;
+            report += `━━━━━━━━━━━━━━━━━━\n\n`;
+
+            peerStates.forEach((state, peerIp) => {
+              const total = state.totalPings || 0;
+              const success = state.successPings || 0;
+              const fail = state.failPings || 0;
+              const successPct = total > 0 ? (success / total * 100).toFixed(2) : '0.00';
+              const failPct = total > 0 ? (fail / total * 100).toFixed(2) : '0.00';
+              const statusText = state.status === 'online' ? 'ONLINE 🟢' : 'OFFLINE 🔴';
+
+              report += `🖥️ *Đối phương: ${peerIp}*\n`;
+              report += `  • Trạng thái hiện tại: \`${statusText}\`\n`;
+              report += `  • Tổng số lần ping: \`${total}\`\n`;
+              report += `  • Thành công: \`${success}\` (${successPct}%)\n`;
+              report += `  • Thất bại: \`${fail}\` (${failPct}%)\n`;
+              
+              if (state.incidents.length > 0) {
+                report += `  • Chi tiết sự cố hôm nay:\n`;
+                state.incidents.forEach((inc, idx) => {
+                  const durationText = formatDurationText(inc.durationSec);
+                  report += `    ${idx + 1}. 🚨 Sập lúc \`${inc.downAt}\` -> Khôi phục lúc \`${inc.upAt || 'Chưa khôi phục'}\` (${durationText})\n`;
+                });
+              } else {
+                report += `  • Chi tiết sự cố: \`Không có sự cố nào (Ổn định 100% 🛡️)\`\n`;
+              }
+              report += `\n`;
+
+              // Reset thống kê cho ngày mới
+              state.totalPings = 0;
+              state.successPings = 0;
+              state.failPings = 0;
+              state.incidents = [];
+              if (state.status === 'offline' && state.currentIncident) {
+                state.currentIncident.downAt = '00:00:00';
+                state.currentIncident.downTimestamp = Date.now();
+              }
+            });
+
+            broadcast(report);
+            sendToZalo(report);
+          }
+        } catch (err) {
+          console.error('[Sentinel] Lỗi gửi báo cáo hằng ngày:', err.message);
+        }
+      };
+
+      function formatDurationText(sec) {
+        if (sec < 60) return `${sec} giây`;
+        const mins = Math.floor(sec / 60);
+        const remSec = sec % 60;
+        if (mins < 60) return `${mins} phút ${remSec} giây`;
+        const hours = Math.floor(mins / 60);
+        const remMins = mins % 60;
+        return `${hours} giờ ${remMins} phút`;
+      }
+
+      // Kiểm tra thời gian mỗi 10 giây
+      setInterval(checkTimeAndSendDailyReport, 10000);
+
+      const intervalMs = config.sentinel.intervalMs || 60000;
+      setInterval(checkAllPeers, intervalMs);
+      checkAllPeers();
+    };
+
+    startSentinel();
+  }
+
   // === KÍCH HOẠT KẾT NỐI TELEGRAM BOT HỆ THỐNG ===
   // Tự động tắt polling khi chạy ở máy Windows (Local) để tránh tranh chấp với VPS (Linux)
   const isLocalWindows = os.platform() === 'win32';
