@@ -413,17 +413,14 @@ function launchFFmpeg(id, key, file, mode, minutes) {
             
             // --- KIỂM TRA LỖI PHỤC HỒI THẤT BẠI CỦA FIFO MUXER ---
             if (lowerLine.includes('recovery failed') || lowerLine.includes('unrecoverable error')) {
-                console.log(`[Stream #${id}] 🚨 Phát hiện lỗi phục hồi thất bại từ FFmpeg (Recovery failed). Tiến hành đóng tiến trình để tự động kết nối lại...`);
-                s.streamAActive = false;
-                s.streamBActive = false;
-                s.streamALog = line;
-                s.streamBLog = line;
-                saveStreams();
-                
-                if (proc) {
-                    try { proc.kill(); } catch (_) {}
+                // Chỉ khởi động lại nếu CẢ 2 đầu A và B đều sập kết nối thực tế
+                if (s.streamAActive === false && s.streamBActive === false) {
+                    console.log(`[Stream #${id}] 🚨 Cả 2 máy chủ A & B đều thất bại phục hồi. Đóng tiến trình để tự động kết nối lại...`);
+                    if (proc) {
+                        try { proc.kill(); } catch (_) {}
+                    }
+                    return;
                 }
-                return;
             }
             
             // --- KIỂM TRA NHÁNH A ---
