@@ -411,6 +411,21 @@ function launchFFmpeg(id, key, file, mode, minutes) {
                 return;
             }
             
+            // --- KIỂM TRA LỖI PHỤC HỒI THẤT BẠI CỦA FIFO MUXER ---
+            if (lowerLine.includes('recovery failed') || lowerLine.includes('unrecoverable error')) {
+                console.log(`[Stream #${id}] 🚨 Phát hiện lỗi phục hồi thất bại từ FFmpeg (Recovery failed). Tiến hành đóng tiến trình để tự động kết nối lại...`);
+                s.streamAActive = false;
+                s.streamBActive = false;
+                s.streamALog = line;
+                s.streamBLog = line;
+                saveStreams();
+                
+                if (proc) {
+                    try { proc.kill(); } catch (_) {}
+                }
+                return;
+            }
+            
             // --- KIỂM TRA NHÁNH A ---
             if (lowerLine.includes('a.rtmp.youtube.com') || lowerLine.includes('slave muxer #0')) {
                 const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || /\btimeout\b/i.test(lowerLine) || lowerLine.includes('timed out') || lowerLine.includes('slave muxer #0 failed');
