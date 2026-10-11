@@ -28,7 +28,13 @@ downloads/*
 # Dịch vụ mã hóa và cấu hình bot/vps
 ffmpeg.exe
 auth_config.json
+users.json
+users_backup.json
+sheet_config.json
+cluster_nodes.json
 
 # Các thư mục biên dịch Electron desktop-app
 desktop-app/node_modules/
-desktop-app/dist/
+desktop-app/dist/sessions.json
+*.tmp
+history.json

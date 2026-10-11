@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Live Controller">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/icon-180.png">
 <title>Vệ Binh Cyber-Shield - Aegis Live Orchestrator PRO</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -155,26 +162,27 @@
   /* Grid Layout */
   .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 30px;
     align-items: start;
   }
+  .dashboard-grid > * { min-width: 0; }
 
   @media (min-width: 740px) and (orientation: landscape) {
     .dashboard-grid {
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 320px minmax(0, 1fr);
     }
   }
 
   @media (min-width: 1024px) {
     .dashboard-grid {
-      grid-template-columns: 380px 1fr;
+      grid-template-columns: 380px minmax(0, 1fr);
     }
   }
 
   @media (min-width: 1440px) {
     .dashboard-grid {
-      grid-template-columns: 420px 1fr;
+      grid-template-columns: 420px minmax(0, 1fr);
     }
   }
 
@@ -201,6 +209,8 @@
     margin-bottom: 20px;
     border-bottom: 1px solid rgba(255,255,255,0.04);
     padding-bottom: 14px;
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
   .card-title {
@@ -212,6 +222,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   /* Form Elements */
@@ -431,6 +442,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
   }
 
   .counter-badge {
@@ -441,11 +453,12 @@
     padding: 4px 10px;
     border-radius: 12px;
     font-weight: 600;
+    white-space: nowrap;
   }
 
   .streams-container {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 20px;
   }
 
@@ -888,7 +901,7 @@
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    min-width: 72px;
+    min-width: 0;
     flex: 1;
   }
   .sys-ring-wrapper {
@@ -962,7 +975,10 @@
     font-family: 'JetBrains Mono', monospace;
     font-weight: 500;
     text-align: center;
-    white-space: nowrap;
+    white-space: normal;
+    line-height: 1.25;
+    max-width: 100%;
+    word-break: break-word;
     margin-top: 1px;
   }
 
@@ -1861,6 +1877,23 @@
       
       <!-- Cột bên trái: Thiết lập tệp & Khóa bảo mật -->
       <div class="modal-grid-col">
+        <!-- Chọn Máy chủ phát sóng -->
+        <div class="form-group" id="serverSelectGroup">
+          <label for="serverSelect" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>🖥️ Máy chủ phát sóng (Cluster Node)</span>
+            <span style="font-size: 0.72rem; color: #34d399; font-weight: 600;">⚖️ Tự động cân bằng tải</span>
+          </label>
+          <div class="input-wrapper">
+            <select id="serverSelect" style="width: 100%; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 10px 14px; font-family: inherit; font-size: 0.85rem; outline: none;">
+              <option value="auto" selected>⚡ Tự Động Chọn VPS Tối Ưu (Khuyên dùng)</option>
+              <!-- Các máy chủ trong cụm được nạp động từ /api/cluster/nodes -->
+            </select>
+          </div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; line-height: 1.3;">
+            💡 Hệ thống tự đo CPU, RAM & số luồng của tất cả máy chủ để chọn máy nhẹ nhất (Tự cứu hộ Failover nếu 1 máy mất kết nối).
+          </div>
+        </div>
+
         <!-- Stream Name / Tag -->
         <div class="form-group">
           <label for="streamName">Tên gợi nhớ luồng (Tùy chọn)</label>
@@ -1892,8 +1925,8 @@
             <span class="drive-detect-badge" id="driveBadge">📥 Link Drive phát hiện</span>
           </label>
           <div class="file-input-grid">
-            <input type="text" id="videoPath" placeholder="D:\\Video\\sample.mp4 hoặc https://drive.google.com/..." autocomplete="off" />
-            <button class="btn btn-ghost btn-sm" onclick="browse()" title="Mở hộp thoại chọn file trên VPS">📂 Chọn File</button>
+            <input type="text" id="videoPath" placeholder="D:\Video\sample.mp4 hoặc https://drive.google.com/..." autocomplete="off" />
+            <button class="btn btn-ghost btn-sm" id="btnBrowse" onclick="browse()" title="Mở hộp thoại chọn file trên VPS">📂 Chọn File</button>
           </div>
         </div>
       </div>
@@ -2033,6 +2066,230 @@
   </div>
 </div>
 
+<!-- Modal Lịch sử luồng: Admin xem toàn bộ, khách chỉ xem của mình -->
+<div class="modal-overlay hidden" id="historyModal" onclick="closeHistoryModal(event)">
+  <div class="modal-content-card" style="max-width: 1100px; width: 95%; max-height: 90vh; overflow-y: auto;" onclick="event.stopPropagation()">
+    <button class="modal-close-x" onclick="closeHistoryModal(event)" title="Đóng cửa sổ">×</button>
+    <div class="card-header-area" style="border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 14px; margin-bottom: 16px;">
+      <div>
+        <div class="card-title" style="font-size: 1.15rem;">📜 Lịch sử luồng <span class="counter-badge" id="historyCount">0</span></div>
+        <div id="historyScopeNote" style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;"></div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center;">
+      <input type="text" id="historySearch" placeholder="Tìm theo tên luồng, file, khách..." oninput="renderHistory()" style="flex: 1; min-width: 180px; background: rgba(0,0,0,0.5); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 10px; font-size: 0.78rem; outline: none;" />
+      <select id="historyReason" onchange="renderHistory()" style="background: rgba(0,0,0,0.5); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 8px; font-size: 0.75rem; outline: none;">
+        <option value="all">Tất cả kết quả</option>
+        <option value="finished">✅ Hoàn thành</option>
+        <option value="stopped">⏹ Đã dừng</option>
+        <option value="error">⚠️ Lỗi</option>
+      </select>
+      <select id="historyOwner" onchange="renderHistory()" style="display: none; background: rgba(0,0,0,0.5); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 7px 8px; font-size: 0.75rem; outline: none;">
+        <option value="all">👥 Tất cả khách</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="loadHistoryData()" style="padding: 6px 12px; font-size: 0.75rem;">🔄 Làm mới</button>
+    </div>
+    <div style="overflow-x: auto;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem;">
+        <thead>
+          <tr style="color: var(--text-secondary); text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08);">
+            <th style="padding: 8px 10px; white-space: nowrap;">Kết thúc lúc</th>
+            <th style="padding: 8px 10px;">Tên luồng</th>
+            <th class="history-admin-col" style="padding: 8px 10px; display: none;">Khách</th>
+            <th style="padding: 8px 10px;">Máy chủ</th>
+            <th style="padding: 8px 10px;">Chế độ</th>
+            <th style="padding: 8px 10px; white-space: nowrap;">Thời lượng</th>
+            <th style="padding: 8px 10px;">Kết quả</th>
+          </tr>
+        </thead>
+        <tbody id="historyTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<!-- Modal Quản Lý Khách Hàng (Dành cho Admin) -->
+<div class="modal-overlay hidden" id="userManagerModal" onclick="closeUserManagerModal(event)">
+  <div class="modal-content-card" style="max-width: 950px; width: 95%; max-height: 90vh; overflow-y: auto;" onclick="event.stopPropagation()">
+    <button class="modal-close-x" onclick="closeUserManagerModal(event)" title="Đóng cửa sổ">×</button>
+    
+    <div class="card-header-area" style="border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <div>
+        <div class="card-title" style="font-size: 1.15rem;">👥 Quản Lý Khách Hàng (Multi-Tenant)</div>
+        <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">Quản lý tài khoản, phân bổ luồng live và đồng bộ Google Sheets</div>
+      </div>
+      
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-sm" id="btnSyncSheetModal" onclick="triggerGoogleSheetSync()" style="background: var(--success-gradient); color: #fff; font-weight: 600; padding: 6px 14px; border-radius: 8px; border: none; cursor: pointer;">
+          ⚡ ĐỒNG BỘ TOÀN BỘ TỪ SHEET
+        </button>
+        <button class="btn btn-sm" onclick="openAddUserModal()" style="background: var(--primary-gradient); color: #fff; font-weight: 600; padding: 6px 14px; border-radius: 8px; border: none; cursor: pointer;">
+          ➕ THÊM KHÁCH THỦ CÔNG
+        </button>
+      </div>
+    </div>
+
+    <!-- KHUNG QUẢN LÝ MÁY CHỦ (CLUSTER) - THÊM / XÓA VPS -->
+    <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.28); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+        <span style="font-size: 1.15rem;">🖥️</span>
+        <span style="font-weight: 700; font-size: 0.88rem; color: #a5b4fc; letter-spacing: 0.5px;">QUẢN LÝ MÁY CHỦ (CLUSTER)</span>
+        <span id="clusterNodeCount" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(99,102,241,0.15); color: #a5b4fc; font-weight: 600;"></span>
+      </div>
+      <div id="clusterNodesAdminList" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;"></div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+        <input type="text" id="newNodeId" placeholder="Mã máy (vd: vps3)" style="width: 130px; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem;" />
+        <input type="text" id="newNodeName" placeholder="Tên hiển thị (vd: VPS 3)" style="width: 170px; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem;" />
+        <input type="text" id="newNodeIp" placeholder="IP hoặc tên miền" style="width: 170px; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem;" />
+        <input type="number" id="newNodePort" placeholder="3131" value="3131" style="width: 80px; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); border-radius: 8px; padding: 8px 10px; font-size: 0.8rem;" />
+        <button class="btn btn-sm" id="btnAddNode" onclick="addClusterNode()" style="background: var(--primary-gradient); color: #fff; font-weight: 600; padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer;">➕ THÊM MÁY CHỦ</button>
+      </div>
+      <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 8px; line-height: 1.4;">
+        💡 Trên VPS mới: cài cùng mã nguồn, chạy <code>NODE_ID=&lt;mã máy&gt; pm2 start server.js</code>, mở cổng 3131, rồi thêm vào đây. Danh sách sẽ tự đồng bộ sang tất cả máy trong cụm.
+      </div>
+    </div>
+
+    <!-- KHUNG KẾT NỐI TRỰC TIẾP GOOGLE SHEET -->
+    <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.15rem;">📊</span>
+          <span style="font-weight: 700; font-size: 0.88rem; color: #34d399; letter-spacing: 0.5px;">XÁC THỰC THẲNG LÊN GOOGLE SHEET (REAL-TIME DIRECT AUTH)</span>
+          <span id="sheetStatusBadge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(156,163,175,0.15); color: #9ca3af; font-weight: 600;">⚪ Đang kiểm tra...</span>
+        </div>
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="toggleSheetHelp()" style="font-size: 0.75rem; padding: 4px 10px; color: #60a5fa; border: 1px solid rgba(96,165,250,0.3); border-radius: 6px; cursor: pointer;">
+            📋 Xem Hướng Dẫn & Mẫu Cột
+          </button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+        <div class="input-wrapper" style="margin: 0; flex: 1; min-width: 280px;">
+          <input type="text" id="sheetUrlInput" placeholder="Dán link Google Sheet hoặc Web App (https://docs.google.com/spreadsheets/d/...)" style="font-size: 0.82rem; padding: 8px 12px; width: 100%; border-radius: 6px;" />
+        </div>
+        <div class="input-wrapper" style="margin: 0; width: 180px;">
+          <input type="text" id="sheetSecretInput" placeholder="Secret Key (CLUSTER_SECRET)" value="" style="font-size: 0.82rem; padding: 8px 12px; width: 100%; border-radius: 6px;" />
+        </div>
+        <button class="btn btn-sm" id="btnSaveSheetConfig" onclick="saveSheetConfigUI()" style="background: #059669; color: #fff; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; white-space: nowrap;">
+          💾 LƯU LINK SHEET
+        </button>
+        <button class="btn btn-sm" id="btnTestSheetConfig" onclick="testSheetConfigUI()" style="background: rgba(99,102,241,0.25); border: 1px solid rgba(99,102,241,0.5); color: #c7d2fe; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;">
+          ⚡ TEST KẾT NỐI
+        </button>
+      </div>
+
+      <!-- Khung trợ giúp và mẫu cột Google Sheet (ẩn/hiện) -->
+      <div id="sheetHelpBox" style="display: none; margin-top: 14px; padding-top: 14px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5;">
+        <div style="font-weight: 600; color: #fbbf24; margin-bottom: 6px;">📝 QUY ƯỚC CÁC CỘT TRÊN GOOGLE SHEET (Dòng 1 là Tiêu đề, Dòng 2 trở đi là Danh sách khách):</div>
+        <div style="background: rgba(0,0,0,0.5); padding: 10px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #e2e8f0; overflow-x: auto; margin-bottom: 10px; white-space: nowrap;">
+          Cột A: Username | Cột B: Password | Cột C: Tên Khách | Cột D: Số Luồng | Cột E: Ngày Hết Hạn | Cột F: Server | Cột G: Trạng Thái | Cột H: Quyền | Cột I: Ghi Chú
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+          <a href="https://sheets.new" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration: none; font-size: 0.72rem; padding: 5px 12px; color: #34d399; border: 1px solid rgba(52,211,153,0.3); border-radius: 6px;">
+            🌐 Mở Google Sheets Mới (sheets.new)
+          </a>
+          <button class="btn btn-ghost btn-sm" onclick="copyTemplateSample()" style="font-size: 0.72rem; padding: 5px 12px; color: #c084fc; border: 1px solid rgba(192,132,252,0.3); border-radius: 6px; cursor: pointer;">
+            📋 Sao Chép 5 Dòng Mẫu Để Dán Vào Sheet
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="copyAppsScriptCode()" style="font-size: 0.72rem; padding: 5px 12px; color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); border-radius: 6px; cursor: pointer;">
+            📜 Sao Chép Code Google Apps Script (Bảo Mật Cao)
+          </button>
+        </div>
+        <div style="color: var(--text-muted); font-size: 0.73rem; background: rgba(255,255,255,0.02); padding: 8px 12px; border-radius: 6px;">
+          💡 <b>Cách dùng nhanh nhất:</b> Vào <a href="https://sheets.new" target="_blank" style="color: #60a5fa;">sheets.new</a> ➜ Nhấn nút <b>"Sao Chép 5 Dòng Mẫu"</b> ở trên rồi dán vào Sheet ➜ Nhấn nút <b>Chia sẻ (Share)</b> ở góc phải Google Sheet, chọn <b>"Bất kỳ ai có đường liên kết đều có thể xem"</b> ➜ Copy link trình duyệt dán vào ô trên ➜ Bấm <b>LƯU</b>! Khách hàng đăng nhập là máy chủ sẽ đọc trực tiếp từ Sheet ngay lập tức!
+        </div>
+      </div>
+    </div>
+
+    <!-- Bảng danh sách khách hàng -->
+    <div style="overflow-x: auto; background: rgba(0,0,0,0.25); border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+      <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; color: var(--text-secondary); background: rgba(255,255,255,0.02);">
+            <th style="padding: 10px;">Username</th>
+            <th style="padding: 10px;">Tên Khách Hàng</th>
+            <th style="padding: 10px; text-align: center;">Giới Hạn Luồng</th>
+            <th style="padding: 10px;">Ngày Hết Hạn</th>
+            <th style="padding: 10px;">Máy Chủ Cấp</th>
+            <th style="padding: 10px;">Trạng Thái</th>
+            <th style="padding: 10px;">Ghi Chú</th>
+            <th style="padding: 10px; text-align: right;">Thao Tác</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-secondary);">⏳ Đang tải...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Thêm / Chỉnh Sửa Khách Hàng -->
+<div class="modal-overlay hidden" id="userEditModal" onclick="closeUserEditModal(event)">
+  <div class="modal-content-card" style="max-width: 500px;" onclick="event.stopPropagation()">
+    <button class="modal-close-x" onclick="closeUserEditModal(event)" title="Đóng cửa sổ">×</button>
+    <div class="card-header-area" style="border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 12px; margin-bottom: 16px;">
+      <div class="card-title" id="userEditTitle">➕ Thêm Khách Hàng Mới</div>
+    </div>
+
+    <input type="hidden" id="editUserId" value="" />
+
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label for="editUsername">Tên đăng nhập (Username)</label>
+      <div class="input-wrapper">
+        <input type="text" id="editUsername" placeholder="ví dụ: khach_vip1" autocomplete="off" />
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label for="editPassword">Mật khẩu</label>
+      <div class="input-wrapper">
+        <input type="text" id="editPassword" placeholder="Nhập mật khẩu" autocomplete="off" />
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label for="editFullName">Tên khách hàng / Ghi chú Zalo</label>
+      <div class="input-wrapper">
+        <input type="text" id="editFullName" placeholder="ví dụ: Anh Tuấn (Zalo: 0987...)" autocomplete="off" />
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="editMaxStreams">Số luồng tối đa</label>
+        <div class="input-wrapper">
+          <input type="number" id="editMaxStreams" value="3" min="1" max="99" />
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="editExpiresAt">Ngày hết hạn (YYYY-MM-DD)</label>
+        <div class="input-wrapper">
+          <input type="text" id="editExpiresAt" placeholder="2026-12-31 hoặc để trống" />
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 14px;">
+      <label for="editAllowedServers">Máy chủ được cấp phép</label>
+      <div class="input-wrapper">
+        <select id="editAllowedServers" style="width: 100%; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 0.85rem;">
+          <option value="all">🌐 Tất cả máy chủ trong cụm</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
+      <input type="checkbox" id="editActive" checked style="accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer;" />
+      <label for="editActive" style="margin-bottom: 0; cursor: pointer; font-size: 0.85rem;">Kích hoạt tài khoản (Cho phép đăng nhập & phát luồng)</label>
+    </div>
+
+    <button class="btn btn-launch btn-lg" id="btnSaveUser" onclick="saveUserSubmit()" style="background: var(--primary-gradient);">
+      💾 LƯU THÔNG TIN KHÁCH HÀNG
+    </button>
+  </div>
+</div>
+
 <div class="dashboard-wrapper">
   
   <!-- Header -->
@@ -2047,13 +2304,25 @@
       </div>
     </div>
     
-    <div class="system-stats-bar">
-      <button onclick="openPasswordModal()" class="sys-badge" style="cursor: pointer; background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.35); color: #c084fc; font-weight: 600; padding: 6px 12px; border-radius: 20px; transition: var(--transition);" onmouseover="this.style.background='rgba(168, 85, 247, 0.25)'; this.style.borderColor='rgba(168, 85, 247, 0.6)';" onmouseout="this.style.background='rgba(168, 85, 247, 0.12)'; this.style.borderColor='rgba(168, 85, 247, 0.35)';">⚙️ ĐỔI MẬT KHẨU</button>
-      <button id="electronConfigBtn" class="sys-badge" style="display: none; cursor: pointer; background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35); color: #818cf8; font-weight: 600; padding: 6px 12px; border-radius: 20px;">⚙️ Cấu Hình VPS</button>
-      <span id="demoBadge" class="sys-badge" style="display:none; background:rgba(239, 68, 68, 0.08); border-color:rgba(239, 68, 68, 0.2); color:#f87171; font-weight:600;"><span style="color:#ef4444;">●</span> MOCK DATA (DEMO)</span>
-      <span class="sys-badge"><span style="color:#6366f1">●</span> FIFO Muxer</span>
-      <span class="sys-badge"><span style="color:#a855f7">●</span> Auto-Healing</span>
-      <span class="sys-badge live-status"><span style="color:#10b981">●</span> Hybrid A+B Protection</span>
+    <div class="system-stats-bar" style="align-items: center; flex-wrap: wrap;">
+      <span id="userBadge" class="sys-badge" style="background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.4); color: #a5b4fc; font-weight: 600;">
+        👤 <span id="userNameText">Đang xác thực...</span>
+      </span>
+      <span id="quotaBadge" class="sys-badge" style="background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); color: #6ee7b7; font-weight: 600;">
+        📊 Gói: <span id="quotaText">0/0 luồng</span>
+      </span>
+      <button id="btnUserManager" onclick="openUserManagerModal()" class="sys-badge" style="display: none; cursor: pointer; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; font-weight: 600; padding: 6px 12px; border-radius: 20px;">
+        👥 QUẢN LÝ KHÁCH HÀNG
+      </button>
+      <button id="btnHistory" onclick="openHistoryModal()" class="sys-badge" style="cursor: pointer; background: rgba(59, 130, 246, 0.12); border-color: rgba(59, 130, 246, 0.35); color: #60a5fa; font-weight: 600; padding: 6px 12px; border-radius: 20px;">
+        📜 LỊCH SỬ
+      </button>
+      <button onclick="openPasswordModal()" class="sys-badge" style="cursor: pointer; background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.35); color: #c084fc; font-weight: 600; padding: 6px 12px; border-radius: 20px;">
+        ⚙️ ĐỔI MẬT KHẨU
+      </button>
+      <button onclick="logout()" class="sys-badge" style="cursor: pointer; background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); color: #f87171; font-weight: 600; padding: 6px 12px; border-radius: 20px;">
+        🚪 ĐĂNG XUẤT
+      </button>
     </div>
   </header>
 
@@ -2065,12 +2334,15 @@
       <!-- Cấu hình Live mới đã được chuyển vào Modal overlay để giao diện gọn gàng hơn -->
 
     <!-- VPS System Telemetry Card -->
-    <div class="card">
-      <div class="card-header-area">
+    <div class="card" id="telemetryCard">
+      <div class="card-header-area" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
         <div class="card-title" style="display: flex; align-items: center; gap: 8px;">
           <div class="sys-beacon" style="width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 10px var(--blue-glow); animation: sys-beacon 2s infinite;"></div>
-          📊 Giám sát tài nguyên VPS
+          📊 Giám sát tài nguyên
         </div>
+        
+        <!-- Bộ chọn chuyển đổi xem Telemetry giữa các máy chủ (nạp động) -->
+        <div id="telemetrySwitcher" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
       </div>
       
       <!-- 3 Circular Telemetry Rings -->
@@ -2160,7 +2432,9 @@
         </div>
       </div>
       
-      <!-- Detailed System List Removed (Replaced by Circular Rings for Sleeker Look) -->
+      <!-- Chi tiết máy chủ đang xem + tổng quan toàn cụm (chỉ Admin) -->
+      <div id="sysDetailLine" style="margin-top: 12px; font-size: 0.68rem; color: var(--text-secondary); line-height: 1.5; text-align: center; font-family: 'JetBrains Mono', monospace;"></div>
+      <div id="clusterOverview" style="margin-top: 14px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px;"></div>
     </div>
 
 
@@ -2175,12 +2449,22 @@
           <span class="counter-badge" id="streamCount">0 luồng</span>
         </div>
         
-        <div class="right-header-tools">
-          <button class="btn btn-launch btn-sm" onclick="openConfigModal()" style="padding: 6px 14px; font-size: 0.75rem; background: var(--primary-gradient); box-shadow: 0 4px 12px var(--primary-glow); margin-right: 8px;">
+        <div class="right-header-tools" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <!-- Filter Server -->
+          <select id="filterServer" onchange="applyStreamFilters()" style="background: rgba(0,0,0,0.5); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 5px 8px; font-size: 0.72rem; outline: none; cursor: pointer;">
+            <option value="all">🌐 Tất cả Server</option>
+          </select>
+
+          <!-- Filter Customer (Dành cho Admin) -->
+          <select id="filterCustomer" onchange="applyStreamFilters()" style="display: none; background: rgba(0,0,0,0.5); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 5px 8px; font-size: 0.72rem; outline: none; cursor: pointer;">
+            <option value="all">👥 Tất cả Khách</option>
+          </select>
+
+          <button class="btn btn-launch btn-sm" onclick="openConfigModal()" style="padding: 6px 14px; font-size: 0.75rem; background: var(--primary-gradient); box-shadow: 0 4px 12px var(--primary-glow);">
             ➕ THÊM LUỒNG LIVE
           </button>
           <button class="btn btn-ghost btn-sm" id="btnClear" onclick="clearDone()" title="Xóa các luồng đã dừng hoặc kết thúc khỏi danh sách" style="padding: 6px 12px; font-size:0.75rem;">
-            🗑️ Dọn dẹp luồng rác
+            🗑️ Dọn dẹp
           </button>
         </div>
       </div>
@@ -2248,6 +2532,11 @@ async function submitLogin() {
     const data = await res.json();
     if (res.ok && data.token) {
       localStorage.setItem('vps_session_token', data.token);
+      if (data.user) {
+        localStorage.setItem('vps_user_profile', JSON.stringify(data.user));
+        currentUserProfile = data.user;
+        updateUserProfileUI(data.user);
+      }
       if (window.require) {
         try {
           const { ipcRenderer } = window.require('electron');
@@ -2265,6 +2554,7 @@ async function submitLogin() {
       document.getElementById('loginPass').value = '';
       
       // Trigger instant polling
+      fetchUserProfile();
       poll();
       pollSysInfo();
     } else {
@@ -2614,6 +2904,10 @@ function openConfigModal() {
     if (titleEl) {
       titleEl.textContent = editingStreamId !== null ? `⚙️ Chỉnh sửa luồng #${editingStreamId}` : '⚙️ Cấu hình Live mới';
     }
+    if (editingStreamId === null) {
+      const serverSelect = document.getElementById('serverSelect');
+      if (serverSelect) serverSelect.value = 'auto';
+    }
   }
 }
 
@@ -2628,6 +2922,92 @@ function closeConfigModal(event) {
       cancelEditSilent();
     }
   }
+}
+
+// ── Lịch sử luồng (Admin: toàn bộ | Khách: chỉ của mình — server tự lọc) ──
+let historyData = [];
+
+function openHistoryModal() {
+  const modal = document.getElementById('historyModal');
+  if (!modal) return;
+  const isAdmin = currentUserProfile && currentUserProfile.role === 'admin';
+  document.querySelectorAll('.history-admin-col').forEach(el => el.style.display = isAdmin ? '' : 'none');
+  const ownerSel = document.getElementById('historyOwner');
+  if (ownerSel) ownerSel.style.display = isAdmin ? '' : 'none';
+  const note = document.getElementById('historyScopeNote');
+  if (note) note.textContent = isAdmin ? 'Toàn bộ lịch sử của mọi khách trên tất cả máy chủ (lưu 90 ngày)' : 'Chỉ hiển thị lịch sử luồng của tài khoản bạn (lưu 90 ngày)';
+  modal.classList.remove('hidden');
+  loadHistoryData();
+}
+
+function closeHistoryModal(event) {
+  if (event) event.stopPropagation();
+  const modal = document.getElementById('historyModal');
+  if (modal && !modal.classList.contains('hidden')) modal.classList.add('hidden');
+}
+
+async function loadHistoryData() {
+  const body = document.getElementById('historyTableBody');
+  if (body) body.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: var(--text-secondary);">Đang tải lịch sử...</td></tr>';
+  try {
+    const r = await authFetch('/api/history?limit=500');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    historyData = await r.json();
+  } catch (e) {
+    historyData = [];
+    if (e.message !== 'Unauthorized') showToast('Không tải được lịch sử: ' + e.message, 'error');
+  }
+  const ownerSel = document.getElementById('historyOwner');
+  if (ownerSel && ownerSel.style.display !== 'none') {
+    const cur = ownerSel.value;
+    const names = Array.from(new Set(historyData.map(h => h.ownerUsername).filter(Boolean))).sort();
+    ownerSel.innerHTML = '<option value="all">👥 Tất cả khách</option>' + names.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    if (names.includes(cur)) ownerSel.value = cur;
+  }
+  renderHistory();
+}
+
+function renderHistory() {
+  const body = document.getElementById('historyTableBody');
+  if (!body) return;
+  const isAdmin = currentUserProfile && currentUserProfile.role === 'admin';
+  const q = (document.getElementById('historySearch').value || '').trim().toLowerCase();
+  const reasonF = document.getElementById('historyReason').value;
+  const ownerF = document.getElementById('historyOwner').value;
+  const rows = historyData.filter(h => {
+    if (reasonF !== 'all' && h.reason !== reasonF) return false;
+    if (isAdmin && ownerF !== 'all' && h.ownerUsername !== ownerF) return false;
+    if (q && !`${h.name} ${h.file} ${h.ownerUsername} ${h.serverId}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  document.getElementById('historyCount').textContent = rows.length;
+  if (rows.length === 0) {
+    body.innerHTML = `<tr><td colspan="${isAdmin ? 7 : 6}" style="padding: 24px; text-align: center; color: var(--text-secondary);">Chưa có lịch sử nào</td></tr>`;
+    return;
+  }
+  const reasonBadge = h => {
+    const map = {
+      finished: ['#10b981', 'rgba(16,185,129,0.15)', '✅ Hoàn thành'],
+      stopped: ['#f59e0b', 'rgba(245,158,11,0.15)', '⏹ Đã dừng'],
+      error: ['#ef4444', 'rgba(239,68,68,0.15)', '⚠️ Lỗi']
+    };
+    const m = map[h.reason] || map.finished;
+    return `<span title="${escapeHtml(h.detail || '')}" style="color:${m[0]};background:${m[1]};padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:600;white-space:nowrap;">${m[2]}</span>`;
+  };
+  const modeLabel = { loop: 'Vòng lặp', once: 'Phát 1 lần', limit: 'Hẹn giờ tắt', scheduled: 'Đặt lịch' };
+  body.innerHTML = rows.map(h => {
+    const node = (clusterNodesList || []).find(n => n.id === h.serverId);
+    const endedTxt = h.endedAt ? new Date(h.endedAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '--';
+    return `<tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+      <td style="padding: 9px 10px; color: var(--text-secondary); white-space: nowrap;">${escapeHtml(endedTxt)}</td>
+      <td style="padding: 9px 10px; color: var(--text-primary);"><b>${escapeHtml(h.name || ('Luồng #' + h.id))}</b><div style="color: var(--text-muted); font-size: 0.68rem;">#${h.id} · ${escapeHtml(h.file || '')} · ${escapeHtml(h.keyMask || '')}</div></td>
+      ${isAdmin ? `<td style="padding: 9px 10px; color: #818cf8; font-weight: 600;">${escapeHtml(h.ownerUsername || '')}</td>` : ''}
+      <td style="padding: 9px 10px; color: var(--text-secondary);">${escapeHtml((node && node.name) || h.serverId || '')}</td>
+      <td style="padding: 9px 10px; color: var(--text-secondary);">${escapeHtml(modeLabel[h.mode] || h.mode || '')}${h.dualStream ? ' · A+B' : ''}</td>
+      <td style="padding: 9px 10px; color: var(--text-primary); white-space: nowrap;">${h.durationSec ? escapeHtml(formatDuration(h.durationSec)) : '--'}</td>
+      <td style="padding: 9px 10px;">${reasonBadge(h)}${h.reason === 'error' && h.detail ? `<div style="color: var(--text-muted); font-size: 0.66rem; margin-top: 3px; max-width: 220px;">${escapeHtml(h.detail)}</div>` : ''}</td>
+    </tr>`;
+  }).join('');
 }
 
 function openPasswordModal() {
@@ -2962,6 +3342,11 @@ async function startStream() {
   }
 
   try {
+    const serverSelect = document.getElementById('serverSelect');
+    if (serverSelect) {
+      body.serverId = serverSelect.value;
+    }
+
     const endpoint = editingStreamId !== null ? '/api/edit' : '/api/start';
     const r = await authFetch(endpoint, {
       method: 'POST',
@@ -2977,10 +3362,16 @@ async function startStream() {
         showToast(`Đã lưu và áp dụng cấu hình mới cho luồng #${editingStreamId}!`, 'success');
         cancelEdit();
       } else {
-        const msg = currentTimingMode === 'scheduled'
+        let msg = currentTimingMode === 'scheduled'
           ? `🕐 Kích hoạt đặt lịch lúc ${new Date(data.scheduledTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
-          : '🔴 Luồng Live đã được khởi kích hoạt thành công!';
+          : '🔴 Luồng Live đã được kích hoạt thành công!';
+        if (data.autoBalanced) {
+          msg += ` (Đã điều phối tới ${data.serverName})`;
+        }
         showToast(msg, 'success');
+        if (data.notice) {
+          setTimeout(() => showToast(data.notice, 'info'), 2500);
+        }
         const nameInput = document.getElementById('streamName');
         if (nameInput) nameInput.value = '';
       }
@@ -3017,6 +3408,11 @@ function editStream(id) {
   
   const isScheduled = s.scheduledTime || s.mode === 'scheduled';
   setTimingMode(isScheduled ? 'scheduled' : 'now');
+
+  const serverSelect = document.getElementById('serverSelect');
+  if (serverSelect) {
+    serverSelect.value = s.serverId || 'vps1';
+  }
 
   // Khôi phục đúng hình thức phát cho Form (Vòng Lặp, Phát Một Lần, Hẹn Giờ Tắt)
   let playMode = 'loop';
@@ -3079,10 +3475,12 @@ function cancelEdit() {
 // ── Stop Stream Call ──
 async function stopStream(id) {
   try {
+    const s = currentStreamsList.find(x => x.id === id);
+    const serverId = s ? s.serverId : 'vps1';
     const r = await authFetch('/api/stop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ id, serverId })
     });
     showToast(`Đã ra lệnh dừng luồng #${id} khẩn cấp`, 'info');
   } catch (e) {
@@ -3094,10 +3492,12 @@ async function stopStream(id) {
 // ── Restart Stream Call ──
 async function restartStream(id) {
   try {
+    const s = currentStreamsList.find(x => x.id === id);
+    const serverId = s ? s.serverId : 'vps1';
     const r = await authFetch('/api/restart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
+      body: JSON.stringify({ id, serverId })
     });
     const data = await r.json();
     if (data.error) showToast(data.error, 'error');
@@ -3295,6 +3695,28 @@ function renderStreams(list) {
     // Build Metadata metrics
     let metaItems = [];
     
+    // Server Badge
+    const _nodeIdx = Math.max(0, clusterNodesList.findIndex(n => n.id === s.serverId));
+    const _rgb = ['59, 130, 246', '168, 85, 247', '16, 185, 129', '245, 158, 11', '236, 72, 153', '20, 184, 166'][_nodeIdx % 6];
+    const _nodeObj = clusterNodesList.find(n => n.id === s.serverId);
+    const _nodeLabelTxt = s.serverName || (_nodeObj && _nodeObj.name) || s.serverId || '';
+    metaItems.push(`
+      <div class="meta-item" style="border: 1px solid rgba(${_rgb}, 0.4); background: rgba(${_rgb}, 0.12); padding: 4px 8px; border-radius: 6px;">
+        <span class="meta-icon">🖥️</span>
+        <span style="font-weight: 700; color: rgb(${_rgb}); font-size: 0.75rem;">${escapeHtml(_nodeLabelTxt)}</span>
+      </div>
+    `);
+
+    // Customer Badge (nếu là Admin)
+    if (currentUserProfile && currentUserProfile.role === 'admin' && s.ownerUsername) {
+      metaItems.push(`
+        <div class="meta-item" style="border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.12); padding: 4px 8px; border-radius: 6px;">
+          <span class="meta-icon">👤</span>
+          <span style="font-weight: 600; color: #fbbf24; font-size: 0.75rem;">Khách: ${escapeHtml(s.ownerUsername)}</span>
+        </div>
+      `);
+    }
+
     // 1. Tên luồng (Stream name)
     if (s.name) {
       metaItems.push(`
@@ -3579,6 +4001,7 @@ function renderStreams(list) {
           <div class="card-top-row" style="margin-bottom: 8px;">
             <div class="stream-id-area">
               <span class="stream-id-pill">#${s.id}</span>
+              <span class="stream-node-tag" title="Chạy trên máy chủ: ${escapeHtml(_nodeLabelTxt)}" style="font-size: 0.68rem; font-weight: 700; color: rgb(${_rgb}); background: rgba(${_rgb}, 0.12); border: 1px solid rgba(${_rgb}, 0.4); padding: 2px 8px; border-radius: 6px; white-space: nowrap;">🖥️ ${escapeHtml(_nodeLabelTxt)}</span>
               ${s.name ? `<span class="stream-name-tag" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.25); padding: 2px 8px; border-radius: 6px; text-shadow: 0 0 8px rgba(99, 102, 241, 0.45); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle;" title="${s.name}">${s.name}</span>` : ''}
               <span class="stream-mode-badge">${modeLabel}</span>
             </div>
@@ -3806,7 +4229,9 @@ async function poll() {
     if (!r.ok) throw new Error('API offline');
     const list = await r.json();
     currentStreamsList = list;
-    renderStreams(list);
+    applyStreamFilters();
+    updateCustomerFilterOptions();
+    fetchUserProfile();
     document.getElementById('demoBadge').style.display = 'none';
   } catch (e) {
     if (e.message === 'Unauthorized') return;
@@ -3931,75 +4356,842 @@ function parseSpeedToMbps(speedStr) {
   return val;
 }
 
+// ── Bộ lọc danh sách luồng theo Server & Khách Hàng ──
+let filterServerValue = 'all';
+let filterCustomerValue = 'all';
+
+function applyStreamFilters() {
+  const fs = document.getElementById('filterServer');
+  const fc = document.getElementById('filterCustomer');
+  if (fs) filterServerValue = fs.value;
+  if (fc) filterCustomerValue = fc.value;
+
+  let filtered = currentStreamsList;
+  if (filterServerValue !== 'all') {
+    filtered = filtered.filter(s => s.serverId === filterServerValue);
+  }
+  if (filterCustomerValue !== 'all') {
+    filtered = filtered.filter(s => (s.ownerUsername || 'admin') === filterCustomerValue);
+  }
+
+  renderStreams(filtered);
+}
+
+function updateCustomerFilterOptions() {
+  const sel = document.getElementById('filterCustomer');
+  if (!sel) return;
+  if (!currentUserProfile || currentUserProfile.role !== 'admin') {
+    sel.style.display = 'none';
+    return;
+  }
+  sel.style.display = 'inline-block';
+  const currentVal = sel.value;
+  const usernames = Array.from(new Set(currentStreamsList.map(s => s.ownerUsername).filter(Boolean)));
+  sel.innerHTML = '<option value="all">👥 Tất cả Khách</option>' + usernames.map(u => `<option value="${escapeHtml(u)}">👤 ${escapeHtml(u)}</option>`).join('');
+  if (usernames.includes(currentVal)) {
+    sel.value = currentVal;
+  }
+}
+
+// ── Danh sách máy chủ trong Cụm (động, hỗ trợ nhiều máy) & chuyển đổi xem Telemetry ──
+let clusterNodesList = [];
+let currentViewingServer = null;
+let cachedClusterSysinfo = null;
+let _serverControlsSig = '';
+
+function rebuildServerControls(nodes) {
+  const sig = JSON.stringify(nodes.map(n => [n.id, n.name]));
+  if (sig === _serverControlsSig) return;
+  _serverControlsSig = sig;
+  clusterNodesList = nodes;
+
+  const fillSelect = (sel, headOptions) => {
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = headOptions + nodes.map(n => `<option value="${escapeHtml(n.id)}">🖥️ ${escapeHtml(n.name || n.id)}</option>`).join('');
+    if (Array.from(sel.options).some(o => o.value === cur)) sel.value = cur;
+  };
+  fillSelect(document.getElementById('serverSelect'), '<option value="auto">⚡ Tự Động Chọn Máy Chủ Tối Ưu (Khuyên dùng)</option>');
+  fillSelect(document.getElementById('filterServer'), '<option value="all">🌐 Tất cả Server</option>');
+  fillSelect(document.getElementById('editAllowedServers'), '<option value="all">🌐 Tất cả máy chủ trong cụm</option>');
+  applyServerRestrictions();
+}
+
+function applyServerRestrictions() {
+  const user = currentUserProfile;
+  const serverSelect = document.getElementById('serverSelect');
+  if (serverSelect && user && user.role !== 'admin' && user.allowedServers && !user.allowedServers.includes('all')) {
+    const allowed = user.allowedServers.map(s => s.toLowerCase());
+    for (let opt of serverSelect.options) {
+      if (opt.value === 'auto') continue;
+      opt.disabled = !allowed.includes(opt.value.toLowerCase());
+    }
+  }
+}
+
+function switchTelemetryServer(serverId) {
+  currentViewingServer = serverId;
+  if (cachedClusterSysinfo) {
+    applyTelemetryUI(cachedClusterSysinfo);
+  }
+}
+
+function renderTelemetrySwitcher(clusterData, nodes) {
+  const sw = document.getElementById('telemetrySwitcher');
+  if (!sw) return;
+  sw.innerHTML = '';
+  nodes.forEach(n => {
+    const tel = n.isLocal ? clusterData.local : n.telemetry;
+    const online = n.isLocal || n.status === 'online';
+    const count = tel && tel.activeStreams !== undefined ? tel.activeStreams : 0;
+    const active = n.id === currentViewingServer;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.style.cssText = 'padding: 4px 10px; font-size: 0.72rem; font-weight: 600; border-radius: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.1);';
+    if (active) { btn.style.background = 'var(--primary)'; btn.style.color = '#fff'; btn.style.border = 'none'; }
+    else { btn.style.background = 'rgba(255,255,255,0.06)'; btn.style.color = online ? 'var(--text-secondary)' : '#fca5a5'; }
+    if (!online) btn.style.borderColor = 'rgba(239,68,68,0.4)';
+    btn.textContent = online ? `🖥️ ${n.name || n.id} (${count} luồng)` : `🖥️ ${n.name || n.id} (Offline ⚠️)`;
+    btn.onclick = () => switchTelemetryServer(n.id);
+    sw.appendChild(btn);
+  });
+}
+
+// Tổng quan toàn cụm (Admin): mỗi VPS một dòng, thấy ngay máy nào đang tải cao / đầy / offline
+function renderClusterOverview(clusterData, nodes) {
+  const box = document.getElementById('clusterOverview');
+  if (!box) return;
+  const pctColor = (v, warn, crit) => v >= crit ? '#f87171' : v >= warn ? '#fbbf24' : '#34d399';
+  const cell = (v, warn, crit) => (typeof v === 'number')
+    ? `<span style="color:${pctColor(v, warn, crit)}; font-weight:700;">${v}%</span>` : '<span style="color:var(--text-muted)">--</span>';
+  const rows = nodes.map(n => {
+    const t = n.isLocal ? clusterData.local : n.telemetry;
+    const online = n.isLocal || n.status === 'online';
+    const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${online ? '#22c55e' : '#ef4444'};margin-right:6px;"></span>`;
+    const full = t && t.capacityFull ? ` <span title="${escapeHtml(t.capacityFull)}" style="background:rgba(239,68,68,0.18);color:#f87171;border-radius:6px;padding:1px 6px;font-size:0.6rem;font-weight:700;">ĐẦY</span>` : '';
+    const active = n.id === currentViewingServer ? 'background: rgba(99,102,241,0.10);' : '';
+    const tag = (n.isMaster ? ' <span style="color:#fbbf24;font-size:0.6rem;">★ Master</span>' : '') + (n.isLocal ? ' <span style="color:#60a5fa;font-size:0.6rem;">• Máy này</span>' : '');
+    const addr = n.ip ? `<div style="color:var(--text-muted);font-size:0.62rem;">${escapeHtml(n.ip)}:${n.port}</div>` : '';
+    const click = `onclick="switchTelemetryServer('${escapeHtml(n.id)}')"`;
+    if (!t) {
+      return `<tr style="cursor:pointer; ${active}" ${click}><td style="padding:7px 6px;">${dot}<b>${escapeHtml(n.name || n.id)}</b>${tag}${addr}</td><td colspan="5" style="padding:7px 6px;color:#f87171;">${online ? 'Chưa có dữ liệu' : 'Offline / mất kết nối'}</td></tr>`;
+    }
+    return `<tr style="cursor:pointer; ${active}" ${click}>
+      <td style="padding:7px 6px;">${dot}<b>${escapeHtml(n.name || n.id)}</b>${tag}${full}${addr}</td>
+      <td style="padding:7px 6px;text-align:center;">${cell(t.cpuUsage, 70, 90)}</td>
+      <td style="padding:7px 6px;text-align:center;">${cell(t.ramUsage, 75, 90)}</td>
+      <td style="padding:7px 6px;text-align:center;">${cell(t.diskUsage, 80, 95)}</td>
+      <td style="padding:7px 6px;text-align:center;color:var(--text-primary);font-weight:700;">${t.activeStreams !== undefined ? t.activeStreams : '--'}</td>
+      <td style="padding:7px 6px;text-align:center;color:var(--text-secondary);white-space:nowrap;">${escapeHtml(t.netSpeedRx || '--')} ↓<br>${escapeHtml(t.netSpeedTx || '--')} ↑</td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `
+    <div style="font-size:0.72rem;font-weight:700;color:var(--text-primary);margin-bottom:8px;">🖧 Tổng quan cụm máy chủ <span style="color:var(--text-secondary);font-weight:500;">(${nodes.length} máy)</span></div>
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.7rem;">
+      <thead><tr style="color:var(--text-secondary);text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">
+        <th style="padding:5px 6px;text-align:left;font-weight:600;">Máy chủ</th><th style="padding:5px 6px;font-weight:600;">CPU</th><th style="padding:5px 6px;font-weight:600;">RAM</th><th style="padding:5px 6px;font-weight:600;">Disk</th><th style="padding:5px 6px;font-weight:600;">Luồng</th><th style="padding:5px 6px;font-weight:600;">Mạng</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// Thông tin chi tiết của máy chủ đang được chọn xem (Admin)
+function renderSysDetailLine(data, node) {
+  const el = document.getElementById('sysDetailLine');
+  if (!el) return;
+  if (!data) { el.innerHTML = ''; return; }
+  const parts = [];
+  if (node) parts.push(`<b style="color:var(--text-primary)">${escapeHtml(node.name || node.id)}</b>${node.ip ? ' · ' + escapeHtml(node.ip) + ':' + node.port : ''}`);
+  if (data.cpuModel) parts.push(escapeHtml(data.cpuModel));
+  if (data.platform) parts.push(escapeHtml(data.platform) + (data.nodeVersion ? ' · Node ' + escapeHtml(data.nodeVersion) : ''));
+  if (data.vpsUptime) parts.push('Uptime: ' + escapeHtml(data.vpsUptime));
+  if (data.capacityFull) parts.push(`<span style="color:#f87171">⛔ Đầy tài nguyên (${escapeHtml(data.capacityFull)}) - tạm ngưng nhận luồng mới</span>`);
+  el.innerHTML = parts.join('<br>');
+}
+
+function applyTelemetryUI(clusterData) {
+  const C = 226.2;
+  let data = null;
+  let nodes = clusterData.nodes || [];
+  rebuildServerControls(nodes);
+  const _isAdminView = !clusterData.restricted && !(currentUserProfile && currentUserProfile.role !== 'admin');
+  const _leftCol = document.querySelector('.left-column-wrapper');
+  const _grid = document.querySelector('.dashboard-grid');
+  if (!_isAdminView) {
+    // Khách hàng: ẩn hoàn toàn bảng giám sát tài nguyên, danh sách luồng chiếm toàn bộ chiều ngang
+    if (_leftCol) _leftCol.style.display = 'none';
+    if (_grid) _grid.style.gridTemplateColumns = 'minmax(0, 1fr)';
+    return;
+  }
+  if (_leftCol) _leftCol.style.display = '';
+  if (_grid) _grid.style.gridTemplateColumns = '';
+
+  const localNode = nodes.find(n => n.isLocal);
+  if (!currentViewingServer || !nodes.some(n => n.id === currentViewingServer)) {
+    currentViewingServer = localNode ? localNode.id : (nodes[0] ? nodes[0].id : null);
+  }
+  renderTelemetrySwitcher(clusterData, nodes);
+  renderClusterOverview(clusterData, nodes);
+
+  const viewing = nodes.find(n => n.id === currentViewingServer);
+  if (!viewing || viewing.isLocal) {
+    data = clusterData.local;
+  } else {
+    data = viewing.telemetry ? viewing.telemetry : null;
+  }
+
+  renderSysDetailLine(data, viewing);
+
+  if (!data) {
+    document.getElementById('sysCpuPct').textContent = 'N/A';
+    document.getElementById('sysRamPct').textContent = 'N/A';
+    document.getElementById('sysDiskPct').textContent = 'N/A';
+    document.getElementById('sysRamSub').textContent = 'Server Offline';
+    document.getElementById('sysDiskSub').textContent = 'Chưa kết nối';
+    document.getElementById('sysNetSpeedVal').textContent = '0';
+    document.getElementById('sysNetSub').textContent = 'Mất kết nối';
+    return;
+  }
+
+  // CPU
+  document.getElementById('sysCpuPct').textContent = `${data.cpuUsage}%`;
+  const cpuOffset = C - (data.cpuUsage / 100) * C;
+  document.getElementById('sysCpuRing').style.strokeDashoffset = cpuOffset;
+  
+  // RAM
+  document.getElementById('sysRamPct').textContent = `${data.ramUsage}%`;
+  const ramOffset = C - (data.ramUsage / 100) * C;
+  document.getElementById('sysRamRing').style.strokeDashoffset = ramOffset;
+  document.getElementById('sysRamSub').textContent = `${data.ramUsed} / ${data.ramTotal}`;
+  
+  // Disk
+  document.getElementById('sysDiskPct').textContent = `${data.diskUsage}%`;
+  const diskOffset = C - (data.diskUsage / 100) * C;
+  document.getElementById('sysDiskRing').style.strokeDashoffset = diskOffset;
+  document.getElementById('sysDiskSub').textContent = `${data.diskUsed} / ${data.diskTotal}`;
+  
+  // Network
+  const rxStr = data.netSpeedRx || '0 Kbps';
+  const txStr = data.netSpeedTx || '0 Kbps';
+  const rxMbps = parseSpeedToMbps(rxStr);
+  const txMbps = parseSpeedToMbps(txStr);
+  const totalMbps = rxMbps + txMbps;
+  
+  let displayVal = '0';
+  let displayUnit = 'Mbps';
+  if (totalMbps >= 1) {
+    displayVal = totalMbps.toFixed(1);
+    displayUnit = 'Mbps';
+  } else {
+    displayVal = Math.round(totalMbps * 1000);
+    displayUnit = 'Kbps';
+  }
+  document.getElementById('sysNetSpeedVal').textContent = displayVal;
+  document.getElementById('sysNetSpeedUnit').textContent = displayUnit;
+  
+  const rxShort = rxMbps >= 1 ? rxMbps.toFixed(1) + 'M' : Math.round(rxMbps * 1000) + 'K';
+  const txShort = txMbps >= 1 ? txMbps.toFixed(1) + 'M' : Math.round(txMbps * 1000) + 'K';
+  document.getElementById('sysNetSub').textContent = `📥 ${rxShort} | 📤 ${txShort}`;
+  
+  let netPct = Math.min(100, (totalMbps / 500) * 100);
+  if (totalMbps > 0 && netPct < 2) netPct = 2;
+  const netOffset = C - (netPct / 100) * C;
+  document.getElementById('sysNetRing').style.strokeDashoffset = netOffset;
+}
+
 async function pollSysInfo() {
   try {
     if (useMockData) {
       updateMockSysInfo();
       return;
     }
-    const r = await authFetch('/api/sysinfo');
+    const r = await authFetch('/api/cluster/sysinfo');
     if (!r.ok) throw new Error('Sysinfo API offline');
-    const data = await r.json();
-    
-    const C = 226.2;
-    
-    // CPU
-    document.getElementById('sysCpuPct').textContent = `${data.cpuUsage}%`;
-    const cpuOffset = C - (data.cpuUsage / 100) * C;
-    document.getElementById('sysCpuRing').style.strokeDashoffset = cpuOffset;
-    
-    // RAM
-    document.getElementById('sysRamPct').textContent = `${data.ramUsage}%`;
-    const ramOffset = C - (data.ramUsage / 100) * C;
-    document.getElementById('sysRamRing').style.strokeDashoffset = ramOffset;
-    document.getElementById('sysRamSub').textContent = `${data.ramUsed} / ${data.ramTotal}`;
-    
-    // Disk
-    document.getElementById('sysDiskPct').textContent = `${data.diskUsage}%`;
-    const diskOffset = C - (data.diskUsage / 100) * C;
-    document.getElementById('sysDiskRing').style.strokeDashoffset = diskOffset;
-    document.getElementById('sysDiskSub').textContent = `${data.diskUsed} / ${data.diskTotal}`;
-    
-    // Network Speed Ring Update
-    const rxStr = data.netSpeedRx || '0 Kbps';
-    const txStr = data.netSpeedTx || '0 Kbps';
-    const rxMbps = parseSpeedToMbps(rxStr);
-    const txMbps = parseSpeedToMbps(txStr);
-    const totalMbps = rxMbps + txMbps;
-    
-    let displayVal = '0';
-    let displayUnit = 'Mbps';
-    if (totalMbps >= 1) {
-      displayVal = totalMbps.toFixed(1);
-      displayUnit = 'Mbps';
-    } else {
-      displayVal = Math.round(totalMbps * 1000);
-      displayUnit = 'Kbps';
-    }
-    document.getElementById('sysNetSpeedVal').textContent = displayVal;
-    document.getElementById('sysNetSpeedUnit').textContent = displayUnit;
-    
-    const rxShort = rxMbps >= 1 ? rxMbps.toFixed(1) + 'M' : Math.round(rxMbps * 1000) + 'K';
-    const txShort = txMbps >= 1 ? txMbps.toFixed(1) + 'M' : Math.round(txMbps * 1000) + 'K';
-    document.getElementById('sysNetSub').textContent = `📥 ${rxShort} | 📤 ${txShort}`;
-    
-    let netPct = Math.min(100, (totalMbps / 500) * 100);
-    if (totalMbps > 0 && netPct < 2) netPct = 2;
-    const netOffset = C - (netPct / 100) * C;
-    document.getElementById('sysNetRing').style.strokeDashoffset = netOffset;
-    
-    // Static fields (safe text setters)
-    setSafeText('sysOs', data.platform);
-    setSafeText('sysNode', data.nodeVersion);
-    setSafeText('sysUptime', data.vpsUptime);
-    setSafeText('sysActiveThreads', `${data.activeStreams} luồng active`);
-    setSafeText('sysNetRx', data.netSpeedRx || 'Đang tải...');
-    setSafeText('sysNetTx', data.netSpeedTx || 'Đang tải...');
-    
+    const clusterData = await r.json();
+    cachedClusterSysinfo = clusterData;
+    applyTelemetryUI(clusterData);
   } catch (e) {
     if (e.message === 'Unauthorized') return;
-    updateMockSysInfo();
   }
+}
+
+// ── Xử lý Hồ sơ Tài khoản & Phân quyền Người Dùng ──
+let currentUserProfile = null;
+try {
+  const saved = localStorage.getItem('vps_user_profile');
+  if (saved) currentUserProfile = JSON.parse(saved);
+} catch (_) {}
+
+function updateUserProfileUI(user, activeStreamsCount = 0) {
+  if (!user) return;
+  currentUserProfile = user;
+  
+  const nameEl = document.getElementById('userNameText');
+  if (nameEl) {
+    nameEl.textContent = user.role === 'admin' ? `Admin: ${user.name || user.username}` : (user.name || user.username);
+  }
+
+  const quotaBadge = document.getElementById('quotaBadge');
+  const quotaText = document.getElementById('quotaText');
+  if (quotaBadge && quotaText) {
+    if (user.role === 'admin') {
+      quotaBadge.style.display = 'none';
+    } else {
+      quotaBadge.style.display = 'inline-flex';
+      quotaText.textContent = `${activeStreamsCount || 0}/${user.maxStreams} luồng`;
+    }
+  }
+
+  const btnUserManager = document.getElementById('btnUserManager');
+  if (btnUserManager) {
+    btnUserManager.style.display = user.role === 'admin' ? 'inline-flex' : 'none';
+  }
+  const btnBrowse = document.getElementById('btnBrowse');
+  if (btnBrowse) btnBrowse.style.display = user.role === 'admin' ? '' : 'none';
+
+  // Giới hạn server options nếu user bị hạn chế
+  applyServerRestrictions();
+}
+
+async function fetchUserProfile() {
+  try {
+    const res = await authFetch('/api/me');
+    if (res.ok) {
+      const data = await res.json();
+      updateUserProfileUI(data.user, data.activeStreamsCount);
+    }
+  } catch (_) {}
+}
+
+function logout() {
+  localStorage.removeItem('vps_session_token');
+  localStorage.removeItem('vps_user_profile');
+  if (window.require) {
+    try {
+      const { ipcRenderer } = window.require('electron');
+      ipcRenderer.send('save-session-token', '');
+    } catch (_) {}
+  }
+  showLoginOverlay();
+  showToast('Đã đăng xuất khỏi hệ thống!', 'info');
+}
+
+// ── Quản Lý Khách Hàng (User Manager Modal Logic) ──
+let allLoadedUsers = [];
+
+function openUserManagerModal() {
+  const modal = document.getElementById('userManagerModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    loadClusterAdminUI();
+    loadSheetConfigUI();
+    loadUsersList();
+  }
+}
+
+function closeUserManagerModal(e) {
+  if (e && e.target !== e.currentTarget && !e.target.classList.contains('modal-close-x')) return;
+  const modal = document.getElementById('userManagerModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+// ── Quản lý Máy chủ (Cluster): xem, thêm, xóa ──
+async function loadClusterAdminUI() {
+  const box = document.getElementById('clusterNodesAdminList');
+  if (!box) return;
+  try {
+    const res = await authFetch('/api/cluster/nodes');
+    if (!res.ok) return;
+    const nodes = await res.json();
+    const cnt = document.getElementById('clusterNodeCount');
+    if (cnt) cnt.textContent = `${nodes.length} máy`;
+    box.innerHTML = '';
+    nodes.forEach(n => {
+      const online = n.isLocal || n.status === 'online';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:7px 10px; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); font-size:0.8rem;';
+      const dot = document.createElement('span');
+      dot.textContent = online ? '🟢' : (n.status === 'unknown' ? '⚪' : '🔴');
+      const info = document.createElement('span');
+      info.style.cssText = 'flex:1; min-width:200px;';
+      const tags = [n.isMaster ? 'Master' : '', n.isLocal ? 'Máy này' : ''].filter(Boolean).join(' · ');
+      info.textContent = `${n.name || n.id}  [${n.id}]  ${n.ip}:${n.port}${tags ? '  — ' + tags : ''}`;
+      row.appendChild(dot);
+      row.appendChild(info);
+      if (!n.isLocal && !n.isMaster) {
+        const del = document.createElement('button');
+        del.className = 'btn btn-sm';
+        del.textContent = '🗑️ Xóa';
+        del.style.cssText = 'background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.35); border-radius:6px; padding:3px 10px; cursor:pointer; font-size:0.72rem;';
+        del.onclick = () => removeClusterNode(n.id, n.name || n.id);
+        row.appendChild(del);
+      }
+      box.appendChild(row);
+    });
+  } catch (_) {}
+}
+
+async function addClusterNode() {
+  const id = (document.getElementById('newNodeId').value || '').trim().toLowerCase();
+  const name = (document.getElementById('newNodeName').value || '').trim();
+  const ip = (document.getElementById('newNodeIp').value || '').trim();
+  const port = parseInt(document.getElementById('newNodePort').value) || 3131;
+  if (!id || !ip) { showToast('Vui lòng nhập Mã máy và IP!', 'error'); return; }
+  const btn = document.getElementById('btnAddNode');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await authFetch('/api/cluster/nodes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name: name || id, ip, port })
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Không thêm được máy chủ!', 'error'); return; }
+    const failed = (data.push || []).filter(p => !p.ok).map(p => p.nodeId);
+    if (failed.length) showToast(`Đã thêm ${id}, nhưng chưa đồng bộ được tới: ${failed.join(', ')} (máy đó đang tắt/chưa cài?)`, 'warning');
+    else showToast(`✅ Đã thêm máy chủ ${id} vào cụm!`, 'success');
+    ['newNodeId', 'newNodeName', 'newNodeIp'].forEach(i => { document.getElementById(i).value = ''; });
+    loadClusterAdminUI();
+    pollSysInfo();
+  } catch (e) {
+    showToast('Lỗi kết nối: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function removeClusterNode(id, label) {
+  if (!confirm(`Xóa máy chủ "${label}" khỏi cụm? (Các luồng đang chạy trên máy đó KHÔNG bị dừng, nhưng dashboard sẽ không còn quản lý được)`)) return;
+  try {
+    const res = await authFetch('/api/cluster/nodes/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Không xóa được!', 'error'); return; }
+    showToast(`Đã xóa máy chủ ${id} khỏi cụm`, 'success');
+    loadClusterAdminUI();
+    pollSysInfo();
+  } catch (e) {
+    showToast('Lỗi kết nối: ' + e.message, 'error');
+  }
+}
+
+// ── Cấu hình & Đồng bộ Trực Tiếp Google Sheet ──
+async function loadSheetConfigUI() {
+  const urlInp = document.getElementById('sheetUrlInput');
+  const secInp = document.getElementById('sheetSecretInput');
+  const badge = document.getElementById('sheetStatusBadge');
+  if (!urlInp || !badge) return;
+
+  try {
+    const res = await authFetch('/api/sheet/config');
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (cfg.googleSheetScriptUrl) {
+      urlInp.value = cfg.googleSheetScriptUrl;
+      if (cfg.googleSheetScriptUrl.includes('docs.google.com/spreadsheets/d/')) {
+        badge.innerHTML = '🟢 Đang kết nối trực tiếp Sheet CSV (Real-Time)';
+        badge.style.background = 'rgba(16,185,129,0.15)';
+        badge.style.color = '#34d399';
+      } else if (cfg.googleSheetScriptUrl.includes('script.google.com')) {
+        badge.innerHTML = '🟢 Đang kết nối Apps Script Web App (Bảo mật)';
+        badge.style.background = 'rgba(99,102,241,0.15)';
+        badge.style.color = '#818cf8';
+      } else {
+        badge.innerHTML = '🟢 Đã cấu hình link Sheet';
+        badge.style.background = 'rgba(16,185,129,0.15)';
+        badge.style.color = '#34d399';
+      }
+    } else {
+      urlInp.value = '';
+      badge.innerHTML = '⚪ Chưa liên kết Sheet (Dùng User nội bộ)';
+      badge.style.background = 'rgba(156,163,175,0.15)';
+      badge.style.color = '#9ca3af';
+    }
+    if (cfg.syncSecret && secInp) {
+      secInp.value = cfg.syncSecret;
+    }
+  } catch (_) {}
+}
+
+async function saveSheetConfigUI() {
+  const urlInp = document.getElementById('sheetUrlInput');
+  const secInp = document.getElementById('sheetSecretInput');
+  const btn = document.getElementById('btnSaveSheetConfig');
+  const badge = document.getElementById('sheetStatusBadge');
+
+  const sheetUrl = (urlInp ? urlInp.value : '').trim();
+  const secret = (secInp ? secInp.value : '').trim() || '';
+
+  if (!sheetUrl) {
+    if (!confirm('Bạn có chắc muốn xóa liên kết Google Sheet để chuyển về dùng tài khoản nội bộ?')) return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
+
+  try {
+    const res = await authFetch('/api/sheet/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleSheetScriptUrl: sheetUrl, syncSecret: secret })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      if (data.testResult && data.testResult.ok) {
+        showToast(data.testResult.message || 'Đã lưu cấu hình và kết nối Google Sheet thành công!', 'success');
+        badge.innerHTML = '🟢 Đang kết nối trực tiếp Sheet (Real-Time)';
+        badge.style.background = 'rgba(16,185,129,0.15)';
+        badge.style.color = '#34d399';
+      } else if (data.testResult && data.testResult.error) {
+        showToast(`Đã lưu nhưng cảnh báo: ${data.testResult.error}`, 'error');
+        badge.innerHTML = '🟡 Lưu thành công nhưng Sheet chưa phản hồi';
+        badge.style.background = 'rgba(245,158,11,0.15)';
+        badge.style.color = '#fbbf24';
+      } else {
+        showToast('Đã lưu cấu hình Google Sheet!', 'success');
+      }
+
+      // Kéo nạp danh sách user ngay
+      if (sheetUrl) {
+        triggerGoogleSheetSync(true);
+      } else {
+        loadUsersList();
+      }
+    } else {
+      showToast(data.error || 'Lỗi khi lưu cấu hình Sheet!', 'error');
+    }
+  } catch (err) {
+    showToast('Lỗi kết nối: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 LƯU LINK SHEET'; }
+  }
+}
+
+async function testSheetConfigUI() {
+  const urlInp = document.getElementById('sheetUrlInput');
+  const secInp = document.getElementById('sheetSecretInput');
+  const btn = document.getElementById('btnTestSheetConfig');
+
+  const sheetUrl = (urlInp ? urlInp.value : '').trim();
+  const secret = (secInp ? secInp.value : '').trim() || '';
+
+  if (!sheetUrl) {
+    showToast('Vui lòng dán link Google Sheet hoặc Web App trước khi test!', 'error');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang test...'; }
+
+  try {
+    const res = await authFetch('/api/sheet/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleSheetScriptUrl: sheetUrl, syncSecret: secret })
+    });
+    const data = await res.json();
+    if (res.ok && data.testResult && data.testResult.ok) {
+      showToast(data.testResult.message || '✅ Kết nối Google Sheet thành công mỹ mãn!', 'success');
+      loadSheetConfigUI();
+    } else if (data.testResult && data.testResult.error) {
+      showToast(`❌ Thất bại: ${data.testResult.error}`, 'error');
+    } else {
+      showToast(data.error || 'Không nhận được phản hồi từ Google Sheet!', 'error');
+    }
+  } catch (err) {
+    showToast('Lỗi test kết nối: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ TEST KẾT NỐI'; }
+  }
+}
+
+async function triggerGoogleSheetSync(silent = false) {
+  const btn = document.getElementById('btnSyncSheetModal');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang nạp từ Sheet...'; }
+
+  try {
+    const res = await authFetch('/api/sheet/sync-now', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      showToast(`✅ Đã đồng bộ thành công! Tổng cộng: ${data.total} tài khoản trên hệ thống.`, 'success');
+      loadUsersList();
+    } else {
+      showToast(data.error || 'Lỗi khi đồng bộ từ Google Sheet!', 'error');
+    }
+  } catch (err) {
+    if (!silent) showToast('Lỗi đồng bộ: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ ĐỒNG BỘ TOÀN BỘ TỪ SHEET'; }
+  }
+}
+
+function toggleSheetHelp() {
+  const box = document.getElementById('sheetHelpBox');
+  if (!box) return;
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function copyTemplateSample() {
+  const sampleTsv = 
+`Username	Password	Tên Khách Hàng	Số Luồng Tối Đa	Ngày Hết Hạn	Server Được Dùng	Trạng Thái	Quyền Hạn	Ghi Chú
+admin	DOI_MAT_KHAU_ADMIN	Quản Trị Viên (Admin)	999	Vĩnh viễn	All	Active	admin	Tài khoản gốc
+khach1	123456	Anh Nam (Zalo 0912...)	3	2026-12-31	All	Active	user	Gói 3 luồng
+khach2	654321	Chị Linh Shop Live	5	2026-11-15	vps1	Active	user	Gói 5 luồng VPS 1
+khach3	pass888	Team Marketing	2	2026-10-30	vps2	Active	user	Gói 2 luồng VPS 2
+khach_khoa	123456	Tài Khoản Tạm Dừng	1	2026-05-01	All	Inactive	user	Tạm khóa do hết hạn`;
+
+  navigator.clipboard.writeText(sampleTsv).then(() => {
+    showToast('📋 Đã sao chép 5 dòng mẫu! Hãy mở Google Sheet (sheets.new) và nhấn Ctrl+V vào ô A1.', 'success');
+  }).catch(() => {
+    prompt('Sao chép dữ liệu mẫu dưới đây rồi dán vào ô A1 Google Sheets:', sampleTsv);
+  });
+}
+
+function copyAppsScriptCode() {
+  const scriptCode = `// Apps Script Google Sheet - Xác thực & Quản lý Tài Khoản Live
+const DEFAULT_CONFIG = {
+  SYNC_SECRET: "DOI_SECRET_NAY_GIONG_CLUSTER_SECRET",
+  SHEET_NAME: "DANH_SACH_KHACH_HANG"
+};
+
+function doGet(e) {
+  const params = e && e.parameter ? e.parameter : {};
+  const secret = params.secret || "";
+  const action = params.action || "getUsers";
+
+  if (secret !== DEFAULT_CONFIG.SYNC_SECRET) {
+    return ContentService.createTextOutput(JSON.stringify({ error: "Secret Key không chính xác!" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (action === "ping") {
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, message: "Google Sheet API đang hoạt động hoàn hảo!" })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(DEFAULT_CONFIG.SHEET_NAME) || ss.getSheets()[0];
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return ContentService.createTextOutput(JSON.stringify({ ok: true, users: [] })).setMimeType(ContentService.MimeType.JSON);
+
+  const usersList = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const username = String(row[0] || '').trim();
+    if (!username) continue;
+    let expiresAt = null;
+    if (row[4] instanceof Date) expiresAt = Utilities.formatDate(row[4], "GMT+7", "yyyy-MM-dd");
+    else if (row[4] && !['vĩnh viễn', 'forever', 'all'].includes(String(row[4]).toLowerCase().trim())) expiresAt = String(row[4]).trim();
+
+    usersList.push({
+      username: username,
+      password: String(row[1] || '').trim(),
+      name: String(row[2] || username).trim(),
+      maxStreams: parseInt(row[3]) || 1,
+      expiresAt: expiresAt,
+      allowedServers: String(row[5] || 'All').trim(),
+      status: String(row[6] || 'Active').trim(),
+      role: String(row[7] || 'user').trim(),
+      notes: String(row[8] || '').trim()
+    });
+  }
+
+  if (action === "auth") {
+    const uInput = String(params.username || "").trim().toLowerCase();
+    const pInput = String(params.password || "").trim();
+    const u = usersList.find(x => x.username.toLowerCase() === uInput);
+    if (!u) return ContentService.createTextOutput(JSON.stringify({ error: "Tài khoản không tồn tại trên Google Sheet!" })).setMimeType(ContentService.MimeType.JSON);
+    if (u.password !== pInput) return ContentService.createTextOutput(JSON.stringify({ error: "Mật khẩu không chính xác!" })).setMimeType(ContentService.MimeType.JSON);
+    if (['inactive', 'lock'].includes(u.status.toLowerCase())) return ContentService.createTextOutput(JSON.stringify({ error: "Tài khoản đang bị khóa trên Sheet!" })).setMimeType(ContentService.MimeType.JSON);
+    if (u.expiresAt && new Date(u.expiresAt).getTime() < Date.now()) return ContentService.createTextOutput(JSON.stringify({ error: "Tài khoản đã hết hạn trên Sheet!" })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, user: u })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return ContentService.createTextOutput(JSON.stringify({ ok: true, total: usersList.length, users: usersList })).setMimeType(ContentService.MimeType.JSON);
+}`;
+
+  navigator.clipboard.writeText(scriptCode).then(() => {
+    showToast('📜 Đã sao chép toàn bộ code Google Apps Script vào Clipboard!', 'success');
+  }).catch(() => {
+    prompt('Sao chép mã Google Apps Script:', scriptCode);
+  });
+}
+
+async function loadUsersList() {
+  const tbody = document.getElementById('usersTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-secondary);">⏳ Đang tải danh sách người dùng...</td></tr>';
+  
+  try {
+    const res = await authFetch('/api/users/list');
+    if (!res.ok) throw new Error('Không thể tải danh sách');
+    const users = await res.json();
+    allLoadedUsers = users;
+    renderUsersTable(users);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 20px; color: #f87171;">❌ ${err.message}</td></tr>`;
+  }
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('usersTableBody');
+  if (!tbody) return;
+  if (!users || users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-secondary);">Chưa có tài khoản khách hàng nào. Nhấn "Thêm Khách Hàng" hoặc đồng bộ từ Google Sheet!</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = users.map(u => {
+    const statusBadge = u.active !== false 
+      ? (u.isExpired ? '<span style="color: #f59e0b; background: rgba(245,158,11,0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; white-space: nowrap;">Hết hạn ⚠️</span>' : '<span style="color: #10b981; background: rgba(16,185,129,0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; white-space: nowrap;">Hoạt động 🟢</span>')
+      : '<span style="color: #ef4444; background: rgba(239,68,68,0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; white-space: nowrap;">Bị khóa 🛑</span>';
+
+    const serverBadge = (u.allowedServers || ['all']).join(', ').toUpperCase();
+
+    return `
+      <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem;">
+        <td style="padding: 10px; font-weight: 600; color: #818cf8;">${escapeHtml(u.username)}</td>
+        <td style="padding: 10px; color: var(--text-primary);">${escapeHtml(u.name || u.username)}</td>
+        <td style="padding: 10px; font-weight: 700; color: #34d399; text-align: center;">${u.maxStreams || 1} luồng</td>
+        <td style="padding: 10px; color: var(--text-secondary);">${u.expiresAt || 'Vĩnh viễn'}</td>
+        <td style="padding: 10px; color: var(--text-secondary);"><span style="background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${serverBadge}</span></td>
+        <td style="padding: 10px;">${statusBadge}</td>
+        <td style="padding: 10px; color: var(--text-muted); font-size: 0.75rem;">${escapeHtml(u.notes || '')}</td>
+        <td style="padding: 10px; text-align: right;">
+          <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" style="padding: 4px 8px; font-size: 0.72rem; margin-right: 4px;">✏️ Sửa</button>
+          ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}', '${u.username}')" style="padding: 4px 8px; font-size: 0.72rem; color: #f87171;">🗑️ Xóa</button>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openAddUserModal() {
+  document.getElementById('userEditTitle').textContent = '➕ Thêm Khách Hàng Mới';
+  document.getElementById('editUserId').value = '';
+  document.getElementById('editUsername').value = '';
+  document.getElementById('editUsername').disabled = false;
+  document.getElementById('editPassword').value = '';
+  document.getElementById('editFullName').value = '';
+  document.getElementById('editMaxStreams').value = '3';
+  document.getElementById('editExpiresAt').value = '';
+  document.getElementById('editAllowedServers').value = 'all';
+  document.getElementById('editActive').checked = true;
+
+  const modal = document.getElementById('userEditModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function editUser(userId) {
+  const user = allLoadedUsers.find(u => u.id === userId);
+  if (!user) return;
+
+  document.getElementById('userEditTitle').textContent = `✏️ Chỉnh Sửa: ${user.username}`;
+  document.getElementById('editUserId').value = user.id;
+  document.getElementById('editUsername').value = user.username;
+  document.getElementById('editUsername').disabled = true;
+  document.getElementById('editPassword').value = '';
+  document.getElementById('editFullName').value = user.name || '';
+  document.getElementById('editMaxStreams').value = user.maxStreams || 1;
+  document.getElementById('editExpiresAt').value = user.expiresAt || '';
+  document.getElementById('editAllowedServers').value = (user.allowedServers && user.allowedServers[0]) || 'all';
+  document.getElementById('editActive').checked = user.active !== false;
+
+  const modal = document.getElementById('userEditModal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeUserEditModal(e) {
+  if (e && e.target !== e.currentTarget && !e.target.classList.contains('modal-close-x')) return;
+  const modal = document.getElementById('userEditModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function saveUserSubmit() {
+  const userId = document.getElementById('editUserId').value;
+  const username = document.getElementById('editUsername').value.trim();
+  const password = document.getElementById('editPassword').value.trim();
+  const name = document.getElementById('editFullName').value.trim();
+  const maxStreams = parseInt(document.getElementById('editMaxStreams').value) || 1;
+  const expiresAt = document.getElementById('editExpiresAt').value.trim() || null;
+  const allowedServers = [document.getElementById('editAllowedServers').value];
+  const active = document.getElementById('editActive').checked;
+
+  if (!username) {
+    showToast('Tên đăng nhập không được để trống!', 'error');
+    return;
+  }
+  if (!userId && !password) {
+    showToast('Vui lòng nhập mật khẩu cho tài khoản mới!', 'error');
+    return;
+  }
+
+  const payload = {
+    username,
+    name,
+    maxStreams,
+    expiresAt,
+    allowedServers,
+    active
+  };
+  if (password) payload.password = password;
+
+  const btn = document.getElementById('btnSaveUser');
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang lưu...';
+
+  try {
+    const res = await authFetch('/api/users/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      showToast('Đã lưu thông tin khách hàng thành công!', 'success');
+      closeUserEditModal();
+      loadUsersList();
+    } else {
+      showToast(data.error || 'Lỗi lưu thông tin người dùng!', 'error');
+    }
+  } catch (err) {
+    showToast('Lỗi kết nối: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 LƯU THÔNG TIN KHÁCH HÀNG';
+  }
+}
+
+async function deleteUser(userId, username) {
+  if (!confirm(`Bạn có chắc chắn muốn xóa khách hàng [${username}] không?`)) return;
+
+  try {
+    const res = await authFetch('/api/users/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      showToast(`Đã xóa khách hàng [${username}]!`, 'success');
+      loadUsersList();
+    } else {
+      showToast(data.error || 'Lỗi khi xóa người dùng!', 'error');
+    }
+  } catch (err) {
+    showToast('Lỗi kết nối: ' + err.message, 'error');
+  }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
+  });
+}
+
+if (localStorage.getItem('vps_session_token')) {
+  fetchUserProfile();
 }
 
 function updateMockSysInfo() {
@@ -4129,6 +5321,9 @@ function showToast(msg, type = 'info') {
     t.className = type;
   }, 4000);
 }
+</script>
+<script>
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }
 </script>
 </body>
 </html>
