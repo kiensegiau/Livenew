@@ -391,8 +391,10 @@ function browseFile() {
 
 function cleanupFile(filePath, retryCount = 0) {
   if (!filePath) return;
-  // Xóa nếu nằm trong thư mục downloads hoặc thư mục tạm hệ thống
-  const isTemp = filePath.includes(DOWNLOAD_DIR) || filePath.includes(os.tmpdir()) || path.basename(filePath).startsWith('drive_video_');
+  // Chỉ xóa file do hệ thống tự tải về (thư mục downloads hoặc tiền tố drive_video_). Tuyệt đối không xóa file của người dùng nằm ở nơi khác (kể cả thư mục Temp)
+  const resolved = path.resolve(filePath);
+  const dlRoot = path.resolve(DOWNLOAD_DIR) + path.sep;
+  const isTemp = resolved.startsWith(dlRoot) || path.basename(filePath).startsWith('drive_video_');
   if (isTemp && fs.existsSync(filePath)) {
     fs.unlink(filePath, (err) => {
       if (err) {
@@ -574,6 +576,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   let errBuf = '';
   proc.stderr.on('data', (d) => {
     const dataStr = d.toString();
+    // Bỏ qua log của tiến trình cũ (đã bị thay thế sau khi sửa/bật lại luồng)
+    if ((streams.get(id) || {}).process !== proc) return;
     updateStreamLog(id, d); 
     errBuf = (errBuf + dataStr).slice(-2000); 
     const s = streams.get(id);
@@ -648,6 +652,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   proc.on('close', (code) => {
     const s = streams.get(id);
     if (!s) return;
+    // Tiến trình cũ đã bị thay bằng tiến trình mới (sửa cấu hình / bật lại nhanh): không được đụng tới trạng thái luồng
+    if (s.process !== proc) return;
     s._exitCode = code;
     
     // Dọn _killTimer nếu có
@@ -855,21 +861,21 @@ function stopStream(id) {
   if (!info) return false;
   if (info.timer) clearTimeout(info.timer);
   info.status = 'stopped';
-  if (info.process) {
+  const p = info.process;
+  if (p) {
     try {
       // Gửi 'q' vào stdin → ffmpeg tự đóng RTMP gracefully
-      info.process.stdin.write('q\n');
-      // Force kill sau 5 giây nếu vẫn còn chạy
-      info._killTimer = setTimeout(() => {
-        try { info.process.kill(); } catch (_) {}
-      }, 5000);
+      p.stdin.write('q\n');
+      // Force kill sau 5 giây nếu vẫn còn chạy — chỉ nhắm đúng tiến trình này (không phải tiến trình mới nếu luồng được bật lại ngay)
+      const kt = setTimeout(() => { try { p.kill(); } catch (_) {} }, 5000);
+      p.once('close', () => clearTimeout(kt));
+      info._killTimer = kt;
     } catch (_) {
-      try { info.process.kill(); } catch (_) {}
+      try { p.kill(); } catch (_) {}
     }
   }
 
-  // Xóa file tạm nếu có (từ Drive)
-  cleanupFile(info.file);
+  // Giữ lại file video (kể cả file tải từ Drive) để còn bật lại được. File chỉ bị xóa khi luồng bị xóa/dọn tự động.
   saveStreams(); // Lưu lại trạng thái dừng
 
   return true;
@@ -1131,7 +1137,9 @@ function applyLocalRole(id, how) {
   localNodeId = id;
   localRoleConfirmed = true;
   clusterManager.setLocalNode(id);
-  console.log(`[Cluster] 🖥️ Vai trò máy chủ này: ${id === 'vps2' ? 'VPS 2 (Worker Node)' : 'VPS 1 (Master Controller)'} (nhận diện qua ${how})`);
+  const nd = clusterManager.getNode(id);
+  const label = nd ? `${nd.name || id} [${id}] (${nd.isMaster ? 'Master Controller' : 'Worker Node'})` : id;
+  console.log(`[Cluster] 🖥️ Vai trò máy chủ này: ${label} (nhận diện qua ${how})`);
 }
 
 function detectRoleFromInterfaces() {

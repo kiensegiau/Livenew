@@ -529,7 +529,7 @@
   }
 
   .stream-card-details.expanded {
-    max-height: 520px;
+    max-height: 4000px;
     opacity: 1;
     margin-top: 14px;
     padding-top: 14px;
@@ -575,7 +575,16 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
+
+  /* Responsive safety: never let header chips push content past the card edge */
+  .stream-card, .stream-card-compact-header, .stream-card-details { min-width: 0; max-width: 100%; }
+  .stream-id-area { flex-wrap: wrap; min-width: 0; max-width: 100%; gap: 6px 8px; }
+  .stream-id-area .stream-name-tag { max-width: min(180px, 100%) !important; }
+  .stream-card .compact-file-info { max-width: 100% !important; min-width: 0; }
+  .compact-middle-telemetry { flex-wrap: wrap; }
+  .stream-card-details button, .stream-card-details .btn { max-width: 100%; }
 
   .status-badge {
     font-size: 0.68rem;
@@ -1201,7 +1210,7 @@
   }
 
   .accordion-content.expanded {
-    max-height: 200px;
+    max-height: 400px;
     transition: max-height 0.35s cubic-bezier(0.25, 1, 0.5, 1);
   }
 
