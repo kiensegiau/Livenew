@@ -1161,6 +1161,8 @@ loadAuthConfig();
 // Nhận diện vai trò Master / Worker trong Cluster (bền vững, không phụ thuộc 1 nguồn duy nhất)
 let detectedServerIp = 'Unknown';
 let localNodeId = 'vps1';
+let failoverCtl = null; // bộ điều phối tự chuyển luồng (failover.js), chỉ hoạt động trên Master
+let sysinfoFn = null;
 let localRoleConfirmed = false;
 
 function applyLocalRole(id, how) {
@@ -1206,6 +1208,7 @@ function checkLocalServerRole() {
 checkLocalServerRole();
 
 const server = http.createServer(async (req, res) => {
+  sysinfoFn = getLocalSysinfo; // (hàm được hoist trong handler) để failover.js lấy tải máy này khi chọn máy đích
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
@@ -1426,6 +1429,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   // API: Lấy danh sách Node trong Cluster
+  if (req.method === 'GET' && pathname === '/api/cluster/failover') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Chỉ admin' }); return; }
+    json(res, 200, failoverCtl ? failoverCtl.getState() : { enabled: false });
+    return;
+  }
+
   if (req.method === 'GET' && pathname === '/api/cluster/nodes') {
     json(res, 200, publicNodes(clusterManager.getNodes(), currentUser));
     return;
@@ -2125,6 +2134,7 @@ const server = http.createServer(async (req, res) => {
         serverId: localNodeId,
         serverName: (clusterManager.getNode(localNodeId) || {}).name || localNodeId,
         isRemote: false,
+        firstLiveTime: s.firstLiveTime || null,
         createdAt: s.createdAt || null,
         updatedAt: s.updatedAt || null
       });
@@ -2207,6 +2217,15 @@ server.listen(PORT, '0.0.0.0', async () => {
   for (let i = 0; i < 14 && !localRoleConfirmed; i++) await new Promise(r => setTimeout(r, 500));
   loadHistory(); // Nap lich su luong da luu
   loadStreams(); // Khôi phục danh sách luồng trước
+  // Master tự động chuyển luồng đang chạy sang máy khác khi một Worker bị chết (xem failover.js)
+  try {
+    failoverCtl = require('./failover').init({
+      clusterManager, userManager, startStream, extractDriveId,
+      getLocalSysinfo: () => (sysinfoFn ? sysinfoFn() : null),
+      localNodeId: () => localNodeId,
+      notify: (m) => { try { broadcast(m); } catch (_) {} try { sendToZalo(m); } catch (_) {} }
+    });
+  } catch (e) { console.error('[Failover] Không khởi động được:', e.message); }
   cleanupOrphanedFiles(); // Sau đó mới dọn dẹp các file không nằm trong danh sách
   
   // Tự động quét dọn định kỳ mỗi 1 tiếng

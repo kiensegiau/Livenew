@@ -38,3 +38,5 @@ desktop-app/node_modules/
 desktop-app/dist/sessions.json
 *.tmp
 history.json
+
+cluster_failover_state.json
