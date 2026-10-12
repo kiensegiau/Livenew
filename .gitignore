@@ -32,6 +32,7 @@ users.json
 users_backup.json
 sheet_config.json
 cluster_nodes.json
+bot_config.json
 
 # Các thư mục biên dịch Electron desktop-app
 desktop-app/node_modules/

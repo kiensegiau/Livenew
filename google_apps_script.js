@@ -22,6 +22,7 @@
 
 const DEFAULT_CONFIG = {
   SYNC_SECRET: "DOI_SECRET_NAY_GIONG_CLUSTER_SECRET", // Secret Key bảo mật
+  NODES_SHEET_NAME: "DANH_SACH_VPS", // Tab danh sách VPS: id | tên | ip | port | vai trò (Master/Worker) | trạng thái (Active/Inactive)
   SHEET_NAME: "DANH_SACH_KHACH_HANG"     // Tên sheet chứa tài khoản
 };
 
@@ -298,6 +299,60 @@ function doGet(e) {
   }
 
   // 3. Lấy toàn bộ danh sách tài khoản
+  // 2b. Lấy danh sách VPS của cụm (tab DANH_SACH_VPS) - cần secret. Server sẽ đọc định kỳ để tự cập nhật cụm.
+  // 2a. GHI tab DANH_SACH_VPS (cần đúng secret): seedNodes | upsertNode | deleteNode
+  if (action === "seedNodes" || action === "upsertNode" || action === "deleteNode") {
+    const outN = function (obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); };
+    const ssN = SpreadsheetApp.getActiveSpreadsheet();
+    let shN = ssN.getSheetByName(DEFAULT_CONFIG.NODES_SHEET_NAME);
+    if (!shN) shN = ssN.insertSheet(DEFAULT_CONFIG.NODES_SHEET_NAME);
+    const headN = ["id", "Tên máy", "IP", "Port", "Vai trò", "Trạng thái"];
+    if (shN.getLastRow() < 1) { shN.getRange(1, 1, 1, headN.length).setValues([headN]).setFontWeight("bold"); }
+    shN.getRange("C:C").setNumberFormat("@"); // IP phải là VĂN BẢN, nếu không Sheets biến 57.129.134.155 thành số 57129134155
+    if (action === "seedNodes") {
+      if (shN.getLastRow() > 1) return outN({ error: "Tab đã có dữ liệu, không ghi đè!" });
+      const rowsN = [
+        ["vps1", "VPS 1 (Chính - Master)", "57.129.134.155", 3131, "Master", "Active"],
+        ["vps2", "VPS 2 (Phụ - Worker)", "51.68.214.167", 3131, "Worker", "Active"]
+      ];
+      shN.getRange(2, 1, rowsN.length, headN.length).setValues(rowsN);
+      return outN({ ok: true, added: rowsN.length });
+    }
+    const idN = String(params.id || "").trim().toLowerCase();
+    if (!idN) return outN({ error: "Thiếu id!" });
+    const dataN = shN.getDataRange().getValues();
+    let rowN = -1;
+    for (let i = 1; i < dataN.length; i++) { if (String(dataN[i][0]).trim().toLowerCase() === idN) { rowN = i + 1; break; } }
+    if (action === "deleteNode") {
+      if (rowN === -1) return outN({ error: "Không tìm thấy máy!" });
+      shN.deleteRow(rowN);
+      return outN({ ok: true, deleted: idN });
+    }
+    if (rowN === -1) {
+      rowN = shN.getLastRow() + 1;
+      shN.getRange(rowN, 1, 1, headN.length).setValues([[idN, idN, "", 3131, "Worker", "Active"]]);
+    }
+    const colsN = { name: 2, ip: 3, port: 4, role: 5, status: 6 };
+    Object.keys(colsN).forEach(function (k) {
+      if (params[k] !== undefined) shN.getRange(rowN, colsN[k]).setValue(k === "port" ? (parseInt(params[k]) || 3131) : String(params[k]));
+    });
+    return outN({ ok: true, upserted: idN, row: rowN });
+  }
+
+  if (action === "getNodes") {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sh = ss.getSheetByName(DEFAULT_CONFIG.NODES_SHEET_NAME);
+    if (!sh) {
+      return ContentService.createTextOutput(JSON.stringify({ error: "Chưa có tab " + DEFAULT_CONFIG.NODES_SHEET_NAME }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    const nodes = sh.getDataRange().getValues().slice(1)
+      .map(function (r) { return [0, 1, 2, 3, 4, 5].map(function (i) { return String(r[i] === undefined || r[i] === null ? "" : r[i]).trim(); }); })
+      .filter(function (r) { return r[0]; });
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, total: nodes.length, nodes: nodes }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   if (action === "getUsers") {
     const users = getSheetUserData();
     return ContentService.createTextOutput(JSON.stringify({ 

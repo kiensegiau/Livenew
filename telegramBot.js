@@ -206,6 +206,110 @@ function escapeMarkdown(text) {
   return text.toString().replace(/[*_`\[]/g, '\\$&');
 }
 
+// ─── Báo cáo TỔNG QUÁT CẢ CỤM VPS (giống dashboard web mới) ───────────────────
+const STREAM_ICON = (st) => st === 'live' ? '🟢' : (st === 'downloading' ? '⬇️' : (st === 'reconnecting' ? '🟡' : (st === 'scheduled' ? '🕐' : (st === 'launching' ? '🚀' : '⚪'))));
+const NODE_ICON = (n) => (n.isLocal || n.status === 'online') ? '🟢' : (n.status === 'warning' ? '🟡' : (n.status === 'offline' ? '🔴' : '⚪'));
+const nodeRoleTag = (n) => /master|worker/i.test(String(n.name || '')) ? '' : ` (${n.isMaster ? 'Master' : 'Worker'})`;
+const vnTime = (t) => new Date(t || Date.now()).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+
+function streamBrief(s) {
+  let logBrief = s.lastLog || '...';
+  if (s.status === 'live') {
+    const time = (s.lastLog || '').match(/time=\S+/);
+    const bitrate = (s.lastLog || '').match(/bitrate=\s*\S+/);
+    const speed = (s.lastLog || '').match(/speed=\s*\S+/);
+    if (time && bitrate && speed) logBrief = `${time[0]} | ${bitrate[0]} | ${speed[0]}`;
+  }
+  let dualText = '';
+  if (s.dualStream) {
+    dualText = s.status === 'live'
+      ? ` [Song song ⚡ A:${s.streamAActive !== false ? '🟢' : '🔴'} B:${s.streamBActive !== false ? '🟢' : '🔴'}]`
+      : ' [Song song ⚡]';
+  }
+  return `${STREAM_ICON(s.status)} *#${s.id}*${s.name ? ` (${escapeMarkdown(s.name)})` : ''}${dualText}: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\``;
+}
+
+function nodeStreams(ov, n) { return (ov.streams || []).filter(s => String(s.serverId) === String(n.id)); }
+
+// Trả về MẢNG tin nhắn (mỗi tin ≤ maxLen ký tự) mô tả toàn cụm
+function formatClusterReport(ov, opts = {}) {
+  const maxLen = opts.maxLen || 3800;
+  const perNode = opts.perNodeLimit || 12;
+  const nodes = (ov.nodes || []).slice().sort((a, b) => (b.isMaster ? 1 : 0) - (a.isMaster ? 1 : 0));
+  const all = ov.streams || [];
+  const online = nodes.filter(n => n.isLocal || n.status === 'online').length;
+  const live = all.filter(s => s.status === 'live').length;
+  const from = nodes.find(n => String(n.id) === String(ov.localNodeId));
+
+  const head = [
+    `📊 *${opts.title || 'BÁO CÁO CỤM VPS ĐỊNH KỲ'}*`,
+    '━━━━━━━━━━━━━━━━━━',
+    `🕒 Thời gian: \`${vnTime()}\``,
+    from ? `📡 Báo cáo từ: *${escapeMarkdown(from.name)}*${nodeRoleTag(from)}` : '',
+    `🖥️ Cụm: *${online}/${nodes.length}* máy online | 📺 Luồng: *${live}/${all.length}* đang chạy`,
+  ].filter(Boolean).join('\n');
+
+  const blocks = nodes.map(n => {
+    const t = n.telemetry || {};
+    const isOn = n.isLocal || n.status === 'online';
+    const list = nodeStreams(ov, n);
+    const nLive = list.filter(s => s.status === 'live').length;
+    const lines = [`${NODE_ICON(n)} *${escapeMarkdown(n.name)}*${nodeRoleTag(n)}${n.isLocal ? ' — máy báo cáo' : ''}${isOn ? '' : ` — ${String(n.status || 'unknown').toUpperCase()}`}`];
+    if (!isOn) {
+      lines.push(`└─ ⚠️ Mất kết nối${n.lastSeen ? ` — thấy lần cuối \`${vnTime(n.lastSeen)}\`` : ''}; không có dữ liệu luồng (failover sẽ chuyển luồng nếu mất quá ngưỡng)`);
+      return lines.join('\n');
+    }
+    lines.push(`├─ ⚡ CPU \`${t.cpuUsage ?? '?'}%\` | 🧠 RAM \`${t.ramUsed || '?'}/${t.ramTotal || '?'} (${t.ramUsage ?? '?'}%)\` | 💽 Disk \`${t.diskUsed || '?'}/${t.diskTotal || '?'} (${t.diskUsage ?? '?'}%)\``);
+    lines.push(`├─ 🌐 ⬇️ \`${t.netSpeedRx || '?'}\` | ⬆️ \`${t.netSpeedTx || '?'}\` | ⏱ Uptime \`${t.vpsUptime || '?'}\``);
+    if (t.capacityFull) lines.push(`├─ 🚫 Đầy tài nguyên: ${escapeMarkdown(t.capacityFull)} (tạm ngưng nhận luồng mới)`);
+    lines.push(`${list.length ? '├' : '└'}─ 📺 Luồng: \`${nLive}/${list.length}\` đang chạy`);
+    list.slice(0, perNode).forEach(s => lines.push(`      ${streamBrief(s)}`));
+    if (list.length > perNode) lines.push(`      … và ${list.length - perNode} luồng khác (xem trên web)`);
+    return lines.join('\n');
+  });
+
+  const parts = [];
+  let cur = head;
+  for (const b of blocks) {
+    if (cur.length + b.length + 2 > maxLen) { parts.push(cur); cur = `📊 *${opts.title || 'BÁO CÁO CỤM VPS ĐỊNH KỲ'}* (tiếp)`; }
+    cur += `\n\n${b}`;
+  }
+  if (!blocks.length) cur += '\n\n📭 _Chưa có dữ liệu máy chủ._';
+  parts.push(cur);
+  return parts;
+}
+
+// Khối tóm tắt gọn từng VPS (dùng chèn vào /status)
+function formatClusterNodesCompact(ov) {
+  if (!ov || !ov.nodes || ov.nodes.length < 2) return '';
+  const nodes = ov.nodes.slice().sort((a, b) => (b.isMaster ? 1 : 0) - (a.isMaster ? 1 : 0));
+  const online = nodes.filter(n => n.isLocal || n.status === 'online').length;
+  let out = `━━━━━━━━━━━━━━━━━━\n🖥️ *CỤM VPS: ${online}/${nodes.length} máy online*\n`;
+  nodes.forEach(n => {
+    const t = n.telemetry || {};
+    const list = nodeStreams(ov, n);
+    const nLive = list.filter(s => s.status === 'live').length;
+    const isOn = n.isLocal || n.status === 'online';
+    out += `${NODE_ICON(n)} *${escapeMarkdown(n.name)}*${n.isLocal ? ' (máy này)' : ''}: ` + (isOn
+      ? `CPU \`${t.cpuUsage ?? '?'}%\` | RAM \`${t.ramUsage ?? '?'}%\` | Disk \`${t.diskUsage ?? '?'}%\` | 📺 \`${nLive}/${list.length}\`\n`
+      : `*${String(n.status || 'unknown').toUpperCase()}* — mất kết nối\n`);
+  });
+  return out;
+}
+
+// Luồng đang nằm trên MÁY KHÁC (chỉ xem; điều khiển trên web)
+function formatRemoteStreamsCompact(ov, max = 10) {
+  const remote = (ov && ov.streams || []).filter(s => s.isRemote);
+  if (!remote.length) return '';
+  let out = `━━━━━━━━━━━━━━━━━━\n🌐 *LUỒNG TRÊN MÁY KHÁC* (điều khiển trên web)\n`;
+  remote.slice(0, max).forEach(s => {
+    out += `${STREAM_ICON(s.status)} *#${s.id}*${s.name ? ` (${escapeMarkdown(s.name)})` : ''} — ${escapeMarkdown(s.serverName || s.serverId)}: \`${s.status}\`\n`;
+  });
+  if (remote.length > max) out += `… và ${remote.length - max} luồng khác\n`;
+  return out;
+}
+
+
 function initBot(actions) {
   // === KHỞI ĐỘNG AEGIS SENTINEL (TỰ ĐỘNG PHÁT HIỆN VÀ KIỂM TRA CHÉO GIỮA CÁC VPS) ===
   if (config.sentinel && config.sentinel.enabled && Array.isArray(config.sentinel.knownServers)) {
@@ -294,8 +398,13 @@ function initBot(actions) {
         }
 
         const now = Date.now();
-        const peerUrlStr = `http://${peerIp}:3131`;
+        let peerNode = null;
+        try { peerNode = actions.getNodeByIp ? actions.getNodeByIp(peerIp) : null; } catch (_) {}
+        const peerUrlStr = `http://${peerIp}:${(peerNode && peerNode.port) || 3131}`;
         const timeStr = new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' });
+        const escMd = (s) => String(s).replace(/([_*`\[])/g, '\\$1');
+        const peerName = peerNode ? `${escMd(peerNode.name)} (${peerNode.isMaster ? 'MASTER' : 'WORKER'}) - ${peerIp}` : peerIp;
+        const failSec = parseInt(process.env.FAILOVER_AFTER_SEC, 10) || 90;
 
         if (isSuccess) {
           if (state.status === 'offline') {
@@ -309,7 +418,7 @@ function initBot(actions) {
               state.currentIncident = null;
             }
 
-            const msg = `🟢 *[SENTINEL ALERT] CHẠY LẠI THÀNH CÔNG!*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerIp}*\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Trạng thái: Đã khôi phục hoạt động bình thường.`;
+            const msg = `🟢 *[SENTINEL ALERT] CHẠY LẠI THÀNH CÔNG!*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerName}*\n🕒 Thời gian: \`${timeStr}\`\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Trạng thái: Đã khôi phục hoạt động bình thường.`;
             console.log(`[Sentinel] ${msg}`);
             broadcast(msg);
             sendToZalo(msg);
@@ -327,14 +436,14 @@ function initBot(actions) {
               durationSec: 0
             };
 
-            const msg = `🚨 *[SENTINEL ALERT] MẤT KẾT NỐI SERVER!* \n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerIp}*\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Cảnh báo: Server đối phương không phản hồi! Có thể Node.js bị crash hoặc VPS đã sập.`;
+            const msg = `🚨 *[SENTINEL ALERT] MẤT KẾT NỐI SERVER!* \n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerName}*\n🕒 Thời gian: \`${timeStr}\`\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Cảnh báo: Server đối phương không phản hồi! Có thể Node.js bị crash hoặc VPS đã sập.\n🔄 Nếu mất kết nối quá ${failSec}s, hệ thống sẽ tự chuyển luồng sang máy còn sống.`;
             console.error(`[Sentinel] ${msg}`);
             broadcast(msg);
             sendToZalo(msg);
           } else {
             if (now - state.lastAlertTime > ALERT_COOLDOWN_MS) {
               state.lastAlertTime = now;
-              const msg = `⚠️ *[SENTINEL WARNING] SERVER PEER VẪN SẬP!*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerIp}*\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Trạng thái: Chưa thể khôi phục kết nối.`;
+              const msg = `⚠️ *[SENTINEL WARNING] SERVER PEER VẪN SẬP!*\n━━━━━━━━━━━━━━━━━━\n🖥️ Server Peer: *${peerName}*\n🕒 Thời gian: \`${timeStr}\`\n⏱️ Đã mất kết nối: *${Math.floor((now - ((state.currentIncident && state.currentIncident.downTimestamp) || now)) / 60000)} phút*\n🔗 Địa chỉ: \`${peerUrlStr}\`\n💬 Trạng thái: Chưa thể khôi phục kết nối.`;
               broadcast(msg);
               sendToZalo(msg);
             }
@@ -370,7 +479,9 @@ function initBot(actions) {
               const failPct = total > 0 ? (fail / total * 100).toFixed(2) : '0.00';
               const statusText = state.status === 'online' ? 'ONLINE 🟢' : 'OFFLINE 🔴';
 
-              report += `🖥️ *Đối phương: ${peerIp}*\n`;
+              let _pn = null;
+              try { _pn = actions.getNodeByIp ? actions.getNodeByIp(peerIp) : null; } catch (_) {}
+              report += `🖥️ *Đối phương: ${_pn ? String(_pn.name).replace(/([_*`\[])/g, '\\$1') + ' (' + (_pn.isMaster ? 'MASTER' : 'WORKER') + ') - ' : ''}${peerIp}*\n`;
               report += `  • Trạng thái hiện tại: \`${statusText}\`\n`;
               report += `  • Tổng số lần ping: \`${total}\`\n`;
               report += `  • Thành công: \`${success}\` (${successPct}%)\n`;
@@ -461,6 +572,16 @@ function initBot(actions) {
   // Hàm gửi báo cáo định kỳ
   const sendPeriodicReport = async () => {
     try {
+      // Ưu tiên báo cáo TỔNG QUÁT cả cụm (giống web); lỗi/không có dữ liệu thì rơi về báo cáo cục bộ cũ bên dưới
+      if (typeof actions.getClusterOverview === 'function') {
+        try {
+          const ov = await actions.getClusterOverview();
+          if (ov && Array.isArray(ov.nodes) && ov.nodes.length) {
+            for (const part of formatClusterReport(ov)) { broadcast(part); sendToZalo(part); }
+            return;
+          }
+        } catch (e) { console.error('Lỗi báo cáo cụm, dùng báo cáo cục bộ:', e.message); }
+      }
       const list = actions.getStreams();
       const startUsage = process.cpuUsage();
       const startTime = process.hrtime();
@@ -601,8 +722,19 @@ function initBot(actions) {
               sysInfo += `💽 Disk: \`${disk}\` | ⚡ CPU: \`${cpuPercent}%\`\n`;
               sysInfo += `🌐 Mạng: ⬇️ \`${rxSpeedMbps} Mbps\` | ⬆️ \`${txSpeedMbps} Mbps\`\n`;
 
+              // Tổng quan cả cụm VPS + luồng trên máy khác (giống web); lỗi thì bỏ qua, vẫn hiện phần cục bộ
+              let ovBlock = '', remoteBlock = '';
+              try {
+                if (typeof actions.getClusterOverview === 'function') {
+                  const ov = await actions.getClusterOverview();
+                  ovBlock = formatClusterNodesCompact(ov);
+                  remoteBlock = formatRemoteStreamsCompact(ov);
+                }
+              } catch (_) {}
+              sysInfo += ovBlock;
+
               if (list.length === 0) {
-                return bot.sendMessage(chatId, `${sysInfo}━━━━━━━━━━━━━━━━━━\n📭 Hiện chưa có luồng nào.`, { parse_mode: 'Markdown' });
+                return bot.sendMessage(chatId, `${sysInfo}━━━━━━━━━━━━━━━━━━\n📭 Hiện chưa có luồng nào trên máy này.\n${remoteBlock}`, { parse_mode: 'Markdown' });
               }
               
               let fullMsg = sysInfo + `━━━━━━━━━━━━━━━━━━\n📺 *DANH SÁCH LUỒNG PHÁT:*\n\n`;
@@ -656,6 +788,7 @@ function initBot(actions) {
                 }
               });
 
+              if (remoteBlock && fullMsg.length + remoteBlock.length < 3900) fullMsg += remoteBlock;
               bot.sendMessage(chatId, fullMsg, { 
                 parse_mode: 'Markdown', 
                 reply_markup: { inline_keyboard: allButtons } 
@@ -1373,4 +1506,4 @@ function saveEditChanges(chatId, state, actions) {
   }
 }
 
-module.exports = { initBot, broadcast, updateProgress, sendToZalo };
+module.exports = { initBot, broadcast, updateProgress, sendToZalo, formatClusterReport, formatClusterNodesCompact, formatRemoteStreamsCompact };

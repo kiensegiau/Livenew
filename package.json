@@ -8,7 +8,8 @@
     "stop": "pm2 stop live-controller",
     "logs": "pm2 logs live-controller",
     "dev": "node --watch server.js",
-    "make-video": "node videoMaker.js"
+    "make-video": "node videoMaker.js",
+    "test": "node test_cluster.js"
   },
   "dependencies": {
     "node-telegram-bot-api": "^0.67.0"

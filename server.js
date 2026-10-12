@@ -18,7 +18,7 @@ try {
     // Không có tiến trình nào đang chạy, bỏ qua lỗi
 }
 const { downloadGoogleDriveFile, extractDriveId } = require('./driveDownloader');
-const { initBot, broadcast, updateProgress, sendToZalo } = require('./telegramBot');
+const { initBot, broadcast, updateProgress, sendToZalo, formatClusterReport } = require('./telegramBot');
 const userManager = require('./userManager');
 const clusterManager = require('./clusterManager');
 
@@ -251,19 +251,25 @@ function loadStreams() {
   }
 }
 
-function cleanupOrphanedFiles() {
+function cleanupOrphanedFiles(minAgeMs = 60 * 60 * 1000) {
   console.log('[System] 🧹 Đang quét dọn dẹp tự động các file video tạm không sử dụng...');
   if (!fs.existsSync(DOWNLOAD_DIR)) return;
   
   fs.readdir(DOWNLOAD_DIR, (err, files) => {
     if (err) return console.error('[Cleanup] Không thể đọc thư mục downloads:', err.message);
     
-    // Lấy danh sách tất cả các file đang được sử dụng trong map streams
-    const activeFiles = new Set();
-    for (const s of streams.values()) {
-      if (s.file) activeFiles.add(path.resolve(s.file));
-      if (s.originalFile) activeFiles.add(path.resolve(s.originalFile));
-    }
+    // Tập file đang được dùng bởi BẤT KỲ luồng nào còn trong map (kể cả đã dừng - có thể bật lại). Tính lại mỗi lần gọi để tránh race.
+    const getActiveFiles = () => {
+      const set = new Set();
+      for (const s of streams.values()) {
+        if (s.file) set.add(path.resolve(s.file));
+        if (s.originalFile) set.add(path.resolve(s.originalFile));
+      }
+      return set;
+    };
+    const activeFiles = getActiveFiles();
+    // Đang có luồng tải Drive -> file/thư mục tạm của nó (temp_chunks_*, file đích chưa gắn vào luồng) KHÔNG được động tới
+    const downloading = Array.from(streams.values()).some(s => s.status === 'downloading');
     
     files.forEach(file => {
       if (file === '.gitkeep') return;
@@ -275,10 +281,19 @@ function cleanupOrphanedFiles() {
         fs.stat(fullPath, (err, stats) => {
           if (err) return;
           const ageInMs = Date.now() - stats.mtime.getTime();
-          // Bỏ qua các file/thư mục mới tải hoặc sửa đổi dưới 60 phút
-          if (ageInMs < 60 * 60 * 1000) {
+          // Bỏ qua các file/thư mục mới tải hoặc sửa đổi chưa đủ minAgeMs (mặc định 60 phút; dọn khẩn cấp: 5 phút)
+          if (ageInMs < minAgeMs) {
             return;
           }
+          // Đang tải Drive: không xóa thư mục chunk tạm và mọi thư mục/file chưa quá 6 giờ (tải lớn/chậm có thể không đổi mtime)
+          if (downloading && (/^temp_chunks_/.test(file) || ageInMs < 6 * 3600 * 1000)) {
+            return;
+          }
+          // Kiểm tra lại NGAY trước khi xóa: luồng có thể vừa được tạo/gắn file trong lúc chờ fs.stat
+          if (getActiveFiles().has(resolvedPath)) return;
+          // Giữ cả thư mục nếu có luồng đang dùng file nằm bên trong
+          const dirPrefix = resolvedPath + path.sep;
+          if (stats.isDirectory() && Array.from(getActiveFiles()).some(f => f.startsWith(dirPrefix))) return;
           
           if (stats.isDirectory()) {
             fs.rm(fullPath, { recursive: true, force: true }, (err) => {
@@ -305,16 +320,17 @@ function cleanupOrphanedFiles() {
 
 // Tự động xóa các luồng ĐÃ KẾT THÚC/ĐÃ DỪNG quá FINISHED_TTL_HOURS (mặc định 6 giờ) cùng file video tạm của chúng
 const FINISHED_TTL_MS = (parseFloat(process.env.FINISHED_TTL_HOURS) || 6) * 3600 * 1000;
-function purgeFinishedStreams() {
+function purgeFinishedStreams(ttlMs = FINISHED_TTL_MS) {
   try { captureFinished(); } catch (_) {}
   const now = Date.now();
   let purged = 0;
   for (const [id, s] of Array.from(streams.entries())) {
     if (s.status !== 'stopped' && s.status !== 'ended') { delete s._doneSince; continue; }
-    if (!s._doneSince) { s._doneSince = now; continue; }
-    if (now - s._doneSince < FINISHED_TTL_MS) continue;
-    // Chỉ xóa file nếu không còn luồng nào khác đang dùng chung
-    const inUse = Array.from(streams.values()).some(o => o !== s && o.file === s.file && o.status !== 'stopped' && o.status !== 'ended');
+    if (!s._doneSince) { s._doneSince = now; if (ttlMs > 0) continue; }
+    if (now - s._doneSince < ttlMs) continue;
+    // Chỉ xóa file nếu không còn luồng nào KHÁC (bất kỳ trạng thái, kể cả đã dừng chờ bật lại) đang dùng chung file đó
+    const mine = [s.file, s.originalFile].filter(Boolean).map(f => path.resolve(f));
+    const inUse = Array.from(streams.values()).some(o => o !== s && [o.file, o.originalFile].filter(Boolean).some(f => mine.includes(path.resolve(f))));
     if (!inUse) cleanupFile(s.file);
     streams.delete(id);
     purged++;
@@ -323,6 +339,37 @@ function purgeFinishedStreams() {
     console.log(`[Cleanup] 🧹 Tự động dọn ${purged} luồng đã kết thúc quá ${FINISHED_TTL_MS / 3600000} giờ.`);
     saveStreams();
   }
+}
+
+// Dọn khẩn cấp khi ổ đĩa gần đầy: xóa ngay file mồ côi (>5 phút) + luồng đã dừng/kết thúc (không chờ TTL). Không đụng luồng đang chạy.
+const DISK_CLEAN_PCT = parseInt(process.env.DISK_CLEAN_PCT, 10) || 85;
+const RAM_WARN_PCT = parseInt(process.env.RAM_WARN_PCT, 10) || 92;
+let _lastEmergencyAt = 0, _lastRamWarnAt = 0;
+function emergencyCleanup(reason) {
+  console.warn(`[Cleanup] 🚨 Dọn khẩn cấp (${reason})`);
+  try { purgeFinishedStreams(10 * 60 * 1000); } catch (e) { console.error('[Cleanup] purge:', e.message); } // giữ luồng vừa dừng <10 phút (user có thể bật lại)
+  try { cleanupOrphanedFiles(5 * 60 * 1000); } catch (e) { console.error('[Cleanup] orphan:', e.message); }
+}
+function monitorResources() {
+  try {
+    const si = sysinfoFn ? sysinfoFn() : null;
+    if (!si) return;
+    const now = Date.now();
+    if (typeof si.diskUsage === 'number' && si.diskUsage >= DISK_CLEAN_PCT && now - _lastEmergencyAt > 5 * 60 * 1000) {
+      _lastEmergencyAt = now;
+      emergencyCleanup(`ổ đĩa ${si.diskUsage}% ≥ ${DISK_CLEAN_PCT}%`);
+      const m = `🧹 *DỌN DẸP KHẨN CẤP* - ${escapeMarkdown(String(localNodeId))}\n━━━━━━━━━━━━━━━━━━\n💾 Ổ đĩa: *${si.diskUsage}%* (ngưỡng dọn ${DISK_CLEAN_PCT}%)\n🗑️ Đã xóa file tạm mồ côi & luồng đã dừng.\n⛔ Từ ${process.env.MAX_DISK_PCT || 95}% máy sẽ từ chối luồng mới.`;
+      try { broadcast(m); } catch (_) {}
+      try { sendToZalo(m); } catch (_) {}
+    }
+    if (typeof si.ramUsage === 'number' && si.ramUsage >= RAM_WARN_PCT && now - _lastRamWarnAt > 30 * 60 * 1000) {
+      _lastRamWarnAt = now;
+      const m = `⚠️ *RAM CAO* - ${escapeMarkdown(String(localNodeId))}: *${si.ramUsage}%* (ngưỡng cảnh báo ${RAM_WARN_PCT}%). Máy sẽ từ chối luồng mới khi đạt giới hạn; các luồng đang chạy không bị ảnh hưởng.`;
+      console.warn(m);
+      try { broadcast(m); } catch (_) {}
+      try { sendToZalo(m); } catch (_) {}
+    }
+  } catch (e) { console.error('[Cleanup] monitorResources:', e.message); }
 }
 
 // Xóa file tạm sau khi luồng kết thúc (sử dụng hàm có retry thông minh bên dưới)
@@ -409,6 +456,23 @@ function cleanupFile(filePath, retryCount = 0) {
       }
     });
   }
+}
+
+// Xóa file video tạm ngay khi luồng kết thúc/dừng (giải phóng đĩa). Chỉ xóa file do hệ thống tải về trong downloads/ (cleanupFile đã chặn file khác),
+// và chỉ khi KHÔNG còn luồng nào khác dùng chung file. Đặt KEEP_FILES_AFTER_LIVE=1 để giữ lại như cũ.
+function releaseStreamFile(id, why) {
+  if (process.env.KEEP_FILES_AFTER_LIVE === '1') return;
+  const s = streams.get(id);
+  if (!s || s._fileReleased) return;
+  const mine = [s.file, s.originalFile].filter(Boolean).map(f => path.resolve(f));
+  const shared = Array.from(streams.values()).some(o => o !== s && [o.file, o.originalFile].filter(Boolean).some(f => mine.includes(path.resolve(f))));
+  if (shared) return;
+  const resolved = s.file ? path.resolve(s.file) : '';
+  const isOurs = resolved.startsWith(path.resolve(DOWNLOAD_DIR) + path.sep) || (s.file && path.basename(s.file).startsWith('drive_video_'));
+  if (!isOurs) return;
+  s._fileReleased = true;
+  console.log(`[Cleanup] 🧹 Live xong (${why}) → dọn file tạm của luồng #${id}`);
+  cleanupFile(s.file);
 }
 
 // ─── Launch FFmpeg ────────────────────────────────────────────────────────────
@@ -574,6 +638,23 @@ function launchFFmpeg(id, key, file, mode, minutes) {
   });
 
   let errBuf = '';
+  const maskKey = (t) => key ? String(t).split(String(key)).join('KEY****' + String(key).slice(-4)) : String(t);
+  // ffmpeg fifo hồi phục kết nối LẶNG LẼ (không in dòng thành công) → nhánh A/B không có lỗi mới trong AB_RECOVER_QUIET_MS thì coi là đã hồi phục
+  const AB_QUIET = parseInt(process.env.AB_RECOVER_QUIET_MS) || 45000;
+  const abRecoverTimer = setInterval(() => {
+    const s = streams.get(id);
+    if (!s || s.process !== proc) { clearInterval(abRecoverTimer); return; }
+    const displayName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+    if (s.streamAActive === false && s._aFailTs && Date.now() - s._aFailTs > AB_QUIET) {
+      s.streamAActive = true; s.streamALog = '';
+      broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG A THÀNH CÔNG!* 🟢\n━━━━━━━━━━━━━━━━━━\n${displayName}🇺🇸 Máy chủ chính A (Primary) đã tự động hoạt động bình thường trở lại.`);
+    }
+    if (s.streamBActive === false && s._bFailTs && Date.now() - s._bFailTs > AB_QUIET) {
+      s.streamBActive = true; s.streamBLog = '';
+      broadcast(`🟢 *LUỒNG #${id} - KHÔI PHỤC KẾT NỐI LUỒNG B THÀNH CÔNG!* 🟢\n━━━━━━━━━━━━━━━━━━\n${displayName}🇸🇬 Máy chủ dự phòng B (Backup) đã tự động hoạt động bình thường trở lại.`);
+    }
+  }, 5000);
+  proc.on('close', () => clearInterval(abRecoverTimer));
   proc.stderr.on('data', (d) => {
     const dataStr = d.toString();
     // Bỏ qua log của tiến trình cũ (đã bị thay thế sau khi sửa/bật lại luồng)
@@ -584,7 +665,7 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     if (s) {
         // Thay thế \r thành \n để bóc tách log dòng tiến trình chính xác, tránh đè rác
         const cleanLines = errBuf.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean);
-        s.lastLog = cleanLines[cleanLines.length - 1] || '';
+        s.lastLog = maskKey(cleanLines[cleanLines.length - 1] || '');
         
         // Duyệt qua các dòng log mới nhận để phát hiện lỗi hoặc phục hồi kết nối thời gian thực từ bộ trộn FIFO
         const newLines = dataStr.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(Boolean);
@@ -613,9 +694,10 @@ function launchFFmpeg(id, key, file, mode, minutes) {
                 const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || /\btimeout\b/i.test(lowerLine) || lowerLine.includes('timed out') || lowerLine.includes('slave muxer #0 failed');
                 const isSuccess = lowerLine.includes('connected') || lowerLine.includes('successful') || lowerLine.includes('success') || lowerLine.includes('established') || lowerLine.includes('recovery successful');
                 
+                if (isFail) s._aFailTs = Date.now();
                 if (isFail && s.streamAActive !== false) {
                     s.streamAActive = false;
-                    s.streamALog = line;
+                    s.streamALog = maskKey(line);
                     const displayName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
                     broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG A!* ⚠️\n━━━━━━━━━━━━━━━━━━\n${displayName}🔴 Máy chủ chính A (Primary) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ dự phòng B.`);
                 } else if (isSuccess && s.streamAActive === false) {
@@ -631,9 +713,10 @@ function launchFFmpeg(id, key, file, mode, minutes) {
                 const isFail = lowerLine.includes('failed') || lowerLine.includes('error') || lowerLine.includes('broken pipe') || lowerLine.includes('refused') || /\btimeout\b/i.test(lowerLine) || lowerLine.includes('timed out') || lowerLine.includes('slave muxer #1 failed');
                 const isSuccess = lowerLine.includes('connected') || lowerLine.includes('successful') || lowerLine.includes('success') || lowerLine.includes('established') || lowerLine.includes('recovery successful');
                 
+                if (isFail) s._bFailTs = Date.now();
                 if (isFail && s.streamBActive !== false) {
                     s.streamBActive = false;
-                    s.streamBLog = line;
+                    s.streamBLog = maskKey(line);
                     const displayName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
                     broadcast(`⚠️ *LUỒNG #${id} - CẢNH BÁO MẤT KẾT NỐI LUỒNG B!* ⚠️\n━━━━━━━━━━━━━━━━━━\n${displayName}🔴 Máy chủ dự phòng B (Backup) bị gián đoạn.\n🛡️ Hệ thống vẫn đang duy trì phát sóng qua Máy chủ chính A.`);
                 } else if (isSuccess && s.streamBActive === false) {
@@ -663,7 +746,7 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     if (s._stableTimer) { clearTimeout(s._stableTimer); s._stableTimer = null; }
 
     // Nếu do user bấm stop → status đã là 'stopped', không làm gì thêm
-    if (s.status === 'stopped') return;
+    if (s.status === 'stopped') { releaseStreamFile(id, 'dừng thủ công'); return; }
 
     // Kiểm tra thời lượng đã hết chưa (nếu có giới hạn phút)
     if (s.minutes > 0 && s.firstLiveTime) {
@@ -675,6 +758,7 @@ function launchFFmpeg(id, key, file, mode, minutes) {
         const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
         broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n━━━━━━━━━━━━━━━━━━\n${telegramName}🎞 Video: \`${path.basename(s.file)}\`\n⏱ Thời lượng: \`${s.minutes} phút (Đã phát xong)\``);
         saveStreams();
+        releaseStreamFile(id, 'hết thời lượng');
         return;
       }
     }
@@ -705,8 +789,9 @@ function launchFFmpeg(id, key, file, mode, minutes) {
       } else {
         broadcast(`⚪ *LUỒNG #${id} KẾT THÚC BÌNH THƯỜNG*\n━━━━━━━━━━━━━━━━━━\n${telegramName}🎞 Video: \`${path.basename(s.file)}\``);
       }
-      // KHÔNG tự ý xóa file tạm khi luồng sập nữa để bảo vệ khả năng bật lại
-      console.log(`[Stream #${id}] Luồng đã kết thúc vĩnh viễn. Giữ lại file video tạm.`);
+      // Luồng kết thúc vĩnh viễn → dọn file tạm ngay (đặt KEEP_FILES_AFTER_LIVE=1 để giữ lại cho phép bật lại)
+      console.log(`[Stream #${id}] Luồng đã kết thúc vĩnh viễn.`);
+      releaseStreamFile(id, code !== 0 ? 'kết thúc có lỗi' : 'kết thúc');
     }
     saveStreams(); // Lưu backup khi trạng thái thay đổi
   });
@@ -855,7 +940,8 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
       }
     }).then(filePath => {
       const s = streams.get(streamId);
-      if (!s || s.status === 'stopped') return;
+      if (!s) { cleanupFile(filePath); return; }
+      if (s.status === 'stopped') { s.file = filePath; releaseStreamFile(streamId, 'dừng khi đang tải'); return; }
       s.file = filePath;
       s.lastLog = 'Tải xong, chuẩn bị live...';
       console.log(`\n[Stream #${streamId}] ✅ TẢI XONG! File được lưu tạm tại: ${filePath}`);
@@ -867,7 +953,9 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
       const s = streams.get(streamId);
       if (!s) return;
       s.status = 'ended';
-      s.lastLog = `❌ Lỗi tải Drive: ${err.message}`;
+      const noSpace = /ENOSPC|no space/i.test(String(err && (err.code || err.message)));
+      s.lastLog = noSpace ? `❌ Ổ đĩa đầy, không tải được file (đã dọn tạm: ${err.message})` : `❌ Lỗi tải Drive: ${err.message}`;
+      if (noSpace) { _lastEmergencyAt = Date.now(); emergencyCleanup(`ENOSPC khi tải luồng #${streamId}`); }
       console.error(`\n[Stream #${streamId}] ❌ Lỗi tải Google Drive: ${err.message}`);
       const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
       broadcast(`❌ *Lỗi tải Drive (Luồng #${streamId})*\n━━━━━━━━━━━━━━━━━━\n${telegramName}Chi tiết: \`${escapeMarkdown(err.message)}\``);
@@ -901,8 +989,9 @@ function stopStream(id) {
     }
   }
 
-  // Giữ lại file video (kể cả file tải từ Drive) để còn bật lại được. File chỉ bị xóa khi luồng bị xóa/dọn tự động.
+  // File video được giữ cho tới khi live kết thúc/dừng (xem releaseStreamFile). Nếu luồng chưa có tiến trình ffmpeg (đang chờ lịch) thì dọn ngay.
   saveStreams(); // Lưu lại trạng thái dừng
+  if (!p) releaseStreamFile(id, 'dừng khi chưa phát');
 
   return true;
 }
@@ -916,6 +1005,7 @@ function restartStream(id) {
     return { error: 'Luồng đang chạy, không thể khởi động lại' };
   }
   if (findActiveKeyUser(s.key, id)) return { error: DUP_KEY_ERROR };
+  if (s._fileReleased || (s.file && path.resolve(s.file).startsWith(path.resolve(DOWNLOAD_DIR) + path.sep) && !fs.existsSync(s.file))) return { error: 'File video tạm đã được dọn sau khi live xong. Hãy tạo luồng mới (hoặc đặt KEEP_FILES_AFTER_LIVE=1 để giữ file).' };
   
   s.status = 'launching';
   s.startTime = null;
@@ -1163,6 +1253,8 @@ let detectedServerIp = 'Unknown';
 let localNodeId = 'vps1';
 let failoverCtl = null; // bộ điều phối tự chuyển luồng (failover.js), chỉ hoạt động trên Master
 let sysinfoFn = null;
+let sheetNodesCtl = null; // đồng bộ danh sách VPS từ Google Sheet (sheetNodes.js)
+let streamsReady = false; // true sau khi loadStreams() xong (để failover không kết luận "không còn bản cũ" khi máy vừa khởi động lại)
 let localRoleConfirmed = false;
 
 function applyLocalRole(id, how) {
@@ -1207,9 +1299,53 @@ function checkLocalServerRole() {
 }
 checkLocalServerRole();
 
+// Tự đăng ký vào cụm: đặt MASTER_URL=http://IP_MASTER:3131 (+ NODE_ID, CLUSTER_SECRET giống Master).
+// Máy này tự gọi Master để được thêm vào cụm; Master sẽ đẩy danh sách node về lại. Thử lại mỗi 30s tới khi thành công.
+async function autoJoinCluster() {
+  const masterUrl = process.env.MASTER_URL;
+  if (!masterUrl) return;
+  const nodeId = String(process.env.NODE_ID || '').trim().toLowerCase();
+  if (!nodeId) { console.warn('[AutoJoin] Cần đặt NODE_ID (vd vps3) để tự đăng ký vào cụm'); return; }
+  let mu;
+  try { mu = new URL(masterUrl); } catch (_) { console.warn('[AutoJoin] MASTER_URL không hợp lệ:', masterUrl); return; }
+  const master = { id: '_master', name: 'master', ip: mu.hostname, port: parseInt(mu.port, 10) || 3131 };
+  const retry = (why) => { console.warn(`[AutoJoin] ${why} → thử lại sau 30s`); setTimeout(autoJoinCluster, 30000).unref(); };
+  try {
+    const list = await clusterManager.callNodeApi(master, '/api/cluster/nodes', 'GET', null, 6000);
+    if (list.statusCode === 401 || list.statusCode === 403) { retry('Master từ chối (kiểm tra CLUSTER_SECRET có giống Master không)'); return; }
+    if (list.statusCode !== 200 || !Array.isArray(list.data)) { retry(`Master trả mã ${list.statusCode}`); return; }
+    if (list.data.some(n => n.id === nodeId)) { console.log(`[AutoJoin] ✅ ${nodeId} đã có trong cụm`); return; }
+    let ip = String(process.env.NODE_IP || '').trim();
+    if (!ip) {
+      ip = await new Promise(resolve => {
+        const r = http.get('http://api.ipify.org', { timeout: 5000 }, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d.trim())); });
+        r.on('timeout', () => { r.destroy(); resolve(''); }); r.on('error', () => resolve(''));
+      });
+    }
+    if (!ip) { retry('Không xác định được IP public (đặt NODE_IP=...)'); return; }
+    const name = process.env.NODE_NAME || `${nodeId.toUpperCase()} (Worker)`;
+    const r = await clusterManager.callNodeApi(master, '/api/cluster/nodes', 'POST', { id: nodeId, name, ip, port: PORT }, 15000);
+    if (r.statusCode === 200) { console.log(`[AutoJoin] ✅ Đã đăng ký ${nodeId} (${ip}:${PORT}) vào cụm qua Master`); return; }
+    const msg = (r.data && r.data.error) || `mã ${r.statusCode}`;
+    // IP:Port đã có trong cụm (đăng ký trước đó) thì coi như xong
+    if (/đã có trong cụm|đã tồn tại/.test(msg)) { console.log(`[AutoJoin] ℹ️ ${msg}`); return; }
+    retry(`Master từ chối: ${msg}`);
+  } catch (e) { retry(`Không gọi được Master (${e.message})`); }
+}
+
+// CORS: đặt CORS_ORIGIN=https://a.com,https://b.com để giới hạn; bỏ trống = '*' (tương thích app desktop)
+const CORS_ORIGINS = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+if (process.env.STRICT_INTERNAL !== '1') {
+  console.warn('[Bảo mật] STRICT_INTERNAL chưa bật: request có User-Agent nội bộ được quyền admin. Khuyến nghị đặt STRICT_INTERNAL=1 + CLUSTER_SECRET giống nhau trên các VPS.');
+}
+
 const server = http.createServer(async (req, res) => {
   sysinfoFn = getLocalSysinfo; // (hàm được hoist trong handler) để failover.js lấy tải máy này khi chọn máy đích
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  {
+    const origin = req.headers.origin;
+    if (!CORS_ORIGINS.length) res.setHeader('Access-Control-Allow-Origin', '*');
+    else if (origin && CORS_ORIGINS.includes(origin)) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
+  }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
@@ -1220,6 +1356,7 @@ const server = http.createServer(async (req, res) => {
     json(res, 200, {
       ok: true,
       node: localNodeId,
+      ready: streamsReady,
       uptimeSec: Math.round(process.uptime()),
       activeStreams: Array.from(streams.values()).filter(s => ['live', 'downloading', 'launching', 'reconnecting'].includes(s.status)).length,
       time: new Date().toISOString()
@@ -1432,6 +1569,13 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && pathname === '/api/cluster/failover') {
     if (currentUser.role !== 'admin') { json(res, 403, { error: 'Chỉ admin' }); return; }
     json(res, 200, failoverCtl ? failoverCtl.getState() : { enabled: false });
+    return;
+  }
+
+  // Trạng thái đồng bộ danh sách VPS từ Google Sheet (admin)
+  if (req.method === 'GET' && pathname === '/api/cluster/sheet-nodes') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Chỉ admin' }); return; }
+    json(res, 200, sheetNodesCtl ? sheetNodesCtl.getState() : { enabled: false });
     return;
   }
 
@@ -1653,7 +1797,15 @@ const server = http.createServer(async (req, res) => {
         if (localFallback && !localFallback.error) {
           localFallback.notice = `⚠️ Luồng đã tự động chuyển sang chạy trên ${localNodeId} do ${failedNode} gặp sự cố kết nối (Auto Failover).`;
           try {
-            sendToZalo(`🛡️ *[CẢNH BÁO FAILOVER TỰ ĐỘNG]*\n${failedNode} không phản hồi! Luồng [${body.name}] đã được tự động cứu hộ chạy trên ${localNodeId}.`);
+            const _msg = `🛡️ *[TỰ ĐỘNG CỨU HỘ KHI KHỞI TẠO LUỒNG]*\n━━━━━━━━━━━━━━━━━━\n` +
+              `🕒 Thời gian: \`${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}\`\n` +
+              `🔌 Máy sự cố: *${escapeMarkdown(failedNode)}*\n` +
+              `🖥️ Máy xử lý: *${escapeMarkdown((clusterManager.getNode(localNodeId) || {}).name || localNodeId)}*\n` +
+              `🏷️ Luồng: *${escapeMarkdown(body.name || ('#' + localFallback.id))}* (#${localFallback.id}, key …${escapeMarkdown(String(body.key || '').slice(-4))})\n` +
+              `💬 Lý do: ${escapeMarkdown(remoteRes.error)}\n` +
+              `✅ Luồng đã tự động chạy trên máy này.`;
+            try { broadcast(_msg); } catch (_) {}
+            sendToZalo(_msg);
           } catch (_) {}
         }
         json(res, localFallback.error ? 400 : 200, localFallback);
@@ -1735,6 +1887,10 @@ const server = http.createServer(async (req, res) => {
     const s = streams.get(streamId);
     if (s && currentUser.role !== 'admin' && s.ownerId !== currentUser.id && s.ownerUsername !== currentUser.username) {
       json(res, 403, { error: 'Bạn không có quyền dừng luồng này!' });
+      return;
+    }
+    if (!s) {
+      json(res, 404, { error: 'Không tìm thấy luồng trên máy chủ này (kiểm tra lại serverId)' });
       return;
     }
     stopStream(streamId);
@@ -2052,6 +2208,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: Xem trước báo cáo TỔNG QUÁT cả cụm (nội dung y hệt tin Telegram/Zalo gửi định kỳ) - chỉ Admin
+  if (req.method === 'GET' && pathname === '/api/cluster/report') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Chỉ Admin mới được xem báo cáo cụm!' }); return; }
+    try {
+      const ov = await getClusterOverview();
+      json(res, 200, { overview: ov, messages: formatClusterReport(ov) });
+    } catch (e) {
+      json(res, 500, { error: e.message });
+    }
+    return;
+  }
+
   // API: Get Combined Cluster Telemetry (tất cả VPS trong cụm) - Admin xem chi tiết, khách chỉ nhận danh sách máy chủ được phép
   if (req.method === 'GET' && pathname === '/api/cluster/sysinfo') {
     try {
@@ -2165,7 +2333,29 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ─── Khởi tạo Telegram Bot ────────────────────────────────────────────────────
+// Tổng quan CẢ CỤM cho Telegram/Zalo: cùng dữ liệu dashboard web (telemetry mỗi VPS + luồng từ mọi máy, kèm tên máy)
+async function getClusterOverview() {
+  const local = sysinfoFn ? sysinfoFn() : null;
+  // Làm mới telemetry máy từ xa nếu đã cũ (>15s) để báo cáo không dùng số liệu lỗi thời
+  await Promise.all(clusterManager.getNodes()
+    .filter(n => !n.isLocal && Date.now() - (n.lastSeen || 0) > 15000)
+    .map(n => { const real = clusterManager.getNode(n.id); return real ? clusterManager.refreshNodeTelemetry(real) : null; }));
+  const nodes = clusterManager.getNodes().map(n => n.isLocal ? { ...n, status: 'online', telemetry: local } : n);
+  const localName = (clusterManager.getNode(localNodeId) || {}).name || localNodeId;
+  const localStreams = Array.from(streams.values()).map(s => ({
+    id: s.id, name: s.name || '', status: s.status, mode: s.mode, startTime: s.startTime,
+    scheduledTime: s.scheduledTime, lastLog: s.lastLog || '', dualStream: !!s.dualStream,
+    streamAActive: s.streamAActive !== false, streamBActive: s.streamBActive !== false,
+    serverId: localNodeId, serverName: localName, isRemote: false
+  }));
+  let remote = [];
+  try { remote = await clusterManager.fetchAllRemoteStreams(); } catch (_) {}
+  return { localNodeId, nodes, streams: localStreams.concat(remote) };
+}
+
 initBot({
+  getClusterOverview,
+  getNodeByIp: (ip) => clusterManager.getNodes().find(n => n.ip === ip) || null,
   startStream,
   stopStream,
   restartStream,
@@ -2209,6 +2399,8 @@ initBot({
 });
 
 server.listen(PORT, '0.0.0.0', async () => {
+  // Mồi 1 request nội bộ để gán sysinfoFn ngay (trước đây chỉ được gán ở request HTTP đầu tiên -> báo cáo/failover lúc khởi động thiếu số liệu máy này)
+  try { http.get(`http://127.0.0.1:${PORT}/api/health`, r => r.resume()).on('error', () => {}); } catch (_) {}
   const ffmpegOk = await checkFFmpeg();
   if (!ffmpegOk) {
     console.log('⚠️ Cảnh báo: Hệ thống có thể không hoạt động đúng do thiếu FFmpeg.');
@@ -2217,19 +2409,30 @@ server.listen(PORT, '0.0.0.0', async () => {
   for (let i = 0; i < 14 && !localRoleConfirmed; i++) await new Promise(r => setTimeout(r, 500));
   loadHistory(); // Nap lich su luong da luu
   loadStreams(); // Khôi phục danh sách luồng trước
+  streamsReady = true;
+  autoJoinCluster().catch(e => console.error('[AutoJoin] Lỗi:', e.message)); // chỉ chạy khi có MASTER_URL
+  // Đồng bộ danh sách VPS từ tab Google Sheet (chỉ chạy khi có NODES_SHEET_URL hoặc nodesSheetUrl trong sheet_config.json)
+  try {
+    sheetNodesCtl = require('./sheetNodes').init({
+      clusterManager, userManager, localNodeId: () => localNodeId,
+      notify: (m) => { try { broadcast(m); } catch (_) {} try { sendToZalo(m); } catch (_) {} }
+    });
+  } catch (e) { console.error('[SheetNodes] Không khởi động được:', e.message); }
   // Master tự động chuyển luồng đang chạy sang máy khác khi một Worker bị chết (xem failover.js)
   try {
     failoverCtl = require('./failover').init({
       clusterManager, userManager, startStream, extractDriveId,
       getLocalSysinfo: () => (sysinfoFn ? sysinfoFn() : null),
       localNodeId: () => localNodeId,
-      notify: (m) => { try { broadcast(m); } catch (_) {} try { sendToZalo(m); } catch (_) {} }
+      notify: (m) => { console.log(`[Failover][Thông báo]\n${m}`); try { broadcast(m); } catch (_) {} try { sendToZalo(m); } catch (_) {} }
     });
   } catch (e) { console.error('[Failover] Không khởi động được:', e.message); }
   cleanupOrphanedFiles(); // Sau đó mới dọn dẹp các file không nằm trong danh sách
   
   // Tự động quét dọn định kỳ mỗi 1 tiếng
-  setInterval(cleanupOrphanedFiles, 60 * 60 * 1000);
+  setInterval(() => cleanupOrphanedFiles(), 60 * 60 * 1000);
+  // Giám sát đĩa/RAM mỗi 2 phút: đĩa ≥ DISK_CLEAN_PCT → dọn khẩn cấp; RAM ≥ RAM_WARN_PCT → cảnh báo
+  setInterval(monitorResources, parseInt(process.env.RESOURCE_MONITOR_MS, 10) || 2 * 60 * 1000).unref();
   // Tự động dọn các luồng đã kết thúc/dừng quá hạn lưu (kiểm tra mỗi 10 phút)
   setInterval(purgeFinishedStreams, parseInt(process.env.PURGE_INTERVAL_MS) || 10 * 60 * 1000);
   
