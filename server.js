@@ -749,6 +749,30 @@ function proceedStartStream(id) {
   }
 }
 
+// Stream Key đang được một luồng KHÁC (còn hoạt động) sử dụng? Hai luồng cùng key sẽ giật nhau trên YouTube.
+const KEY_ACTIVE_STATUSES = ['live', 'downloading', 'launching', 'reconnecting', 'scheduled'];
+const DUP_KEY_ERROR = 'Stream Key này đang được một luồng khác sử dụng. Mỗi Stream Key chỉ được phát một luồng tại một thời điểm!';
+function findActiveKeyUser(key, exceptId) {
+  const k = String(key || '').trim();
+  if (!k) return null;
+  for (const s of streams.values()) {
+    if (s.id !== exceptId && String(s.key || '').trim() === k && KEY_ACTIVE_STATUSES.includes(s.status)) return s;
+  }
+  return null;
+}
+// Kiểm tra trùng key trên TOÀN CỤM (máy này + các máy khác), bỏ qua chính luồng (exceptId @ exceptServerId)
+async function clusterKeyConflict(key, exceptId, exceptServerId) {
+  const k = String(key || '').trim();
+  if (!k) return false;
+  const same = (s, sid) => String(s.key || '').trim() === k && KEY_ACTIVE_STATUSES.includes(s.status) && !(s.id === exceptId && String(sid || '').toLowerCase() === String(exceptServerId || '').toLowerCase());
+  for (const s of streams.values()) if (same(s, localNodeId)) return true;
+  try {
+    const remoteAll = await clusterManager.fetchAllRemoteStreams();
+    if (remoteAll.some(s => same(s, s.serverId))) return true;
+  } catch (_) {}
+  return false;
+}
+
 function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, dualStream, id, name, youtubeUrl, ownerId, ownerUsername, serverId, createdAt, updatedAt }) {
   if (!file) {
     return { error: 'Đường dẫn video hoặc link Google Drive không được để trống!' };
@@ -756,6 +780,8 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
   if (!key) {
     return { error: 'Stream Key không được để trống!' };
   }
+  // Luồng mới (không phải khôi phục/tải lại luồng cũ) không được trùng key với luồng đang hoạt động
+  if (!id && findActiveKeyUser(key)) return { error: DUP_KEY_ERROR };
 
   // Nếu không có luồng nào, reset số thứ tự về 1
   if (streams.size === 0 && !id) nextId = 1;
@@ -889,6 +915,7 @@ function restartStream(id) {
   if (s.status === 'live' || s.status === 'launching' || s.status === 'scheduled' || s.status === 'reconnecting') {
     return { error: 'Luồng đang chạy, không thể khởi động lại' };
   }
+  if (findActiveKeyUser(s.key, id)) return { error: DUP_KEY_ERROR };
   
   s.status = 'launching';
   s.startTime = null;
@@ -937,6 +964,9 @@ function editStreamLocal(body) {
   const timeChanged = body.scheduledTime && body.scheduledTime !== s.scheduledTime;
   
   const needsRestart = fileChanged || keyChanged || modeChanged || minutesChanged || timeChanged;
+  
+  // Đổi sang Stream Key đang được luồng khác dùng -> từ chối (tránh 2 luồng giật nhau trên YouTube)
+  if (keyChanged && findActiveKeyUser(body.key, id)) return { error: DUP_KEY_ERROR };
   
   if (needsRestart) {
     console.log(`[Stream #${id}] ⚙️ Cấu hình cốt lõi thay đổi. Tiến hành cập nhật và điều chỉnh luồng...`);
@@ -1562,6 +1592,19 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
+    // 1a. Stream Key trùng với luồng đang hoạt động ở BẤT KỲ máy nào trong cụm -> từ chối (Master kiểm tra toàn cụm)
+    if (!isForwarded) {
+      let dupKey = !!findActiveKeyUser(body.key);
+      if (!dupKey) {
+        try {
+          const wantKey = String(body.key || '').trim();
+          const remoteAll = await clusterManager.fetchAllRemoteStreams();
+          dupKey = !!wantKey && remoteAll.some(s => String(s.key || '').trim() === wantKey && KEY_ACTIVE_STATUSES.includes(s.status));
+        } catch (_) {}
+      }
+      if (dupKey) { json(res, 400, { error: DUP_KEY_ERROR }); return; }
+    }
+
     // 1b. Máy này quá tải (RAM/CPU/ổ đĩa) -> không nhận thêm luồng mới
     if (isForwarded || targetServerId === localNodeId) {
       const fullReason = localFullReason();
@@ -1702,6 +1745,13 @@ const server = http.createServer(async (req, res) => {
         json(res, 403, { error: 'Bạn không có quyền khởi động lại luồng này!' });
         return;
       }
+      if (!isForwarded) {
+        try {
+          const remoteAll = await clusterManager.fetchAllRemoteStreams();
+          const tgt = remoteAll.find(x => x.id === streamId && String(x.serverId || '').toLowerCase() === targetServerId);
+          if (tgt && tgt.key && await clusterKeyConflict(tgt.key, streamId, targetServerId)) { json(res, 400, { error: DUP_KEY_ERROR }); return; }
+        } catch (_) {}
+      }
       const resRemote = await clusterManager.forwardStreamAction(targetServerId, 'restart', body);
       json(res, resRemote.error ? 400 : 200, resRemote);
       return;
@@ -1712,6 +1762,7 @@ const server = http.createServer(async (req, res) => {
       json(res, 403, { error: 'Bạn không có quyền khởi động lại luồng này!' });
       return;
     }
+    if (s && !isForwarded && await clusterKeyConflict(s.key, streamId, localNodeId)) { json(res, 400, { error: DUP_KEY_ERROR }); return; }
     const result = restartStream(streamId);
     if (result.error) {
        json(res, 400, result);
