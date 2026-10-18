@@ -462,43 +462,69 @@
     gap: 20px;
   }
 
-  /* Beautiful Telemetry Server Card */
+  /* Beautiful Telemetry Server Card with Distinct VPS Theming */
   .stream-card {
-    background: rgba(18, 22, 42, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(18, 22, 42, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-lg);
-    padding: 14px 18px;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 15px 18px 15px 22px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
   }
 
-  .stream-card.card-expanded {
-    background: rgba(18, 22, 42, 0.7);
-    border-color: rgba(99, 102, 241, 0.18);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  .stream-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5) !important;
   }
 
-  .stream-card::before {
-    content: '';
+  .stream-card.card-expanded {
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.55) !important;
+  }
+
+  .vps-stripe {
     position: absolute;
     top: 0; left: 0; bottom: 0;
-    width: 4px;
-    background: var(--text-muted);
-    transition: var(--transition);
+    width: 6px;
+    border-top-left-radius: var(--radius-lg);
+    border-bottom-left-radius: var(--radius-lg);
+    transition: width 0.25s ease;
   }
 
-  /* Glowing dynamic states for cards based on status class */
-  .stream-card.live::before { background: var(--success); }
-  .stream-card.reconnecting::before { background: var(--warning); }
-  .stream-card.downloading::before { background: var(--purple); }
-  .stream-card.launching::before { background: var(--blue); }
-  .stream-card.scheduled::before { background: var(--warning); }
-  .stream-card.ended::before, .stream-card.stopped::before { background: var(--text-muted); }
+  .stream-card:hover .vps-stripe {
+    width: 8px;
+  }
 
-  .stream-card.live {
-    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.03);
-    border-color: rgba(16, 185, 129, 0.08);
+  .vps-hero-badge {
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+  .stream-card:hover .vps-hero-badge {
+    filter: brightness(1.18);
+  }
+
+  /* Interactive VPS Filter Tabs */
+  .vps-filter-tabs-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 12px 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .vps-tab-btn {
+    transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+    cursor: pointer;
+  }
+  .vps-tab-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.2);
+  }
+  .vps-tab-btn:active {
+    transform: translateY(0);
   }
 
   /* Compact/Expandable layout helper classes */
@@ -2542,6 +2568,9 @@
         </div>
       </div>
 
+      <!-- Quick Filter Tabs per VPS (Nhận diện & Lọc Máy Chủ Nhanh) -->
+      <div id="vpsFilterTabs" class="vps-filter-tabs-container"></div>
+
       <!-- Real-time Streams container -->
       <div class="streams-container" id="streamsList">
         <div class="empty-state">
@@ -3700,6 +3729,129 @@ function toggleStreamCard(id) {
   }
 }
 
+// ── Hệ Thống Màu & Nhận Diện Máy Chủ Độc Bản (Cyber-Shield VPS Visual Themes) ──
+function getNodeTheme(serverId, streamObj = null) {
+  const sid = String(serverId || 'vps1').trim();
+  const idLower = sid.toLowerCase();
+  const node = clusterNodesList.find(n => n.id === sid || String(n.id).toLowerCase() === idLower);
+  
+  // Xác định node Chính (Master)
+  const isMaster = (node && node.isMaster) || idLower === 'vps1' || idLower.includes('master') || idLower.includes('main') || (streamObj && streamObj.isRemote === false);
+  
+  // Tên hiển thị thân thiện & chuyên nghiệp
+  let displayName = (streamObj && streamObj.serverName) || (node && node.name) || sid;
+  if (!displayName || displayName === 'vps1') displayName = 'VPS 1 (Chính)';
+  if (displayName === 'vps2') displayName = 'VPS 2 (Phụ)';
+  if (displayName === 'vps3') displayName = 'VPS 3 (Phụ 2)';
+
+  // VPS 1 / Master: Neon Sky Cyan (#38bdf8) — Máy chủ Điều Phối Trùm
+  if (isMaster || idLower === 'vps1') {
+    return {
+      serverId: sid,
+      displayName: displayName,
+      roleBadge: '👑 CHÍNH',
+      isMaster: true,
+      cssSlug: 'vps1',
+      colorHex: '#38bdf8',
+      rgb: '56, 189, 248',
+      gradient: 'linear-gradient(135deg, rgba(56, 189, 248, 0.12) 0%, rgba(14, 22, 42, 0.90) 45%, rgba(10, 14, 28, 0.96) 100%)',
+      border: 'rgba(56, 189, 248, 0.35)',
+      borderHover: 'rgba(56, 189, 248, 0.75)',
+      tagBg: 'rgba(56, 189, 248, 0.18)',
+      glow: '0 0 20px rgba(56, 189, 248, 0.28)',
+      stripeBg: 'linear-gradient(180deg, #38bdf8 0%, #0284c7 100%)',
+      ip: (node && node.ip) || ''
+    };
+  }
+
+  // VPS 2 / Worker 1: Cyber Violet / Neon Purple (#c084fc)
+  if (idLower === 'vps2' || idLower.includes('sub1') || idLower.includes('worker1')) {
+    return {
+      serverId: sid,
+      displayName: displayName,
+      roleBadge: '⚡ PHỤ 1',
+      isMaster: false,
+      cssSlug: 'vps2',
+      colorHex: '#c084fc',
+      rgb: '192, 132, 252',
+      gradient: 'linear-gradient(135deg, rgba(168, 85, 247, 0.12) 0%, rgba(22, 16, 44, 0.90) 45%, rgba(12, 10, 26, 0.96) 100%)',
+      border: 'rgba(192, 132, 252, 0.35)',
+      borderHover: 'rgba(192, 132, 252, 0.75)',
+      tagBg: 'rgba(168, 85, 247, 0.18)',
+      glow: '0 0 20px rgba(168, 85, 247, 0.28)',
+      stripeBg: 'linear-gradient(180deg, #c084fc 0%, #7c3aed 100%)',
+      ip: (node && node.ip) || ''
+    };
+  }
+
+  // VPS 3 / Worker 2: Emerald Mint Green (#34d399)
+  if (idLower === 'vps3' || idLower.includes('sub2') || idLower.includes('worker2')) {
+    return {
+      serverId: sid,
+      displayName: displayName,
+      roleBadge: '⚡ PHỤ 2',
+      isMaster: false,
+      cssSlug: 'vps3',
+      colorHex: '#34d399',
+      rgb: '52, 211, 153',
+      gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(12, 28, 22, 0.90) 45%, rgba(8, 18, 16, 0.96) 100%)',
+      border: 'rgba(52, 211, 153, 0.35)',
+      borderHover: 'rgba(52, 211, 153, 0.75)',
+      tagBg: 'rgba(16, 185, 129, 0.18)',
+      glow: '0 0 20px rgba(16, 185, 129, 0.28)',
+      stripeBg: 'linear-gradient(180deg, #34d399 0%, #059669 100%)',
+      ip: (node && node.ip) || ''
+    };
+  }
+
+  // VPS 4 / Worker 3: Amber Sunset Gold (#fbbf24)
+  if (idLower === 'vps4' || idLower.includes('sub3') || idLower.includes('worker3')) {
+    return {
+      serverId: sid,
+      displayName: displayName,
+      roleBadge: '⚡ PHỤ 3',
+      isMaster: false,
+      cssSlug: 'vps4',
+      colorHex: '#fbbf24',
+      rgb: '251, 191, 36',
+      gradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(32, 24, 12, 0.90) 45%, rgba(20, 14, 8, 0.96) 100%)',
+      border: 'rgba(251, 191, 36, 0.35)',
+      borderHover: 'rgba(251, 191, 36, 0.75)',
+      tagBg: 'rgba(245, 158, 11, 0.18)',
+      glow: '0 0 20px rgba(245, 158, 11, 0.28)',
+      stripeBg: 'linear-gradient(180deg, #fbbf24 0%, #d97706 100%)',
+      ip: (node && node.ip) || ''
+    };
+  }
+
+  // Bảng màu phân bổ tự động cho các VPS mở rộng khác
+  const dynamicPalette = [
+    { hex: '#f43f5e', rgb: '244, 63, 94', slug: 'rose' },
+    { hex: '#06b6d4', rgb: '6, 182, 212', slug: 'cyan' },
+    { hex: '#eab308', rgb: '234, 179, 8', slug: 'amber' },
+    { hex: '#ec4899', rgb: '236, 72, 153', slug: 'pink' }
+  ];
+  let h = 0;
+  for (let i = 0; i < sid.length; i++) h = (h * 31 + sid.charCodeAt(i)) & 0xffff;
+  const p = dynamicPalette[Math.abs(h) % dynamicPalette.length];
+  return {
+    serverId: sid,
+    displayName: displayName,
+    roleBadge: '⚡ PHỤ',
+    isMaster: false,
+    cssSlug: p.slug,
+    colorHex: p.hex,
+    rgb: p.rgb,
+    gradient: `linear-gradient(135deg, rgba(${p.rgb}, 0.12) 0%, rgba(18, 16, 32, 0.90) 45%, rgba(10, 10, 20, 0.96) 100%)`,
+    border: `rgba(${p.rgb}, 0.35)`,
+    borderHover: `rgba(${p.rgb}, 0.75)`,
+    tagBg: `rgba(${p.rgb}, 0.18)`,
+    glow: `0 0 20px rgba(${p.rgb}, 0.28)`,
+    stripeBg: `linear-gradient(180deg, ${p.hex} 0%, rgba(${p.rgb}, 0.7) 100%)`,
+    ip: (node && node.ip) || ''
+  };
+}
+
 // ── Render Stream Cards ──
 function renderStreams(list) {
   const el = document.getElementById('streamsList');
@@ -3708,11 +3860,20 @@ function renderStreams(list) {
   count.textContent = `${list.length} luồng`;
 
   if (list.length === 0) {
+    const isFiltered = filterServerValue !== 'all' || filterCustomerValue !== 'all';
+    let emptyTitle = 'Chưa có luồng giám sát nào';
+    let emptyMsg = 'Thiết lập cấu hình bên trái và nhấn Kích Hoạt để bắt đầu phát sóng.';
+    if (filterServerValue !== 'all') {
+      const theme = getNodeTheme(filterServerValue);
+      emptyTitle = `Chưa có luồng trên ${theme.displayName}`;
+      emptyMsg = 'Hiện chưa có luồng nào đang chạy trên máy chủ này. Bạn có thể nhấn [Tất Cả] để xem các máy chủ khác.';
+    }
     el.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">📡</div>
-        <h3 style="font-size:0.95rem; font-weight:600; color:var(--text-primary); margin-bottom:4px;">Chưa có luồng giám sát nào</h3>
-        <p style="font-size:0.8rem; color:var(--text-secondary);">Thiết lập cấu hình bên trái và nhấn Kích Hoạt để bắt đầu phát sóng.</p>
+        <h3 style="font-size:0.95rem; font-weight:600; color:var(--text-primary); margin-bottom:4px;">${emptyTitle}</h3>
+        <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom: 12px;">${emptyMsg}</p>
+        ${isFiltered ? `<button class="btn btn-ghost btn-sm" onclick="setVpsFilter('all')" style="padding: 6px 14px; font-size: 0.78rem;">🌐 Xem Toàn Bộ Máy Chủ</button>` : ''}
       </div>`;
     return;
   }
@@ -3725,6 +3886,7 @@ function renderStreams(list) {
   });
 
   el.innerHTML = list.map(s => {
+    const nodeTheme = getNodeTheme(s.serverId, s);
     const canStop = ['live', 'scheduled', 'launching', 'reconnecting', 'downloading'].includes(s.status);
     const canRestart = ['ended', 'stopped'].includes(s.status);
     
@@ -3794,14 +3956,13 @@ function renderStreams(list) {
     let metaItems = [];
     
     // Server Badge
-    const _nodeIdx = Math.max(0, clusterNodesList.findIndex(n => n.id === s.serverId));
-    const _rgb = ['59, 130, 246', '168, 85, 247', '16, 185, 129', '245, 158, 11', '236, 72, 153', '20, 184, 166'][_nodeIdx % 6];
-    const _nodeObj = clusterNodesList.find(n => n.id === s.serverId);
-    const _nodeLabelTxt = s.serverName || (_nodeObj && _nodeObj.name) || s.serverId || '';
     metaItems.push(`
-      <div class="meta-item" style="border: 1px solid rgba(${_rgb}, 0.4); background: rgba(${_rgb}, 0.12); padding: 4px 8px; border-radius: 6px;">
+      <div class="meta-item" style="border: 1.5px solid ${nodeTheme.border}; background: ${nodeTheme.tagBg}; padding: 6px 12px; border-radius: 8px; box-shadow: 0 2px 8px rgba(${nodeTheme.rgb}, 0.2); display: flex; align-items: center; gap: 8px;">
         <span class="meta-icon">🖥️</span>
-        <span style="font-weight: 700; color: rgb(${_rgb}); font-size: 0.75rem;">${escapeHtml(_nodeLabelTxt)}</span>
+        <span style="font-weight: 800; color: ${nodeTheme.colorHex}; font-size: 0.8rem;">
+          Máy chủ: ${escapeHtml(nodeTheme.displayName)} <span style="font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; background: rgba(0,0,0,0.45); color: ${nodeTheme.colorHex}; margin-left: 4px;">${nodeTheme.roleBadge}</span>
+          ${nodeTheme.ip ? `<span style="font-size: 0.7rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-left: 6px;">(${escapeHtml(nodeTheme.ip)})</span>` : ''}
+        </span>
       </div>
     `);
 
@@ -4091,22 +4252,42 @@ function renderStreams(list) {
     const consoleLogsText = s.lastLog ? s.lastLog : 'Đang bắt đầu...';
 
     return `
-      <div class="stream-card ${s.status} ${isCardExpanded ? 'card-expanded' : ''}" id="stream-card-${s.id}">
+      <div class="stream-card ${s.status} ${isCardExpanded ? 'card-expanded' : ''}" 
+           id="stream-card-${s.id}" 
+           style="background: ${nodeTheme.gradient}; border: 1.5px solid ${nodeTheme.border}; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);">
         
+        <!-- Left vertical VPS accent stripe -->
+        <div class="vps-stripe" style="background: ${nodeTheme.stripeBg}; box-shadow: 2px 0 10px rgba(${nodeTheme.rgb}, 0.45);"></div>
+
         <!-- Interactive Compact Header -->
         <div class="stream-card-compact-header" onclick="toggleStreamCard(${s.id})" style="cursor: pointer; user-select: none;">
           <!-- Header row of the card -->
-          <div class="card-top-row" style="margin-bottom: 8px;">
-            <div class="stream-id-area">
-              <span class="stream-id-pill">#${s.id}</span>
-              <span class="stream-node-tag" title="Chạy trên máy chủ: ${escapeHtml(_nodeLabelTxt)}" style="font-size: 0.68rem; font-weight: 700; color: rgb(${_rgb}); background: rgba(${_rgb}, 0.12); border: 1px solid rgba(${_rgb}, 0.4); padding: 2px 8px; border-radius: 6px; white-space: nowrap;">🖥️ ${escapeHtml(_nodeLabelTxt)}</span>
-              ${s.name ? `<span class="stream-name-tag" style="font-size: 0.8rem; font-weight: 700; color: #fff; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.25); padding: 2px 8px; border-radius: 6px; text-shadow: 0 0 8px rgba(99, 102, 241, 0.45); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle;" title="${s.name}">${s.name}</span>` : ''}
+          <div class="card-top-row" style="margin-bottom: 10px; align-items: center;">
+            <div class="stream-id-area" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <!-- HERO VPS BADGE (Siêu nổi bật, nhận diện ngay máy chủ) -->
+              <div class="vps-hero-badge" style="
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: ${nodeTheme.tagBg};
+                border: 1.5px solid ${nodeTheme.border};
+                padding: 4px 10px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(${nodeTheme.rgb}, 0.25);
+              ">
+                <span style="font-size: 0.95rem;">🖥️</span>
+                <span style="font-weight: 800; font-size: 0.78rem; color: #fff; letter-spacing: 0.3px;">${escapeHtml(nodeTheme.displayName)}</span>
+                <span style="font-size: 0.62rem; font-weight: 800; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.45); color: ${nodeTheme.colorHex}; border: 1px solid rgba(${nodeTheme.rgb}, 0.35);">${nodeTheme.roleBadge}</span>
+              </div>
+
+              <span class="stream-id-pill" style="font-weight: 700; font-family: 'JetBrains Mono', monospace; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem;">#${s.id}</span>
+              ${s.name ? `<span class="stream-name-tag" style="font-size: 0.82rem; font-weight: 700; color: #fff; background: rgba(99, 102, 241, 0.2); border: 1px solid rgba(99, 102, 241, 0.4); padding: 3px 10px; border-radius: 6px; text-shadow: 0 0 8px rgba(99, 102, 241, 0.5); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle;" title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</span>` : ''}
               <span class="stream-mode-badge">${modeLabel}</span>
             </div>
             
-            <div class="stream-badge-badges">
-              ${s.dualStream ? '<span class="protection-badge" style="font-size:0.65rem; padding: 2px 8px;">🛡️ DUAL A+B</span>' : ''}
-              <span class="status-badge ${s.status}" style="font-size:0.65rem; padding: 2px 8px;">${statusLabel}</span>
+            <div class="stream-badge-badges" style="display: flex; align-items: center; gap: 8px;">
+              ${s.dualStream ? '<span class="protection-badge" style="font-size:0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 6px;">🛡️ DUAL A+B</span>' : ''}
+              <span class="status-badge ${s.status}" style="font-size:0.68rem; font-weight: 800; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.3px;">${statusLabel}</span>
             </div>
           </div>
 
@@ -4465,11 +4646,76 @@ function parseSpeedToMbps(speedStr) {
 let filterServerValue = 'all';
 let filterCustomerValue = 'all';
 
+function renderVpsFilterTabs() {
+  const container = document.getElementById('vpsFilterTabs');
+  if (!container) return;
+
+  // Đếm số luồng theo từng VPS
+  const counts = { all: currentStreamsList.length };
+  currentStreamsList.forEach(s => {
+    const sid = s.serverId || 'vps1';
+    counts[sid] = (counts[sid] || 0) + 1;
+  });
+
+  // Gom các máy chủ từ danh sách nodes và streams
+  const serverIds = Array.from(new Set([
+    ...clusterNodesList.map(n => n.id),
+    ...currentStreamsList.map(s => s.serverId).filter(Boolean)
+  ]));
+
+  if (serverIds.length === 0) serverIds.push('vps1');
+
+  let html = `
+    <button class="vps-tab-btn" 
+      onclick="setVpsFilter('all')" 
+      style="
+        display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+        ${filterServerValue === 'all' 
+          ? 'background: var(--primary-gradient); color: #fff; border: 1.5px solid rgba(255,255,255,0.4); box-shadow: 0 4px 14px var(--primary-glow);' 
+          : 'background: rgba(255,255,255,0.05); color: var(--text-secondary); border: 1px solid rgba(255,255,255,0.08);'}
+      ">
+      <span>🌐 TẤT CẢ MÁY CHỦ</span>
+      <span style="background: rgba(0,0,0,0.45); padding: 1px 7px; border-radius: 12px; font-size: 0.7rem; font-weight: 800; color: #fff;">${counts.all || 0}</span>
+    </button>
+  `;
+
+  serverIds.forEach(sid => {
+    const theme = getNodeTheme(sid);
+    const count = counts[sid] || 0;
+    const isActive = filterServerValue === sid;
+    html += `
+      <button class="vps-tab-btn" 
+        onclick="setVpsFilter('${escapeHtml(sid)}')" 
+        style="
+          display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+          ${isActive 
+            ? `background: rgba(${theme.rgb}, 0.28); color: #fff; border: 1.5px solid ${theme.colorHex}; box-shadow: ${theme.glow};` 
+            : `background: rgba(${theme.rgb}, 0.08); color: ${theme.colorHex}; border: 1px solid rgba(${theme.rgb}, 0.28);`}
+        ">
+        <span>🖥️ ${escapeHtml(theme.displayName)}</span>
+        <span style="font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; background: rgba(0,0,0,0.45); color: ${theme.colorHex}; border: 1px solid rgba(${theme.rgb}, 0.3);">${theme.roleBadge}</span>
+        <span style="background: rgba(0,0,0,0.45); padding: 1px 7px; border-radius: 12px; font-size: 0.7rem; font-weight: 800; color: #fff;">${count}</span>
+      </button>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+function setVpsFilter(sid) {
+  filterServerValue = sid;
+  const fs = document.getElementById('filterServer');
+  if (fs) fs.value = sid;
+  applyStreamFilters();
+}
+
 function applyStreamFilters() {
   const fs = document.getElementById('filterServer');
   const fc = document.getElementById('filterCustomer');
   if (fs) filterServerValue = fs.value;
   if (fc) filterCustomerValue = fc.value;
+
+  renderVpsFilterTabs();
 
   let filtered = currentStreamsList;
   if (filterServerValue !== 'all') {
