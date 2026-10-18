@@ -238,7 +238,11 @@ function streamBrief(s) {
       ? ` [Song song ⚡ A:${s.streamAActive !== false ? '🟢' : '🔴'} B:${s.streamBActive !== false ? '🟢' : '🔴'}]`
       : ' [Song song ⚡]';
   }
-  return `${STREAM_ICON(s.status)} *#${s.id}*${s.name ? ` (${escapeMarkdown(s.name)})` : ''}${dualText}: \`${s.status}\` | \`${escapeMarkdown(logBrief)}\``;
+  let viewerText = '';
+  if (s.viewers !== undefined && s.viewers !== null) {
+    viewerText = ` | 👁️ \`${Number(s.viewers).toLocaleString('vi-VN')} mắt\``;
+  }
+  return `${STREAM_ICON(s.status)} *#${s.id}*${s.name ? ` (${escapeMarkdown(s.name)})` : ''}${dualText}: \`${s.status}\`${viewerText} | \`${escapeMarkdown(logBrief)}\``;
 }
 
 function nodeStreams(ov, n) { return (ov.streams || []).filter(s => String(s.serverId) === String(n.id)); }
@@ -775,6 +779,9 @@ function initBot(actions) {
                 streamStr += `├─ Chế độ: \`${protection}\`\n`;
                 if (s.status === 'live' && s.startTime) {
                   streamStr += `├─ Đã chạy: \`${Math.floor((Date.now() - new Date(s.startTime)) / 60000)} phút\`\n`;
+                }
+                if (s.viewers !== undefined && s.viewers !== null) {
+                  streamStr += `├─ 👁️ Mắt xem trực tiếp: *${Number(s.viewers).toLocaleString('vi-VN')} mắt* (🔴 Live)\n`;
                 }
                 
                 let logBrief = s.lastLog;

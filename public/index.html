@@ -2260,6 +2260,35 @@
       <div id="driveCopyResult" style="margin-top: 8px; font-size: 0.76rem; line-height: 1.6;"></div>
     </div>
 
+    <!-- KHUNG APPS SCRIPT ĐỌC MẮT XEM LIVE YOUTUBE (TỰ ĐỘNG CẬP NHẬT REALTIME) -->
+    <div id="youtubeStatsBox" style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.15rem;">🔴</span>
+          <span style="font-weight: 700; font-size: 0.88rem; color: #ff8b8b; letter-spacing: 0.5px;">APPS SCRIPT ĐỌC MẮT XEM LIVE YOUTUBE</span>
+          <span id="youtubeStatsBadge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(156,163,175,0.15); color: #9ca3af; font-weight: 600;">⚪ Chưa cài</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnCopyYouTubeScript" onclick="copyYouTubeStatsScript()" style="font-size: 0.75rem; padding: 4px 10px; color: #ff8b8b; border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; cursor: pointer;">
+          📜 Sao chép code Apps Script đọc mắt
+        </button>
+      </div>
+      <div style="font-size: 0.74rem; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5;">
+        Dán URL Web App của Apps Script (<code>https://script.google.com/macros/s/.../exec</code>). Hệ thống sẽ tự động quét số người xem trực tiếp của mọi luồng Live theo chu kỳ và hiển thị lên Web Dashboard + tin nhắn Telegram.
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+        <div class="input-wrapper" style="margin: 0; flex: 1; min-width: 280px;">
+          <input type="text" id="youtubeStatsUrlInput" placeholder="https://script.google.com/macros/s/.../exec" style="font-size: 0.82rem; padding: 8px 12px; width: 100%; border-radius: 6px; font-family: 'JetBrains Mono', monospace;" />
+        </div>
+        <button class="btn btn-sm" id="btnSaveYouTubeStats" onclick="saveYouTubeStatsConfigUI()" style="background: #dc2626; color: #fff; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; white-space: nowrap;">
+          💾 LƯU LINK
+        </button>
+        <button class="btn btn-sm" id="btnTestYouTubeStats" onclick="testYouTubeStatsConfigUI()" style="background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #fca5a5; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;">
+          ⚡ KIỂM TRA MẮT XEM
+        </button>
+      </div>
+      <div id="youtubeStatsResult" style="margin-top: 8px; font-size: 0.76rem; line-height: 1.6;"></div>
+    </div>
+
     <!-- KHUNG KIỂM TRA SÂU HỆ THỐNG (chỉ đọc + chạy thử, không đụng luồng đang phát) -->
     <div id="diagBox" style="background: rgba(52, 211, 153, 0.05); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;">
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
@@ -4019,6 +4048,7 @@ function renderStreams(list) {
           <span class="meta-icon">🔴</span>
           <span style="font-weight: 600; font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: calc(100% - 30px);">
             Link YouTube: <a href="${s.youtubeUrl}" target="_blank" style="color: #ff8b8b; text-decoration: underline; cursor: pointer; font-family: 'JetBrains Mono', monospace;" onclick="event.stopPropagation();">${s.youtubeUrl}</a>
+            ${s.viewers !== undefined && s.viewers !== null ? `<span style="margin-left: 8px; color: #ff6b6b; font-weight: 700; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); padding: 1px 6px; border-radius: 4px;">👁️ ${Number(s.viewers).toLocaleString('vi-VN')} người xem${s.youtubeLikes ? ` | 👍 ${Number(s.youtubeLikes).toLocaleString('vi-VN')}` : ''}</span>` : ''}
           </span>
           <button style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 0 4px; font-size: 0.72rem; margin-left: auto; flex-shrink: 0;" onclick="event.stopPropagation(); navigator.clipboard.writeText('${s.youtubeUrl}'); showToast('Đã sao chép Link YouTube!', 'success');" title="Sao chép link YouTube">📋</button>
         </div>
@@ -4286,6 +4316,25 @@ function renderStreams(list) {
             </div>
             
             <div class="stream-badge-badges" style="display: flex; align-items: center; gap: 8px;">
+              ${s.viewers !== undefined && s.viewers !== null && s.status === 'live' ? `
+                <span class="viewers-badge" style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 5px;
+                  background: rgba(239, 68, 68, 0.22);
+                  border: 1.5px solid #ef4444;
+                  color: #ff8b8b;
+                  font-size: 0.72rem;
+                  font-weight: 800;
+                  padding: 3px 8px;
+                  border-radius: 6px;
+                  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+                  animation: pulse 2s infinite;
+                " title="Số người đang xem trực tiếp trên YouTube">
+                  <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#ef4444; box-shadow:0 0 6px #ef4444;"></span>
+                  👁️ ${Number(s.viewers).toLocaleString('vi-VN')} mắt
+                </span>
+              ` : ''}
               ${s.dualStream ? '<span class="protection-badge" style="font-size:0.68rem; font-weight: 700; padding: 3px 8px; border-radius: 6px;">🛡️ DUAL A+B</span>' : ''}
               <span class="status-badge ${s.status}" style="font-size:0.68rem; font-weight: 800; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.3px;">${statusLabel}</span>
             </div>
@@ -5268,6 +5317,22 @@ async function loadSheetConfigUI() {
       secInp.value = cfg.syncSecret;
     }
     renderDriveCopyConfig(cfg.driveCopyUrls || []);
+    
+    // Nạp cấu hình Apps Script Đọc Mắt YouTube
+    const ytUrlInp = document.getElementById('youtubeStatsUrlInput');
+    const ytBadge = document.getElementById('youtubeStatsBadge');
+    if (ytUrlInp && ytBadge) {
+      ytUrlInp.value = cfg.youtubeStatsScriptUrl || '';
+      if (cfg.youtubeStatsScriptUrl) {
+        ytBadge.innerHTML = '🟢 Đang hoạt động';
+        ytBadge.style.background = 'rgba(239,68,68,0.15)';
+        ytBadge.style.color = '#ff8b8b';
+      } else {
+        ytBadge.innerHTML = '⚪ Chưa cài';
+        ytBadge.style.background = 'rgba(156,163,175,0.15)';
+        ytBadge.style.color = '#9ca3af';
+      }
+    }
   } catch (_) {}
 }
 
@@ -5350,6 +5415,186 @@ async function copyDriveCopyScript() {
     }
   } catch (e) {
     showToast('Lỗi kết nối: ' + e.message, 'error');
+  }
+}
+
+async function copyYouTubeStatsScript() {
+  const code = `/**
+ * Google Apps Script đọc số mắt xem Live YouTube Realtime
+ * Hướng dẫn cài đặt nhanh trong 1 phút:
+ * 1. Vào https://script.google.com -> Bấm "Dự án mới" (New project)
+ * 2. Ở cột bên trái, bấm dấu [+] cạnh "Dịch vụ" (Services) -> Tìm chọn "YouTube Data API v3" -> Bấm Thêm (Add)
+ * 3. Xóa code cũ, dán toàn bộ đoạn code này vào file Code.gs -> Bấm Lưu (Ctrl + S)
+ * 4. Bấm "Triển khai" (Deploy) góc trên bên phải -> "Tùy chọn triển khai mới" (New deployment)
+ *    - Chọn loại: "Ứng dụng web" (Web app)
+ *    - Ai có quyền truy cập (Who has access): Chọn "Bất kỳ ai" (Anyone)
+ *    - Bấm "Triển khai" (Deploy) -> Cấp quyền cho tài khoản nếu có yêu cầu
+ * 5. Sao chép URL Web App (link có đuôi /exec) dán vào ô trên Dashboard Livenew -> Bấm LƯU LINK!
+ */
+
+function doGet(e) {
+  var p = (e && e.parameter) || {};
+  var videoIds = p.videoIds || p.id || p.videoId || '';
+  
+  if (!videoIds) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      ok: false, 
+      error: 'Thiếu tham số videoIds' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    // Dùng YouTube Data API v3 lấy chi tiết luồng live & thống kê
+    var resp = YouTube.Videos.list('liveStreamingDetails,statistics,snippet', { 
+      id: videoIds 
+    });
+    
+    var items = {};
+    if (resp && resp.items) {
+      resp.items.forEach(function(v) {
+        var live = v.liveStreamingDetails || {};
+        var stats = v.statistics || {};
+        var snip = v.snippet || {};
+        var viewers = live.concurrentViewers ? parseInt(live.concurrentViewers, 10) : null;
+        var isLive = snip.liveBroadcastContent === 'live' || viewers !== null;
+        
+        items[v.id] = {
+          viewers: viewers,
+          views: parseInt(stats.viewCount || 0, 10),
+          likes: parseInt(stats.likeCount || 0, 10),
+          isLive: isLive,
+          title: snip.title || '',
+          channelTitle: snip.channelTitle || ''
+        };
+      });
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ 
+      ok: true, 
+      count: Object.keys(items).length,
+      items: items 
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      ok: false, 
+      error: err.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+  try {
+    await navigator.clipboard.writeText(code);
+    showToast('📋 Đã sao chép Code Apps Script Đọc Mắt Live! Dán vào script.google.com', 'success');
+  } catch (_) {
+    prompt('Sao chép code Apps Script dưới đây rồi dán vào script.google.com:', code);
+  }
+}
+
+async function saveYouTubeStatsConfigUI() {
+  const urlInp = document.getElementById('youtubeStatsUrlInput');
+  const btn = document.getElementById('btnSaveYouTubeStats');
+  const badge = document.getElementById('youtubeStatsBadge');
+  const resultEl = document.getElementById('youtubeStatsResult');
+  const url = (urlInp ? urlInp.value : '').trim();
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu...'; }
+
+  try {
+    const res = await authFetch('/api/sheet/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtubeStatsScriptUrl: url })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      if (url) {
+        showToast('Đã lưu cấu hình Apps Script đọc mắt YouTube!', 'success');
+        if (badge) {
+          badge.innerHTML = '🟢 Đang hoạt động';
+          badge.style.background = 'rgba(239,68,68,0.15)';
+          badge.style.color = '#ff8b8b';
+        }
+        if (resultEl) {
+          resultEl.innerHTML = `<span style="color: #34d399;">✓ Đã lưu link thành công. Hệ thống sẽ tự động quét mắt xem cho các luồng Live mỗi 60 giây.</span>`;
+        }
+      } else {
+        showToast('Đã hủy cấu hình Apps Script đọc mắt YouTube', 'info');
+        if (badge) {
+          badge.innerHTML = '⚪ Chưa cài';
+          badge.style.background = 'rgba(156,163,175,0.15)';
+          badge.style.color = '#9ca3af';
+        }
+        if (resultEl) resultEl.innerHTML = '';
+      }
+    } else {
+      showToast(data.error || 'Lỗi khi lưu link Apps Script!', 'error');
+    }
+  } catch (err) {
+    showToast('Lỗi kết nối: ' + err.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 LƯU LINK'; }
+  }
+}
+
+async function testYouTubeStatsConfigUI() {
+  const urlInp = document.getElementById('youtubeStatsUrlInput');
+  const btn = document.getElementById('btnTestYouTubeStats');
+  const resultEl = document.getElementById('youtubeStatsResult');
+  const scriptUrl = (urlInp ? urlInp.value : '').trim();
+
+  if (!scriptUrl) {
+    showToast('Vui lòng dán link Apps Script vào ô trước khi kiểm tra!', 'error');
+    if (urlInp) urlInp.focus();
+    return;
+  }
+
+  // Lấy video URL từ một luồng live đang chạy (nếu có), hoặc hỏi người dùng
+  let testVideoUrl = '';
+  const liveStream = (streamsCache || []).find(s => s.status === 'live' && s.youtubeUrl);
+  if (liveStream) {
+    testVideoUrl = liveStream.youtubeUrl;
+  } else {
+    testVideoUrl = prompt('Nhập link video/live YouTube cần kiểm tra thử:', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    if (!testVideoUrl) return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang kiểm tra...'; }
+  if (resultEl) resultEl.innerHTML = `<span style="color: var(--text-muted);">Đang kết nối tới Apps Script và đọc số liệu video: <code>${escapeHtml(testVideoUrl)}</code>...</span>`;
+
+  try {
+    const res = await authFetch('/api/youtube/test-stats', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scriptUrl, videoUrl: testVideoUrl })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      const stats = data.stats || {};
+      const viewersStr = stats.viewers !== null && stats.viewers !== undefined ? `${Number(stats.viewers).toLocaleString('vi-VN')} mắt` : 'Chưa live / Không có người xem';
+      showToast(`Kết nối thành công! Đọc được: ${viewersStr}`, 'success');
+      if (resultEl) {
+        resultEl.innerHTML = `
+          <div style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 8px; padding: 8px 12px; margin-top: 6px; color: #a7f3d0;">
+            <div style="font-weight: 700; color: #34d399;">✓ KẾT NỐI APPS SCRIPT THÀNH CÔNG!</div>
+            <div>📺 Video ID: <code>${escapeHtml(data.videoId)}</code> — <b>${escapeHtml(stats.title || 'Video YouTube')}</b></div>
+            <div>👁️ Mắt xem trực tiếp: <strong style="color: #ff8b8b;">${viewersStr}</strong> | 📊 Lượt xem: <b>${(stats.views || 0).toLocaleString('vi-VN')}</b> | 👍 Like: <b>${(stats.likes || 0).toLocaleString('vi-VN')}</b></div>
+            <div>🚀 Trạng thái: <span style="padding: 1px 6px; border-radius: 4px; background: rgba(0,0,0,0.3); color: ${stats.isLive ? '#34d399' : '#9ca3af'}; font-weight: 700;">${stats.isLive ? '🔴 LIVE' : '⚪ VIDEO THƯỜNG / ENDED'}</span></div>
+          </div>
+        `;
+      }
+    } else {
+      showToast(data.error || 'Kiểm tra thất bại!', 'error');
+      if (resultEl) {
+        resultEl.innerHTML = `<span style="color: #ef4444;">❌ Lỗi: ${escapeHtml(data.error || 'Apps Script không phản hồi dữ liệu hợp lệ')}</span>`;
+      }
+    }
+  } catch (err) {
+    showToast('Lỗi kết nối: ' + err.message, 'error');
+    if (resultEl) {
+      resultEl.innerHTML = `<span style="color: #ef4444;">❌ Lỗi: ${escapeHtml(err.message)}</span>`;
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ KIỂM TRA MẮT XEM'; }
   }
 }
 

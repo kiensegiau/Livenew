@@ -24,6 +24,7 @@ const clusterManager = require('./clusterManager');
 // Drive "hết lượt tải" → tự tạo bản sao tạm qua Apps Script rồi tải bản sao (tắt: DRIVE_AUTO_COPY=0)
 const driveQuota = require('./driveQuota');
 const diagnostics = require('./diagnostics');
+const youtubeViewer = require('./youtubeViewer');
 driveQuota.init({ userManager, clusterManager, getLocalNodeId: () => localNodeId });
 
 const PORT = parseInt(process.env.PORT) || 3131;
@@ -1742,7 +1743,8 @@ const server = http.createServer(async (req, res) => {
     if (!body) { json(res, 400, { error: 'Invalid JSON' }); return; }
 
     const updated = userManager.updateSheetConfig({
-      googleSheetScriptUrl: body.googleSheetScriptUrl ? body.googleSheetScriptUrl.trim() : '',
+      googleSheetScriptUrl: body.googleSheetScriptUrl !== undefined ? body.googleSheetScriptUrl.trim() : (userManager.getSheetConfig().googleSheetScriptUrl || ''),
+      youtubeStatsScriptUrl: body.youtubeStatsScriptUrl !== undefined ? body.youtubeStatsScriptUrl.trim() : (userManager.getSheetConfig().youtubeStatsScriptUrl || ''),
       syncSecret: body.syncSecret ? body.syncSecret.trim() : userManager.getSheetConfig().syncSecret
     });
 
@@ -1752,6 +1754,30 @@ const server = http.createServer(async (req, res) => {
     }
 
     json(res, 200, { ok: true, config: updated, testResult: testRes });
+    return;
+  }
+
+  // API: Kiểm tra kết nối Apps Script đọc mắt live YouTube
+  if (req.method === 'POST' && pathname === '/api/youtube/test-stats') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Unauthorized' }); return; }
+    const body = (await parseBody(req)) || {};
+    const testUrl = body.scriptUrl ? body.scriptUrl.trim() : (userManager.getSheetConfig().youtubeStatsScriptUrl || userManager.getSheetConfig().googleSheetScriptUrl || '');
+    const videoUrl = body.videoUrl || 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+    const videoId = youtubeViewer.extractYouTubeVideoId(videoUrl);
+    if (!videoId) {
+      json(res, 400, { error: 'Link video YouTube không hợp lệ' });
+      return;
+    }
+    if (!testUrl) {
+      json(res, 400, { error: 'Chưa cấu hình URL Web App Apps Script' });
+      return;
+    }
+    try {
+      const stats = await youtubeViewer.fetchLiveStats([videoId], { scriptUrl: testUrl });
+      json(res, 200, { ok: true, videoId, stats: stats[videoId] || null, raw: stats });
+    } catch (e) {
+      json(res, 200, { ok: false, error: e.message });
+    }
     return;
   }
 
@@ -2586,6 +2612,10 @@ const server = http.createServer(async (req, res) => {
         dlPercent: s.dlPercent !== undefined ? s.dlPercent : null,
         dlSpeed: s.dlSpeed || 0,
         youtubeUrl: s.youtubeUrl || '',
+        viewers: s.viewers !== undefined ? s.viewers : null,
+        youtubeViews: s.youtubeViews !== undefined ? s.youtubeViews : null,
+        youtubeLikes: s.youtubeLikes !== undefined ? s.youtubeLikes : null,
+        youtubeLiveStatus: s.youtubeLiveStatus || null,
         ownerId: s.ownerId || 'admin_root',
         ownerUsername: s.ownerUsername || 'admin',
         serverId: localNodeId,
@@ -2607,6 +2637,9 @@ const server = http.createServer(async (req, res) => {
           if (currentUser.role === 'admin' || isOwner) {
             list.push({
               ...rs,
+              viewers: rs.viewers !== undefined ? rs.viewers : null,
+              youtubeViews: rs.youtubeViews !== undefined ? rs.youtubeViews : null,
+              youtubeLikes: rs.youtubeLikes !== undefined ? rs.youtubeLikes : null,
               key: currentUser.role === 'admin' || isOwner ? rs.key : (String(rs.key || '').substring(0, 6) + '****'),
               keyHint: String(rs.key || '').substring(0, 6) + '****'
             });
@@ -2636,6 +2669,7 @@ async function getClusterOverview() {
     id: s.id, name: s.name || '', status: s.status, mode: s.mode, startTime: s.startTime,
     scheduledTime: s.scheduledTime, lastLog: s.lastLog || '', dualStream: !!s.dualStream,
     streamAActive: s.streamAActive !== false, streamBActive: s.streamBActive !== false,
+    viewers: s.viewers !== undefined ? s.viewers : null,
     serverId: localNodeId, serverName: localName, isRemote: false
   }));
   let remote = [];
@@ -2794,6 +2828,21 @@ server.listen(PORT, '0.0.0.0', async () => {
     });
   } catch (e) { console.error('[HistorySheet] Không khởi động được:', e.message); }
   cleanupOrphanedFiles(); // Sau đó mới dọn dẹp các file không nằm trong danh sách
+  
+  // Khởi động bộ quét mắt xem Live YouTube tự động
+  try {
+    youtubeViewer.startYouTubePoller({
+      getStreams: () => Array.from(streams.values()),
+      getScriptUrl: () => {
+        const sc = userManager.getSheetConfig() || {};
+        return sc.youtubeStatsScriptUrl || sc.googleSheetScriptUrl || process.env.YOUTUBE_STATS_SCRIPT_URL || '';
+      },
+      getApiKey: () => process.env.YOUTUBE_API_KEY || '',
+      intervalMs: parseInt(process.env.YOUTUBE_POLL_INTERVAL_MS, 10) || 60000
+    });
+  } catch (e) {
+    console.error('[YouTube Viewer] Lỗi khởi động:', e.message);
+  }
   
   // Tự động quét dọn định kỳ mỗi 1 tiếng
   setInterval(() => cleanupOrphanedFiles(), 60 * 60 * 1000);
