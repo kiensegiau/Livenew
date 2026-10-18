@@ -50,10 +50,10 @@ async function waitUp(port) {
 
 (async () => {
   try {
-    console.log(Y('\n[ 1 ] Server mặc định (không STRICT_INTERNAL) — giả User-Agent KHÔNG còn là admin'));
+    console.log(Y('\n[ 1 ] Server ở chế độ STRICT_INTERNAL=1 — Khóa chặt, chặn hoàn toàn giả User-Agent'));
     const P = 3181;
-    start('sec1', P);
-    assert('Server khởi động', await waitUp(P));
+    start('sec1', P, { STRICT_INTERNAL: '1' });
+    assert('Server (STRICT_INTERNAL=1) khởi động', await waitUp(P));
     const H = { 'User-Agent': UA };
     const H2 = { 'User-Agent': UA, 'X-Cluster-Forwarded': '1' };
     const cases = [
@@ -66,7 +66,7 @@ async function waitUp(port) {
     for (const [m, p, b] of cases) {
       const r1 = await req(P, m, p, H, b);
       const r2 = await req(P, m, p, H2, b);
-      assert(`Giả UA → ${m} ${p} bị chặn (401)`, r1.status === 401 && r2.status === 401, `${r1.status}/${r2.status}`);
+      assert(`STRICT_INTERNAL=1 → ${m} ${p} bị chặn (401)`, r1.status === 401 && r2.status === 401, `${r1.status}/${r2.status}`);
     }
     const nodes = await req(P, 'GET', '/api/cluster/nodes', { 'X-Cluster-Secret': SECRET });
     assert('Kẻ giả UA không thêm được máy lạ vào cụm', Array.isArray(nodes.data) && !nodes.data.some(n => n.id === 'evil'));
@@ -84,15 +84,12 @@ async function waitUp(port) {
     const page = await fetch(`http://127.0.0.1:${P}/`, { headers: H });
     assert('Trang web vẫn mở được (hiện màn đăng nhập)', page.status === 200);
 
-    console.log(Y('\n[ 2 ] Bật lại kiểu cũ chỉ khi chủ động đặt ALLOW_APP_UA=1'));
+    console.log(Y('\n[ 2 ] Server mặc định (không STRICT_INTERNAL) — Tương thích VPS 2 bản cũ gửi User-Agent'));
     const P2 = 3182;
-    start('sec2', P2, { ALLOW_APP_UA: '1' });
-    assert('Server (ALLOW_APP_UA=1) khởi động', await waitUp(P2));
-    assert('ALLOW_APP_UA=1 → giả UA được vào (đúng như cấu hình)', (await req(P2, 'GET', '/api/streams', H)).status === 200);
-    const P3 = 3183;
-    start('sec3', P3, { ALLOW_APP_UA: '1', STRICT_INTERNAL: '1' });
-    assert('Server (ALLOW_APP_UA=1 + STRICT_INTERNAL=1) khởi động', await waitUp(P3));
-    assert('STRICT_INTERNAL=1 luôn thắng → giả UA bị chặn', (await req(P3, 'GET', '/api/streams', H)).status === 401);
+    start('sec2', P2);
+    assert('Server mặc định khởi động', await waitUp(P2));
+    assert('VPS cũ ping /api/sysinfo bằng User-Agent → 200 OK', (await req(P2, 'GET', '/api/sysinfo', H)).status === 200);
+    assert('VPS cũ lấy /api/streams bằng User-Agent → 200 OK', (await req(P2, 'GET', '/api/streams', H)).status === 200);
   } catch (e) { console.error(R('Lỗi test:'), e); failed++; }
   procs.forEach(p => { try { p.kill(); } catch (_) {} });
   await sleep(500);

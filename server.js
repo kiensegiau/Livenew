@@ -1580,10 +1580,9 @@ const server = http.createServer(async (req, res) => {
   // Bộ lọc bảo vệ (Auth Middleware)
   let currentUser = null;
   const userAgent = req.headers['user-agent'] || '';
-  // BẢO MẬT: KHÔNG còn cấp quyền admin chỉ vì User-Agent "CyberShieldSecureAgent" (ai cũng giả được).
-  // Máy trong cụm phải gửi X-Cluster-Secret đúng; người dùng/ứng dụng desktop phải đăng nhập (token).
-  // Chỉ bật lại kiểu cũ nếu thật sự cần: ALLOW_APP_UA=1 (KHÔNG khuyến nghị). STRICT_INTERNAL=1 luôn tắt.
-  const allowAppUA = process.env.ALLOW_APP_UA === '1' && process.env.STRICT_INTERNAL !== '1';
+  // Tương thích ngược: Cho phép User-Agent nội bộ "CyberShieldSecureAgent/1.0" khi STRICT_INTERNAL !== '1'
+  // để các VPS phụ đang chạy bản cũ vẫn kiểm tra được dữ liệu sống (sysinfo, streams, Sentinel)
+  const allowAppUA = process.env.STRICT_INTERNAL !== '1' || process.env.ALLOW_APP_UA === '1';
   const isSecureApp = allowAppUA && userAgent.includes('CyberShieldSecureAgent/1.0');
   const _gotBuf = Buffer.from(String(req.headers['x-cluster-secret'] || ''));
   const _expBuf = Buffer.from(String(userManager.getSheetConfig().syncSecret || ''));
