@@ -2835,7 +2835,7 @@ server.listen(PORT, '0.0.0.0', async () => {
       getStreams: () => Array.from(streams.values()),
       getScriptUrl: () => {
         const sc = userManager.getSheetConfig() || {};
-        return sc.youtubeStatsScriptUrl || sc.googleSheetScriptUrl || process.env.YOUTUBE_STATS_SCRIPT_URL || '';
+        return sc.youtubeStatsScriptUrl || process.env.YOUTUBE_STATS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbxYgYyp4MHxYQ8HoovJwywvwgLCrpETZ71Kha6L4Pzva3nvv65p95ZXQnQvzNh1GVmiLw/exec';
       },
       getApiKey: () => process.env.YOUTUBE_API_KEY || '',
       intervalMs: parseInt(process.env.YOUTUBE_POLL_INTERVAL_MS, 10) || 60000

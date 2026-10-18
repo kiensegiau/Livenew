@@ -5322,16 +5322,11 @@ async function loadSheetConfigUI() {
     const ytUrlInp = document.getElementById('youtubeStatsUrlInput');
     const ytBadge = document.getElementById('youtubeStatsBadge');
     if (ytUrlInp && ytBadge) {
-      ytUrlInp.value = cfg.youtubeStatsScriptUrl || '';
-      if (cfg.youtubeStatsScriptUrl) {
-        ytBadge.innerHTML = '🟢 Đang hoạt động';
-        ytBadge.style.background = 'rgba(239,68,68,0.15)';
-        ytBadge.style.color = '#ff8b8b';
-      } else {
-        ytBadge.innerHTML = '⚪ Chưa cài';
-        ytBadge.style.background = 'rgba(156,163,175,0.15)';
-        ytBadge.style.color = '#9ca3af';
-      }
+      const currentScript = cfg.youtubeStatsScriptUrl || 'https://script.google.com/macros/s/AKfycbxYgYyp4MHxYQ8HoovJwywvwgLCrpETZ71Kha6L4Pzva3nvv65p95ZXQnQvzNh1GVmiLw/exec';
+      ytUrlInp.value = currentScript;
+      ytBadge.innerHTML = '🟢 Đang hoạt động';
+      ytBadge.style.background = 'rgba(239,68,68,0.15)';
+      ytBadge.style.color = '#ff8b8b';
     }
   } catch (_) {}
 }
