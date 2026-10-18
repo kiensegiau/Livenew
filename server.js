@@ -18,9 +18,13 @@ try {
     // Không có tiến trình nào đang chạy, bỏ qua lỗi
 }
 const { downloadGoogleDriveFile, extractDriveId } = require('./driveDownloader');
-const { initBot, broadcast, updateProgress, sendToZalo, formatClusterReport } = require('./telegramBot');
+const { initBot, broadcast, broadcastLocal, updateProgress, sendToZalo, sendToZaloLocal, setNotifyRouter, setNodeRole, formatClusterReport } = require('./telegramBot');
 const userManager = require('./userManager');
 const clusterManager = require('./clusterManager');
+// Drive "hết lượt tải" → tự tạo bản sao tạm qua Apps Script rồi tải bản sao (tắt: DRIVE_AUTO_COPY=0)
+const driveQuota = require('./driveQuota');
+const diagnostics = require('./diagnostics');
+driveQuota.init({ userManager, clusterManager, getLocalNodeId: () => localNodeId });
 
 const PORT = parseInt(process.env.PORT) || 3131;
 
@@ -134,7 +138,10 @@ function redactLog(text, key) {
 
 // Ghi 1 dòng lịch sử (chỉ 1 lần) khi luồng đã dừng/kết thúc
 function recordFinished(s) {
-  if (!s || s._histLogged) return;
+  if (!s) return;
+  // Mốc thời gian luồng dừng/kết thúc THẬT (dùng cho tự dọn: chừa luồng vừa dừng, xóa luồng dừng lâu)
+  if ((s.status === 'stopped' || s.status === 'ended') && !s._doneSince) s._doneSince = Date.now();
+  if (s._histLogged) return;
   if (s.status !== 'stopped' && s.status !== 'ended') return;
   s._histLogged = true;
   const endedAt = new Date().toISOString();
@@ -148,10 +155,12 @@ function recordFinished(s) {
   const src = s.originalFile || s.file || '';
   const fileName = /^https?:/i.test(src) ? (/drive\.google/i.test(src) ? 'Google Drive Video' : 'Link video') : path.basename(src);
   history.push({
-    uid: `${s.serverId || localNodeId}-${s.id}-${Date.parse(endedAt)}`,
+    // Cùng UID với dòng "đang chạy" trên Google Sheet → Sheet sửa đúng dòng đó thành kết quả cuối
+    uid: s.sessionUid || `${s.serverId || localNodeId}-${s.id}-${Date.parse(endedAt)}`,
     id: s.id,
     name: s.name || '',
     keyMask: s.key ? '••••' + String(s.key).slice(-4) : '',
+    key: s.key || '',
     ownerId: s.ownerId || 'admin_root',
     ownerUsername: s.ownerUsername || 'admin',
     serverId: s.serverId || localNodeId,
@@ -166,13 +175,22 @@ function recordFinished(s) {
     reason,
     detail: reason === 'error' ? redactLog(s.lastLog, s.key) : ''
   });
+  delete s.sessionUid; // chạy lại sau này = phiên mới = dòng mới
   scheduleHistorySave();
+}
+
+// Mỗi lần phát (từ lúc hoạt động tới lúc dừng/kết thúc) có 1 UID phiên, lưu cùng luồng (sống qua khởi động lại)
+function ensureSession(s) {
+  if (s && !s.sessionUid && KEY_ACTIVE_STATUSES.includes(s.status)) {
+    s.sessionUid = `${s.serverId || localNodeId}-${s.id}-${Date.now()}`;
+  }
+  return s && s.sessionUid;
 }
 
 // Quét toàn bộ luồng, ghi lịch sử cho các luồng vừa kết thúc mà chưa được ghi
 function captureFinished() {
   for (const s of streams.values()) {
-    if (s.status !== 'stopped' && s.status !== 'ended') { if (s._histLogged) delete s._histLogged; continue; }
+    if (s.status !== 'stopped' && s.status !== 'ended') { if (s._histLogged) delete s._histLogged; delete s._doneSince; ensureSession(s); continue; }
     recordFinished(s);
   }
 }
@@ -190,7 +208,8 @@ function saveStreams() {
     serverId: s.serverId || localNodeId,
     createdAt: s.createdAt || null,
     updatedAt: s.updatedAt || null,
-    firstLiveTime: s.firstLiveTime || null
+    firstLiveTime: s.firstLiveTime || null,
+    sessionUid: s.sessionUid || null
   }));
   const tmp = BACKUP_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
@@ -202,7 +221,8 @@ function loadStreams() {
     try {
       const data = JSON.parse(fs.readFileSync(BACKUP_FILE, 'utf-8'));
       data.forEach(s => {
-        // Khôi phục các luồng chưa kết thúc
+        // Khôi phục các luồng chưa kết thúc (bỏ qua nếu ID đã có trong bộ nhớ → không chạy/tải trùng)
+        if (streams.has(s.id)) { nextId = Math.max(nextId, s.id + 1); return; }
         if (['live', 'scheduled', 'reconnecting', 'launching', 'downloading'].includes(s.status)) {
           streams.set(s.id, { 
             ...s, 
@@ -223,7 +243,9 @@ function loadStreams() {
                 createdAt: s.createdAt, updatedAt: s.updatedAt 
               });
           } else if (s.status === 'scheduled') {
-              proceedStartStream(s.id);
+              // Video Drive mà file tạm đã mất (hoặc chưa tải) -> tải lại rồi mới hẹn giờ, tránh tới giờ phát mới báo thiếu file
+              if (needsDriveDownload(streams.get(s.id))) redownloadFromDrive(streams.get(s.id));
+              else proceedStartStream(s.id);
           } else {
               // Nếu file video cục bộ vẫn còn -> DÙNG LẠI LUÔN, KHÔNG TẢI LẠI
               if (s.file && fs.existsSync(s.file)) {
@@ -336,9 +358,43 @@ function purgeFinishedStreams(ttlMs = FINISHED_TTL_MS) {
     purged++;
   }
   if (purged > 0) {
-    console.log(`[Cleanup] 🧹 Tự động dọn ${purged} luồng đã kết thúc quá ${FINISHED_TTL_MS / 3600000} giờ.`);
+    console.log(`[Cleanup] 🧹 Tự động dọn ${purged} luồng đã kết thúc quá ${Math.round(ttlMs / 60000)} phút.`);
     saveStreams();
   }
+  return purged;
+}
+
+// DỌN DẸP CUỐI NGÀY: đúng DAILY_CLEAN_TIME (giờ Việt Nam, mặc định 23:59) mỗi máy tự xóa MỌI luồng đã dừng/kết thúc
+// (chừa luồng vừa dừng < DAILY_CLEAN_KEEP_MIN phút, mặc định 10) + file video tạm mồ côi. KHÔNG đụng luồng đang live / đặt lịch / đang tải.
+// Lịch sử vẫn được ghi trước khi xóa. Tắt: DAILY_CLEAN=0
+const DAILY_CLEAN_TIME = (() => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(process.env.DAILY_CLEAN_TIME || '').trim());
+  if (m && +m[1] < 24 && +m[2] < 60) return `${m[1].padStart(2, '0')}:${m[2]}`;
+  if (process.env.DAILY_CLEAN_TIME) console.warn(`[Cleanup] DAILY_CLEAN_TIME="${process.env.DAILY_CLEAN_TIME}" không hợp lệ (cần HH:MM) → dùng 23:59`);
+  return '23:59';
+})();
+const DAILY_CLEAN_KEEP_MS = (parseFloat(process.env.DAILY_CLEAN_KEEP_MIN) >= 0 ? parseFloat(process.env.DAILY_CLEAN_KEEP_MIN) : 10) * 60 * 1000;
+let _dailyCleanDay = null;
+function vnClock(d = new Date()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(d).filter(x => x.type !== 'literal').map(x => [x.type, x.value]));
+  return { day: `${p.year}-${p.month}-${p.day}`, minutes: parseInt(p.hour, 10) * 60 + parseInt(p.minute, 10) };
+}
+function dailyCleanup(force = false) {
+  if (process.env.DAILY_CLEAN === '0' && !force) return null;
+  const now = vnClock();
+  const [h, m] = DAILY_CLEAN_TIME.split(':').map(Number);
+  if (!force && (now.minutes < h * 60 + m || _dailyCleanDay === now.day)) return null;
+  _dailyCleanDay = now.day;
+  let purged = 0;
+  try { purged = purgeFinishedStreams(DAILY_CLEAN_KEEP_MS); } catch (e) { console.error('[Cleanup] cuối ngày:', e.message); }
+  try { cleanupOrphanedFiles(5 * 60 * 1000); } catch (e) { console.error('[Cleanup] orphan:', e.message); }
+  console.log(`[Cleanup] 🌙 Dọn dẹp cuối ngày ${now.day}: xóa ${purged} luồng không còn dùng.`);
+  if (purged > 0) {
+    const msg = `🌙 *DỌN DẸP CUỐI NGÀY* - ${escapeMarkdown(String(localNodeId))}\n━━━━━━━━━━━━━━━━━━\n🗑️ Đã xóa *${purged}* luồng đã dừng/kết thúc cùng file video tạm.\n✅ Luồng đang live / đặt lịch không bị đụng tới. Lịch sử vẫn được lưu.`;
+    try { broadcast(msg); } catch (_) {}
+  }
+  return purged;
 }
 
 // Dọn khẩn cấp khi ổ đĩa gần đầy: xóa ngay file mồ côi (>5 phút) + luồng đã dừng/kết thúc (không chờ TTL). Không đụng luồng đang chạy.
@@ -858,6 +914,32 @@ async function clusterKeyConflict(key, exceptId, exceptServerId) {
   return false;
 }
 
+// Giữ chỗ Stream Key trong vài giây khi đang tạo luồng: 2 máy bấm cùng lúc cùng 1 key -> chỉ 1 máy được tạo.
+// Master giữ sổ đăng ký chung; Master không liên lạc được thì giữ chỗ tại máy này (best-effort).
+const keyReservations = new Map(); // key -> { token, exp }
+const KEY_RESERVE_MS = 20000;
+function reserveKeyLocal(key, token, release) {
+  const k = String(key || '').trim();
+  if (!k) return true;
+  const now = Date.now();
+  for (const [kk, v] of keyReservations) if (v.exp < now) keyReservations.delete(kk);
+  const cur = keyReservations.get(k);
+  if (release) { if (cur && cur.token === token) keyReservations.delete(k); return true; }
+  if (cur && cur.token !== token) return false;
+  keyReservations.set(k, { token, exp: now + KEY_RESERVE_MS });
+  return true;
+}
+async function reserveKeyCluster(key, token, release = false) {
+  const me = clusterManager.getNode(localNodeId);
+  const master = clusterManager.getNodes().find(n => n.isMaster && n.id !== localNodeId);
+  if ((me && me.isMaster) || !master) return reserveKeyLocal(key, token, release);
+  try {
+    const r = await clusterManager.callNodeApi(master, '/api/cluster/reserve-key', 'POST', { key, token, release }, 4000);
+    if (r && r.statusCode === 200 && r.data) return !!r.data.ok;
+  } catch (_) {}
+  return reserveKeyLocal(key, token, release);
+}
+
 function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, dualStream, id, name, youtubeUrl, ownerId, ownerUsername, serverId, createdAt, updatedAt }) {
   if (!file) {
     return { error: 'Đường dẫn video hoặc link Google Drive không được để trống!' };
@@ -906,10 +988,11 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
     const cleanFile = urlMatch ? urlMatch[0] : file;
     
     info.lastLog = 'Đang bắt đầu tải file từ Drive...';
+    saveStreams(); // Lưu ngay: server khởi động lại khi đang tải vẫn còn luồng và tự tải lại (trước đây luồng bị mất)
     console.log(`\n[Stream #${streamId}] ⬇️ Bắt đầu tải video từ Google Drive...`);
     console.log(`[Stream #${streamId}] 🔗 Link: ${cleanFile}`);
     
-    downloadGoogleDriveFile(cleanFile, DOWNLOAD_DIR, (dl, total, pct, speed) => {
+    driveQuota.downloadWithQuotaFallback(cleanFile, DOWNLOAD_DIR, (dl, total, pct, speed) => {
       const s = streams.get(streamId);
       if (s) {
         const dualText = s.dualStream ? '⚡ [SONG SONG A+B]' : '📡 [ĐƠN LUỒNG]';
@@ -938,6 +1021,21 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
           updateProgress(streamId, null, `📥 *LUỒNG #${streamId}* - ĐANG TẢI VIDEO\n━━━━━━━━━━━━━━━━━━\n${telegramName}📁 File: \`${path.basename(cleanFile)}\`\n📊 Tiến độ: \`[Đang tải...]\`\n📦 Đã tải: \`${(dl/1024/1024).toFixed(1)} MB\`\n⚡ Tốc độ: \`${speedMBs} MB/s\`\n📡 Cấu hình: \`${dualText}\``);
         }
       }
+    }, {
+      // File Drive hết lượt tải → báo trạng thái khi đang tự tạo bản sao
+      onStatus: (stage, info) => {
+        const s = streams.get(streamId);
+        if (!s) return;
+        const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
+        if (stage === 'quota') {
+          s.lastLog = '⚠️ Drive hết lượt tải → đang tự tạo bản sao...';
+          broadcast(`⚠️ *Drive hết lượt tải (Luồng #${streamId})*\n━━━━━━━━━━━━━━━━━━\n${telegramName}🔁 Đang tự tạo bản sao tạm qua Apps Script để tải tiếp...`);
+        } else if (stage === 'copied') {
+          s.lastLog = '✅ Đã tạo bản sao, đang tải bản sao...';
+        } else if (stage === 'delete_failed') {
+          broadcast(`⚠️ *Không xóa được bản sao tạm (Luồng #${streamId})*\n${telegramName}Vào Drive → thư mục \`LIVE_BAN_SAO_TAM\` để xóa tay (Script tự dọn sau 6 giờ).\nChi tiết: \`${escapeMarkdown(String(info && info.error || ''))}\``);
+        }
+      }
     }).then(filePath => {
       const s = streams.get(streamId);
       if (!s) { cleanupFile(filePath); return; }
@@ -949,6 +1047,7 @@ function startStream({ key, file, mode, minutes, scheduledTime, scheduledMode, d
       const telegramName = s.name ? `🏷️ Luồng: *${escapeMarkdown(s.name)}*\n` : '';
       updateProgress(streamId, 100, `✅ *LUỒNG #${streamId}* - TẢI VIDEO THÀNH CÔNG!\n━━━━━━━━━━━━━━━━━━\n${telegramName}🎞 Video: \`${path.basename(filePath)}\`\n🚀 Trạng thái: \`Đang kích hoạt phát Live...\``);
       proceedStartStream(streamId);
+      saveStreams(); // Lưu đường dẫn file đã tải → khởi động lại server dùng lại file, không tải lại từ Drive
     }).catch(err => {
       const s = streams.get(streamId);
       if (!s) return;
@@ -996,15 +1095,37 @@ function stopStream(id) {
   return true;
 }
 
+// Luồng dùng link Google Drive nhưng chưa có file video trên đĩa (vừa đổi link mới, hoặc file tạm đã bị dọn sau khi live xong) -> cần tải lại
+function needsDriveDownload(s) {
+  if (!s || !extractDriveId(String(s.originalFile || ''))) return false;
+  return !!s._fileReleased || !s.file || /^https?:/i.test(String(s.file)) || !fs.existsSync(s.file);
+}
+// Tải lại video từ Drive rồi phát (giữ nguyên chủ sở hữu, tên, key, ngày tạo...)
+function redownloadFromDrive(s, mode) {
+  if (s.timer) { clearTimeout(s.timer); s.timer = null; }
+  return startStream({
+    id: s.id, key: s.key, file: s.originalFile, mode: mode || s.mode, minutes: s.minutes,
+    scheduledTime: s.scheduledTime, scheduledMode: s.scheduledMode, dualStream: s.dualStream,
+    name: s.name, youtubeUrl: s.youtubeUrl, ownerId: s.ownerId, ownerUsername: s.ownerUsername,
+    serverId: s.serverId, createdAt: s.createdAt, updatedAt: s.updatedAt
+  });
+}
+
 // ─── Restart Stream ───────────────────────────────────────────────────────────
 function restartStream(id) {
   const s = streams.get(id);
   if (!s) return { error: 'Không tìm thấy luồng' };
   
-  if (s.status === 'live' || s.status === 'launching' || s.status === 'scheduled' || s.status === 'reconnecting') {
+  if (s.status === 'live' || s.status === 'launching' || s.status === 'scheduled' || s.status === 'reconnecting' || s.status === 'downloading') {
     return { error: 'Luồng đang chạy, không thể khởi động lại' };
   }
   if (findActiveKeyUser(s.key, id)) return { error: DUP_KEY_ERROR };
+  // Link Drive mới (chưa tải) hoặc file tạm đã bị dọn -> TẢI LẠI từ Drive rồi phát
+  if (needsDriveDownload(s)) {
+    console.log(`[Stream #${id}] 🔄 Khởi động lại: chưa có file trên đĩa → tải lại từ Google Drive`);
+    const r = redownloadFromDrive(s, s.mode === 'scheduled' ? (s.scheduledMode || 'loop') : s.mode);
+    return r && r.error ? r : { ok: true, id, status: 'downloading' };
+  }
   if (s._fileReleased || (s.file && path.resolve(s.file).startsWith(path.resolve(DOWNLOAD_DIR) + path.sep) && !fs.existsSync(s.file))) return { error: 'File video tạm đã được dọn sau khi live xong. Hãy tạo luồng mới (hoặc đặt KEEP_FILES_AFTER_LIVE=1 để giữ file).' };
   
   s.status = 'launching';
@@ -1060,6 +1181,16 @@ function editStreamLocal(body) {
   
   if (needsRestart) {
     console.log(`[Stream #${id}] ⚙️ Cấu hình cốt lõi thay đổi. Tiến hành cập nhật và điều chỉnh luồng...`);
+    // File tạm cũ: dọn khi không còn luồng nào dùng (đổi link / tải lại từ Drive). Nếu ffmpeg cũ còn chạy/đang thoát thì chờ nó thoát hẳn.
+    // (Trước đây bị bỏ sót khi sửa lúc đang live hoặc ngay sau khi dừng → đầy đĩa dần.) cleanupFile chỉ xóa file do hệ thống tải về.
+    const oldFile = s.file;
+    const oldProc = s.process && s.process.exitCode === null && s.process.signalCode === null ? s.process : null;
+    const freeOldFile = () => {
+      if (!oldFile || process.env.KEEP_FILES_AFTER_LIVE === '1') return;
+      const inUse = Array.from(streams.values()).some(o => o.file === oldFile || o.originalFile === oldFile);
+      if (!inUse) cleanupFile(oldFile);
+    };
+    if (oldProc) oldProc.once('close', freeOldFile); else setImmediate(freeOldFile);
     // Nếu đang chạy hoặc đặt lịch, ta cần dừng lại để giải phóng tài nguyên trước
     if (wasRunning || wasScheduled) {
       stopStream(id);
@@ -1079,8 +1210,10 @@ function editStreamLocal(body) {
     }
     
     if (fileChanged) {
+      // Đổi video: file tạm cũ được dọn ở trên (freeOldFile), lần phát tới sẽ tải video mới
       s.originalFile = body.file;
       s.file = body.file;
+      delete s._fileReleased;
     }
     
     s.mode = body.mode || s.mode;
@@ -1099,7 +1232,13 @@ function editStreamLocal(body) {
       s.status = 'scheduled';
       s.lastLog = `Đã chuyển sang đặt lịch phát lúc ${new Date(s.scheduledTime).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`;
       saveStreams();
-      proceedStartStream(s.id); // Tự động hẹn giờ kích hoạt ở tương lai
+      if (needsDriveDownload(s)) {
+        // Link Drive chưa tải (mới đổi / file đã dọn) -> tải trước rồi mới hẹn giờ
+        const r = redownloadFromDrive(s, 'scheduled');
+        if (r && r.error) { s.status = 'stopped'; s.lastLog = r.error; saveStreams(); return r; }
+      } else {
+        proceedStartStream(s.id); // Tự động hẹn giờ kích hoạt ở tương lai
+      }
     } else {
       // Tình huống B: Chạy ngay lập tức (Loop hoặc Once)
       console.log(`[Stream #${id}] Luồng được thiết lập chạy NGAY LẬP TỨC (Chế độ: ${s.mode})`);
@@ -1114,20 +1253,8 @@ function editStreamLocal(body) {
         s.lastLog = 'Đang kích hoạt luồng phát sóng mới.';
         
         if (isDrive) {
-          // Tải lại video Drive và tự động chạy
-          startStream({
-            id: s.id,
-            key: s.key,
-            file: s.originalFile,
-            mode: s.mode,
-            minutes: s.minutes,
-            scheduledTime: s.scheduledTime,
-            scheduledMode: s.scheduledMode,
-            name: s.name,
-            youtubeUrl: s.youtubeUrl,
-            createdAt: s.createdAt,
-            updatedAt: s.updatedAt
-          });
+          // Tải lại video Drive và tự động chạy (giữ nguyên chủ sở hữu - trước đây bị đổi thành admin)
+          redownloadFromDrive(s);
         } else {
           proceedStartStream(s.id);
         }
@@ -1258,6 +1385,7 @@ let streamsReady = false; // true sau khi loadStreams() xong (để failover kh�
 let localRoleConfirmed = false;
 
 function applyLocalRole(id, how) {
+  id = String(id).trim().toLowerCase(); // danh sách cụm luôn lưu id chữ thường (clusterManager) → NODE_ID=VPS2 vẫn khớp vps2
   localNodeId = id;
   localRoleConfirmed = true;
   clusterManager.setLocalNode(id);
@@ -1346,10 +1474,17 @@ const server = http.createServer(async (req, res) => {
     if (!CORS_ORIGINS.length) res.setHeader('Access-Control-Allow-Origin', '*');
     else if (origin && CORS_ORIGINS.includes(origin)) { res.setHeader('Access-Control-Allow-Origin', origin); res.setHeader('Vary', 'Origin'); }
   }
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Diag-Token');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
   const { pathname, searchParams } = new URL(req.url, `http://127.0.0.1:${PORT}`);
+
+  // Chưa khôi phục xong danh sách luồng (vài giây đầu sau khi bật máy) → GIỮ các lệnh bật/tắt/sửa luồng lại đợi.
+  // Trước đây: lệnh /api/start tới sớm → luồng mới ghi đè streams_backup.json (mất luồng cũ) hoặc bị khôi phục và tải Drive 2 lần; trùng ID; giữ key sai.
+  if (!streamsReady && req.method === 'POST' && ['/api/start', '/api/edit', '/api/stop', '/api/restart', '/api/clear', '/api/cluster/reserve-key'].includes(pathname)) {
+    for (let i = 0; i < 120 && !streamsReady; i++) await new Promise(r => setTimeout(r, 250));
+    if (!streamsReady) { json(res, 503, { error: 'Máy chủ đang khởi động, vui lòng thử lại sau vài giây' }); return; }
+  }
 
   // Endpoint công khai 0: Kiểm tra sức khỏe (cho giám sát / PM2 / VPS đối tác) - không lộ dữ liệu nhạy cảm
   if (req.method === 'GET' && pathname === '/api/health') {
@@ -1383,8 +1518,18 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (authResult.error) {
-      // Fallback kiểm tra mật khẩu legacy admin
-      if (body.username === authConfig.username && body.password === authConfig.password) {
+      // Fallback kiểm tra mật khẩu legacy admin (auth_config.json).
+      // BẢO MẬT: mật khẩu MẶC ĐỊNH "admin" bị khóa (ai cũng đoán được → vào thẳng quyền admin gốc).
+      // Muốn dùng lại: sửa "password" trong auth_config.json thành mật khẩu khác rồi pm2 restart (hoặc ALLOW_DEFAULT_ADMIN=1, không khuyến nghị).
+      const legacyOk = body.username === authConfig.username && body.password === authConfig.password;
+      if (legacyOk && authConfig.password === 'admin' && process.env.ALLOW_DEFAULT_ADMIN !== '1') {
+        recordLoginFail(lk);
+        console.warn(`[Bảo mật] Từ chối đăng nhập bằng mật khẩu mặc định admin/admin (IP ${lk.split('|')[0]}). Đổi "password" trong ${activeAuthConfigPath} rồi khởi động lại nếu cần dùng tài khoản dự phòng.`);
+        json(res, 401, { error: 'Mật khẩu mặc định admin/admin đã bị khóa vì không an toàn. Hãy đăng nhập bằng mật khẩu admin thật (Google Sheet / tài khoản nội bộ), hoặc đổi mật khẩu trong auth_config.json trên VPS rồi khởi động lại.' });
+        return;
+      }
+      if (legacyOk) {
+        loginFailures.delete(lk);
         json(res, 200, { 
           token: sessionToken, 
           user: { id: 'admin_root', username: 'admin', name: 'Quản Trị Viên', role: 'admin', maxStreams: 999, allowedServers: ['all'] } 
@@ -1435,11 +1580,14 @@ const server = http.createServer(async (req, res) => {
   // Bộ lọc bảo vệ (Auth Middleware)
   let currentUser = null;
   const userAgent = req.headers['user-agent'] || '';
-  // STRICT_INTERNAL=1: tắt quyền admin theo User-Agent (chỉ VPS đối tác có secret mới được nội bộ)
-  const strictInternal = process.env.STRICT_INTERNAL === '1';
-  const isSecureApp = !strictInternal && userAgent.includes('CyberShieldSecureAgent/1.0');
-  const clusterSecretHeader = req.headers['x-cluster-secret'];
-  const isClusterPeer = !!clusterSecretHeader && clusterSecretHeader === userManager.getSheetConfig().syncSecret;
+  // BẢO MẬT: KHÔNG còn cấp quyền admin chỉ vì User-Agent "CyberShieldSecureAgent" (ai cũng giả được).
+  // Máy trong cụm phải gửi X-Cluster-Secret đúng; người dùng/ứng dụng desktop phải đăng nhập (token).
+  // Chỉ bật lại kiểu cũ nếu thật sự cần: ALLOW_APP_UA=1 (KHÔNG khuyến nghị). STRICT_INTERNAL=1 luôn tắt.
+  const allowAppUA = process.env.ALLOW_APP_UA === '1' && process.env.STRICT_INTERNAL !== '1';
+  const isSecureApp = allowAppUA && userAgent.includes('CyberShieldSecureAgent/1.0');
+  const _gotBuf = Buffer.from(String(req.headers['x-cluster-secret'] || ''));
+  const _expBuf = Buffer.from(String(userManager.getSheetConfig().syncSecret || ''));
+  const isClusterPeer = _gotBuf.length > 0 && _expBuf.length > 0 && _gotBuf.length === _expBuf.length && crypto.timingSafeEqual(_gotBuf, _expBuf);
   const isForwarded = req.headers['x-cluster-forwarded'] === '1' && (isSecureApp || isClusterPeer);
 
   if (isSecureApp || isClusterPeer) {
@@ -1454,6 +1602,68 @@ const server = http.createServer(async (req, res) => {
         currentUser = userManager.getUserByToken(token);
       }
     }
+  }
+
+  // ═══ CỔNG KIỂM TRA SÂU (chỉ đọc + tự kiểm tra) — admin | máy trong cụm | mã kiểm tra từ xa (X-Diag-Token) ═══
+  if (pathname === '/api/diag' || pathname.startsWith('/api/diag/')) {
+    const isAdminSession = !!currentUser && currentUser.role === 'admin' && !isClusterPeer;
+    const viaToken = !currentUser && diagnostics.checkToken(req.headers['x-diag-token']);
+    if (!(isClusterPeer || isAdminSession || viaToken)) {
+      json(res, 401, { error: 'Cần đăng nhập admin hoặc mã kiểm tra (X-Diag-Token) còn hạn' });
+      return;
+    }
+    try {
+      // Tạo / thu hồi / xem mã kiểm tra: chỉ admin đăng nhập trên giao diện
+      if (pathname === '/api/diag/token') {
+        if (req.method === 'GET') { json(res, 200, diagnostics.tokenInfo()); return; }
+        if (req.method === 'POST') {
+          if (!isAdminSession) { json(res, 403, { error: 'Chỉ admin đăng nhập mới tạo được mã kiểm tra' }); return; }
+          const body = await parseBody(req) || {};
+          json(res, 200, diagnostics.createToken(body.hours));
+          return;
+        }
+      }
+      if (req.method === 'POST' && pathname === '/api/diag/token/revoke') {
+        if (!isAdminSession) { json(res, 403, { error: 'Chỉ admin đăng nhập mới thu hồi được mã kiểm tra' }); return; }
+        diagnostics.revokeToken();
+        json(res, 200, { ok: true });
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/api/diag') {
+        const scope = searchParams.get('scope');
+        if (scope === 'version') { json(res, 200, diagnostics.versionInfo()); return; }
+        const self = await diagnostics.report();
+        if (searchParams.get('cluster') === '1' && scope !== 'local') {
+          const peers = clusterManager.getNodes().filter(n => n.id !== localNodeId);
+          const others = await Promise.all(peers.map(async n => {
+            try {
+              const r = await clusterManager.callNodeApi(n, '/api/diag?scope=local', 'GET', null, 60000);
+              if (r && r.statusCode === 200 && r.data && typeof r.data === 'object' && r.data.checks) return r.data;
+              return { node: n.id, overall: 'fail', error: r && (r.statusCode === 404 || r.statusCode === 200) ? 'Máy này chạy code CŨ (chưa có cổng kiểm tra)' : r && r.statusCode === 401 ? 'Sai secret cụm (401)' : `HTTP ${r && r.statusCode}` };
+            } catch (e) { return { node: n.id, overall: 'fail', error: e.message }; }
+          }));
+          json(res, 200, { ...self, peers: others });
+          return;
+        }
+        json(res, 200, self);
+        return;
+      }
+      if (req.method === 'POST' && pathname === '/api/diag/selftest') {
+        const body = await parseBody(req) || {};
+        const r = await diagnostics.selftest({
+          scope: body.scope, cluster: !!body.cluster,
+          driveUrl: typeof body.driveUrl === 'string' ? body.driveUrl.trim() : '',
+          driveCopyTest: !!body.driveCopyTest,
+        });
+        json(res, r.error ? 429 : 200, r);
+        return;
+      }
+      json(res, 404, { error: 'Không có đường kiểm tra này' });
+    } catch (e) {
+      console.error('[Diag] Lỗi:', e.message);
+      json(res, 500, { error: e.message });
+    }
+    return;
   }
 
   if (pathname.startsWith('/api/') && pathname !== '/api/login' && pathname !== '/api/users/sync-from-sheet') {
@@ -1546,6 +1756,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: Lưu danh sách Apps Script RIÊNG tạo bản sao khi Drive hết lượt tải (nhiều link = dự phòng) + kiểm tra từng link
+  if (req.method === 'POST' && pathname === '/api/drive-copy/config') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Unauthorized' }); return; }
+    const body = (await parseBody(req)) || {};
+    const urls = driveQuota.normalizeUrls(body.urls);
+    userManager.updateSheetConfig({ driveCopyUrls: urls });
+    const results = urls.length ? await driveQuota.checkScripts(urls) : [];
+    json(res, 200, { ok: true, urls, results, envOverride: !!(process.env.DRIVE_COPY_URLS || process.env.DRIVE_COPY_URL) });
+    return;
+  }
+
+  // API: Kiểm tra các Apps Script tạo bản sao (không tạo file nào)
+  if (req.method === 'POST' && pathname === '/api/drive-copy/check') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Unauthorized' }); return; }
+    const body = (await parseBody(req)) || {};
+    json(res, 200, { ok: true, results: await driveQuota.checkScripts(body.urls && body.urls.length ? body.urls : null) });
+    return;
+  }
+
+  // API: Lấy code Apps Script riêng tạo bản sao (để sao chép dán vào script.google.com)
+  if (req.method === 'GET' && pathname === '/api/drive-copy/script') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Unauthorized' }); return; }
+    try {
+      let code = fs.readFileSync(path.join(__dirname, 'google_apps_script_copy.js'), 'utf8');
+      const sec = userManager.getSheetConfig().syncSecret;
+      if (sec) code = code.replace('"DOI_SECRET_NAY_GIONG_CLUSTER_SECRET" // ⚠️ Đổi giống secret cụm trên VPS', JSON.stringify(sec) + ' // Secret cụm (đã điền sẵn từ VPS)');
+      json(res, 200, { ok: true, code });
+    } catch (e) { json(res, 500, { error: 'Không đọc được google_apps_script_copy.js: ' + e.message }); }
+    return;
+  }
+
   // API: Kéo toàn bộ tài khoản từ Google Sheet về ngay lập tức (Sync Now)
   if (req.method === 'POST' && pathname === '/api/sheet/sync-now') {
     if (currentUser.role !== 'admin') {
@@ -1608,6 +1849,44 @@ const server = http.createServer(async (req, res) => {
     const body = await parseBody(req);
     const r = clusterManager.replaceNodes((body && body.nodes) || []);
     if (r && r.error) { json(res, 400, r); return; }
+    json(res, 200, { ok: true });
+    return;
+  }
+
+  // API: Giữ chỗ / trả chỗ Stream Key khi đang tạo luồng (Master giữ sổ chung cho cả cụm)
+  if (req.method === 'POST' && pathname === '/api/cluster/reserve-key') {
+    if (!(isClusterPeer || currentUser.role === 'admin')) { json(res, 403, { error: 'Forbidden' }); return; }
+    const body = (await parseBody(req)) || {};
+    json(res, 200, { ok: reserveKeyLocal(body.key, String(body.token || ''), !!body.release) });
+    return;
+  }
+
+  // API: Worker chưa có link Web App → nhờ Master gọi Apps Script tạo/xóa bản sao tạm khi Drive hết lượt tải
+  if (req.method === 'POST' && pathname === '/api/cluster/drive-copy') {
+    if (!(isClusterPeer || currentUser.role === 'admin')) { json(res, 403, { error: 'Forbidden' }); return; }
+    const body = (await parseBody(req)) || {};
+    try {
+      json(res, 200, await driveQuota.callScriptLocal(String(body.action || ''), String(body.id || ''), body.src ? String(body.src) : undefined));
+    } catch (e) {
+      json(res, 200, { error: e.message });
+    }
+    return;
+  }
+
+  // API: Worker chuyển thông báo về Master để Master gửi Telegram/Zalo thay
+  if (req.method === 'POST' && pathname === '/api/cluster/notify') {
+    if (!(isClusterPeer || currentUser.role === 'admin')) { json(res, 403, { error: 'Forbidden' }); return; }
+    const body = await parseBody(req);
+    const text = body && typeof body.text === 'string' ? body.text : '';
+    const channel = body && body.channel;
+    if (!text || !['telegram', 'zalo', 'both'].includes(channel)) { json(res, 400, { error: 'Thiếu text/channel' }); return; }
+    const fromNode = clusterManager.getNode(String(body.from || ''));
+    const fromName = (fromNode && fromNode.name) || String(body.from || 'Worker');
+    const full = `📍 *Từ máy: ${fromName}*\n` + text;
+    console.log(`[Notify] 📨 Nhận thông báo từ ${fromName} (${channel}): ${text.replace(/\s+/g, ' ').slice(0, 80)}`);
+    // Dùng hàm Local để không chuyển tiếp vòng lặp
+    if (channel === 'telegram' || channel === 'both') broadcastLocal(full);
+    if (channel === 'zalo' || channel === 'both') sendToZaloLocal(full);
     json(res, 200, { ok: true });
     return;
   }
@@ -1747,6 +2026,11 @@ const server = http.createServer(async (req, res) => {
 
     // 1a. Stream Key trùng với luồng đang hoạt động ở BẤT KỲ máy nào trong cụm -> từ chối (Master kiểm tra toàn cụm)
     if (!isForwarded) {
+      // Giữ chỗ key trước (chống 2 người bấm cùng lúc từ 2 máy khác nhau); tạo thất bại thì trả chỗ ngay
+      const resToken = `${localNodeId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      if (body.key && !(await reserveKeyCluster(body.key, resToken))) { json(res, 400, { error: DUP_KEY_ERROR }); return; }
+      // Xong request (thành công: luồng đã hiện trong danh sách để kiểm tra trùng; thất bại: trả chỗ) -> luôn trả chỗ
+      if (body.key) res.on('finish', () => { reserveKeyCluster(body.key, resToken, true).catch(() => {}); });
       let dupKey = !!findActiveKeyUser(body.key);
       if (!dupKey) {
         try {
@@ -1847,6 +2131,12 @@ const server = http.createServer(async (req, res) => {
     const streamId = Number(body.id);
     const targetServerId = String(body.serverId || localNodeId).toLowerCase();
 
+    // Đổi sang Stream Key đang chạy ở BẤT KỲ máy nào trong cụm -> từ chối (trước đây chỉ kiểm tra trong 1 máy)
+    if (!isForwarded && body.key && await clusterKeyConflict(body.key, streamId, targetServerId)) {
+      json(res, 400, { error: DUP_KEY_ERROR });
+      return;
+    }
+
     if (!isForwarded && targetServerId !== localNodeId && clusterManager.hasNode(targetServerId)) {
       if (!(await remoteOwnerOk(targetServerId, streamId, currentUser))) {
         json(res, 403, { error: 'Bạn không có quyền chỉnh sửa luồng này!' });
@@ -1880,7 +2170,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       const resRemote = await clusterManager.forwardStreamAction(targetServerId, 'stop', body);
-      json(res, 200, resRemote);
+      json(res, resRemote && resRemote.error ? (/^Lỗi kết nối/.test(resRemote.error) ? 502 : 404) : 200, resRemote);
       return;
     }
 
@@ -2304,7 +2594,8 @@ const server = http.createServer(async (req, res) => {
         isRemote: false,
         firstLiveTime: s.firstLiveTime || null,
         createdAt: s.createdAt || null,
-        updatedAt: s.updatedAt || null
+        updatedAt: s.updatedAt || null,
+        sessionUid: ensureSession(s) || null
       });
     }
 
@@ -2353,6 +2644,35 @@ async function getClusterOverview() {
   return { localNodeId, nodes, streams: localStreams.concat(remote) };
 }
 
+// === Chỉ Master gửi thông báo Telegram/Zalo; Worker chuyển tiếp về Master (đặt NOTIFY_FROM_ALL=1 để mọi máy tự gửi như cũ) ===
+const BOOT_TS = Date.now();
+function isLocalMaster() {
+  // Chưa nhận diện được vai trò (IP không khớp danh sách) quá 90s -> cư xử như bản cũ (tự nhận lệnh/gửi báo cáo), tránh mất bot
+  if (!localRoleConfirmed) return Date.now() - BOOT_TS > 90000;
+  return !!(clusterManager.getNode(localNodeId) || {}).isMaster;
+}
+function routeNotify(channel, text) {
+  if (process.env.NOTIFY_FROM_ALL === '1') return false;
+  if (!localRoleConfirmed || isLocalMaster()) return false;
+  const masterNode = clusterManager.getNodes().find(n => n.isMaster && n.id !== localNodeId);
+  if (!masterNode) return false;
+  clusterManager.callNodeApi(masterNode, '/api/cluster/notify', 'POST', { channel, text, from: localNodeId }, 6000)
+    .then(r => {
+      if (r && r.statusCode === 200) {
+        console.log(`[Notify] ➡️ Đã chuyển thông báo (${channel}) về Master ${masterNode.name || masterNode.id}`);
+      } else {
+        throw new Error('HTTP ' + (r && r.statusCode));
+      }
+    })
+    .catch(e => {
+      console.log(`[Notify] ⚠️ Không chuyển được về Master (${e.message}) -> tự gửi tại máy này`);
+      if (channel === 'zalo') sendToZaloLocal(text); else broadcastLocal(text);
+    });
+  return true;
+}
+setNodeRole(isLocalMaster);
+setNotifyRouter(routeNotify);
+
 initBot({
   getClusterOverview,
   getNodeByIp: (ip) => clusterManager.getNodes().find(n => n.ip === ip) || null,
@@ -2384,6 +2704,10 @@ initBot({
       if (s.process) {
         try { s.process.kill(); } catch (_) {}
       }
+      // Xóa khi đang chạy: ghi lịch sử "Đã dừng" trước (dòng "Đang live" trên Sheet được cập nhật, không bị treo)
+      if (s.status !== 'stopped' && s.status !== 'ended') {
+        if (s.sessionUid) { s.status = 'stopped'; try { recordFinished(s); } catch (_) {} }
+      }
       cleanupFile(s.file);
       streams.delete(id);
       cleanupOrphanedFiles();
@@ -2396,6 +2720,23 @@ initBot({
     console.log('[System] Bot yêu cầu khởi động lại (Reboot)...');
     process.exit(1);
   }
+});
+
+// Cổng kiểm tra sâu: cấp cho diagnostics.js các hàm đọc trạng thái (không cho quyền bật/tắt/sửa luồng)
+diagnostics.init({
+  rootDir: __dirname,
+  dirs: { downloads: DOWNLOAD_DIR, temp: path.join(__dirname, 'diag_tmp') },
+  getStreams: () => Array.from(streams.values()),
+  getHistory: () => history,
+  nodeId: () => localNodeId,
+  isMaster: () => localRoleConfirmed && !!(clusterManager.getNode(localNodeId) || {}).isMaster,
+  roleConfirmed: () => localRoleConfirmed,
+  streamsReady: () => streamsReady,
+  sysinfo: () => (sysinfoFn ? sysinfoFn() : null),
+  failoverState: () => (failoverCtl ? { enabled: true, ...failoverCtl.getState() } : { enabled: false }),
+  dailyClean: () => ({ enabled: process.env.DAILY_CLEAN !== '0', time: DAILY_CLEAN_TIME, keepMin: Math.round(DAILY_CLEAN_KEEP_MS / 60000), lastDay: _dailyCleanDay }),
+  legacyAdminWeak: () => authConfig.password === 'admin' && process.env.ALLOW_DEFAULT_ADMIN === '1',
+  clusterManager, userManager, driveQuota, downloadGoogleDriveFile, extractDriveId,
 });
 
 server.listen(PORT, '0.0.0.0', async () => {
@@ -2427,6 +2768,32 @@ server.listen(PORT, '0.0.0.0', async () => {
       notify: (m) => { console.log(`[Failover][Thông báo]\n${m}`); try { broadcast(m); } catch (_) {} try { sendToZalo(m); } catch (_) {} }
     });
   } catch (e) { console.error('[Failover] Không khởi động được:', e.message); }
+  // Ghi lịch sử luồng của cả cụm lên tab LICH_SU_LUONG trong Google Sheet tài khoản (chỉ Master đẩy)
+  try {
+    require('./historySheet').init({
+      userManager, clusterManager,
+      isMaster: () => localRoleConfirmed && !!(clusterManager.getNode(localNodeId) || {}).isMaster,
+      getLocalHistory: () => { try { captureFinished(); } catch (_) {} return history; },
+      // Luồng đang hoạt động trên máy này (ghi dòng "Đang live"... lên Sheet, kết thúc thì cập nhật cùng dòng)
+      getLocalActive: () => {
+        let fresh = false;
+        const list = Array.from(streams.values()).filter(s => KEY_ACTIVE_STATUSES.includes(s.status)).map(s => {
+          if (!s.sessionUid) fresh = true;
+          const src = s.originalFile || s.file || '';
+          return {
+            sessionUid: ensureSession(s), id: s.id, name: s.name || '', key: s.key || '',
+            ownerUsername: s.ownerUsername || 'admin', serverId: s.serverId || localNodeId,
+            mode: s.mode, status: s.status, youtubeUrl: s.youtubeUrl || '',
+            file: /^https?:/i.test(src) ? (/drive\.google/i.test(src) ? 'Google Drive Video' : 'Link video') : path.basename(src),
+            firstLiveTime: s.firstLiveTime || null, createdAt: s.createdAt || null,
+          };
+        });
+        if (fresh) { try { saveStreams(); } catch (_) {} } // lưu UID phiên ngay → khởi động lại vẫn cập nhật đúng dòng cũ
+        return list;
+      },
+      nameOf: (id) => (clusterManager.getNode(id) || {}).name || id,
+    });
+  } catch (e) { console.error('[HistorySheet] Không khởi động được:', e.message); }
   cleanupOrphanedFiles(); // Sau đó mới dọn dẹp các file không nằm trong danh sách
   
   // Tự động quét dọn định kỳ mỗi 1 tiếng
@@ -2435,6 +2802,14 @@ server.listen(PORT, '0.0.0.0', async () => {
   setInterval(monitorResources, parseInt(process.env.RESOURCE_MONITOR_MS, 10) || 2 * 60 * 1000).unref();
   // Tự động dọn các luồng đã kết thúc/dừng quá hạn lưu (kiểm tra mỗi 10 phút)
   setInterval(purgeFinishedStreams, parseInt(process.env.PURGE_INTERVAL_MS) || 10 * 60 * 1000);
+  // Dọn dẹp cuối ngày (kiểm tra mỗi phút, chạy 1 lần/ngày vào DAILY_CLEAN_TIME giờ VN)
+  if (process.env.DAILY_CLEAN !== '0') {
+    _dailyCleanDay = vnClock().day; // khởi động sau giờ dọn thì để tới tối mai, không xóa ngay lúc vừa bật máy
+    const [dh, dm] = DAILY_CLEAN_TIME.split(':').map(Number);
+    if (vnClock().minutes < dh * 60 + dm) _dailyCleanDay = null;
+    setInterval(() => dailyCleanup(), 60 * 1000).unref();
+    console.log(`[Cleanup] 🌙 Bật dọn dẹp cuối ngày lúc ${DAILY_CLEAN_TIME} (giờ VN): xóa luồng đã dừng/kết thúc.`);
+  }
   
   const addr = `http://localhost:${PORT}`;
   console.log('\n╔══════════════════════════════════════╗');

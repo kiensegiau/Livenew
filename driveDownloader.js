@@ -31,6 +31,14 @@ function extractDriveId(url) {
 }
 
 // ── BƯỚC 1: Lấy URL Tải Cuối Cùng & Cookie Bypass từ Google ──
+// Nhận diện trang báo "hết lượt tải" của Google Drive (nhiều kiểu câu chữ)
+const QUOTA_RE = /Quota exceeded|Too many users have viewed or downloaded|can(?:'|&#39;|’|no)t view or download this file at this time|download quota|downloadQuotaExceeded|vượt quá hạn mức/i;
+function makeQuotaError() {
+  const err = new Error("File này đã vượt quá hạn mức tải xuống của Google Drive trong hôm nay. 👉 Cách sửa: Hãy 'Tạo bản sao' file này trên Drive và dùng link của bản sao đó.");
+  err.code = 'DRIVE_QUOTA';
+  return err;
+}
+
 function getDirectDownloadInfo(url, cookieString, attempt) {
   return new Promise((resolve, reject) => {
     if (attempt > 4) return reject(new Error("Quá số vòng Redirect tối đa của Google Drive."));
@@ -64,8 +72,8 @@ function getDirectDownloadInfo(url, cookieString, attempt) {
         let htmlBody = '';
         res.on('data', chunk => htmlBody += chunk);
         res.on('end', () => {
-          if (htmlBody.includes("Quota exceeded")) {
-            return reject(new Error("File này đã vượt quá hạn mức tải xuống của Google Drive trong hôm nay. 👉 Cách sửa: Hãy 'Tạo bản sao' file này trên Drive và dùng link của bản sao đó."));
+          if (QUOTA_RE.test(htmlBody)) {
+            return reject(makeQuotaError());
           }
 
           const actionMatch = htmlBody.match(/action="([^"]+)"/i);
@@ -102,6 +110,17 @@ function getDirectDownloadInfo(url, cookieString, attempt) {
         return;
       }
 
+      if (res.statusCode === 403 || res.statusCode === 429) {
+        let body = '';
+        res.on('data', chunk => { if (body.length < 200000) body += chunk; });
+        res.on('end', () => {
+          if (QUOTA_RE.test(body)) return reject(makeQuotaError());
+          reject(new Error(`Bị từ chối quyền truy cập (Code: ${res.statusCode}). File Drive có bật chế độ Chia Sẻ không?`));
+        });
+        res.on('error', () => reject(new Error(`Bị từ chối quyền truy cập (Code: ${res.statusCode}).`)));
+        return;
+      }
+      res.resume();
       reject(new Error(`Bị từ chối quyền truy cập (Code: ${res.statusCode}). File Drive có bật chế độ Chia Sẻ không?`));
     }).on('error', reject);
   });
@@ -393,5 +412,6 @@ function downloadGoogleDriveFile(driveUrl, destPath, onProgress) {
 module.exports = {
   downloadGoogleDriveFile,
   extractDriveId,
+  QUOTA_RE,
   downloadChunk
 };

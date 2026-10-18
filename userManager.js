@@ -64,6 +64,7 @@ let sheetConfig = {
   syncSecret: '', // Bí mật dùng chung giữa các VPS & Google Sheet: lấy từ CLUSTER_SECRET hoặc sheet_config.json (không lưu trong git)
   googleSheetScriptUrl: '', // URL Web App (ví dụ: https://script.google.com/macros/s/.../exec)
   directSheetAuth: true,    // Bật xác thực trực tiếp lên Google Sheet
+  driveCopyUrls: [],        // Các Apps Script RIÊNG tạo bản sao khi Drive hết lượt tải (google_apps_script_copy.js), nhiều link = dự phòng
   lastSyncTime: null
 };
 
@@ -90,8 +91,9 @@ function ensureSyncSecret() {
     console.warn('[UserManager] ⚠️ Chưa có secret đồng bộ: đã tự sinh và lưu vào sheet_config.json.');
     console.warn('[UserManager]    Nhiều VPS phải dùng CHUNG một secret: đặt biến CLUSTER_SECRET giống nhau trên mọi máy (và trong Google Apps Script).');
   }
-  if (sheetConfig.syncSecret === 'vebinh_sync_secret_2026') {
-    console.warn('[UserManager] ⚠️ Đang dùng secret mặc định đã bị công khai trên GitHub. Hãy đổi bằng CLUSTER_SECRET (đồng bộ mọi VPS + Apps Script).');
+  if (['vebinh_sync_secret_2026', 'DOI_SECRET_NAY_GIONG_CLUSTER_SECRET', 'cluster-secret'].includes(sheetConfig.syncSecret)) {
+    console.warn('[UserManager] ⚠️ Đang dùng secret mặc định đã bị công khai trên GitHub → ai biết secret này đều có quyền admin qua API cụm.');
+    console.warn('[UserManager]    Hãy đổi sang chuỗi ngẫu nhiên dài, GIỐNG NHAU trên mọi VPS (Cài đặt Sheet / CLUSTER_SECRET) và trong SYNC_SECRET của Apps Script.');
   }
 }
 
@@ -107,9 +109,11 @@ function loadUsers() {
   try {
     if (fs.existsSync(USERS_FILE)) {
       users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+      if (Array.isArray(users)) users.forEach(u => { if (u) u.role = isRootAccount(u) ? 'admin' : normalizeRole(u.role); });
     } else if (fs.existsSync(USERS_BACKUP_FILE)) {
       console.log('[UserManager] ⚠️ Không thấy users.json, khôi phục từ users_backup.json...');
       users = JSON.parse(fs.readFileSync(USERS_BACKUP_FILE, 'utf8'));
+      if (Array.isArray(users)) users.forEach(u => { if (u) u.role = isRootAccount(u) ? 'admin' : normalizeRole(u.role); });
       saveUsers();
     } else {
       // Khởi tạo tài khoản Admin mặc định (mật khẩu lấy từ ADMIN_PASSWORD, nếu không có thì tự sinh ngẫu nhiên)
@@ -150,7 +154,7 @@ function saveUsers() {
 }
 
 // Hàm hỗ trợ theo dõi chuyển hướng (Redirects) cho Google Apps Script Web App
-function fetchWithRedirect(urlStr, maxRedirects = 5) {
+function fetchWithRedirect(urlStr, maxRedirects = 5, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     if (maxRedirects <= 0) return reject(new Error('Quá số vòng redirect tối đa từ Google'));
 
@@ -162,7 +166,7 @@ function fetchWithRedirect(urlStr, maxRedirects = 5) {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         },
-        timeout: 10000
+        timeout: timeoutMs
       }, (res) => {
         // Xử lý HTTP 301, 302, 307 Redirect của Google Apps Script
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -170,7 +174,8 @@ function fetchWithRedirect(urlStr, maxRedirects = 5) {
           if (nextUrl.startsWith('/')) {
             nextUrl = `${parsedUrl.origin}${nextUrl}`;
           }
-          return resolve(fetchWithRedirect(nextUrl, maxRedirects - 1));
+          res.resume();
+          return resolve(fetchWithRedirect(nextUrl, maxRedirects - 1, timeoutMs));
         }
 
         let data = '';
@@ -187,7 +192,7 @@ function fetchWithRedirect(urlStr, maxRedirects = 5) {
 
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('Hết thời gian chờ kết nối Google Sheet (10s)'));
+        reject(new Error(`Hết thời gian chờ kết nối Google Sheet (${Math.round(timeoutMs / 1000)}s)`));
       });
 
       req.on('error', (err) => reject(err));
@@ -195,6 +200,22 @@ function fetchWithRedirect(urlStr, maxRedirects = 5) {
       reject(e);
     }
   });
+}
+
+// Chuẩn hoá Quyền Hạn: "Admin", " ADMIN ", "Quản trị viên", "quan tri", "QTV"... đều là admin; còn lại là user.
+// (Trước đây "Admin" viết hoa từ Sheet bị coi là khách thường → admin mới không thấy hết luồng.)
+function normalizeRole(role) {
+  const r = String(role == null ? '' : role)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd')
+    .trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!r) return 'user';
+  if (['admin', 'administrator', 'quan tri', 'quan tri vien', 'qtv', 'root', 'superadmin', 'super admin'].includes(r)) return 'admin';
+  return 'user';
+}
+
+// Tài khoản gốc (admin_root / "admin") luôn là admin và không bao giờ bị khóa → tránh tự khóa mình
+function isRootAccount(u) {
+  return !!u && (u.id === 'admin_root' || u.userId === 'admin_root' || String(u.username || '').toLowerCase() === 'admin');
 }
 
 function isUserExpired(user) {
@@ -301,7 +322,7 @@ function parseCSVRows(csvText) {
       : rawAllowed.split(',').map(s => s.trim().toLowerCase());
 
     const status = String(r[6] || 'Active').trim();
-    const role = String(r[7] || (username.toLowerCase() === 'admin' ? 'admin' : 'user')).trim().toLowerCase();
+    const role = normalizeRole(r[7] || (username.toLowerCase() === 'admin' ? 'admin' : 'user'));
     const notes = String(r[8] || '').trim();
 
     usersList.push({
@@ -327,8 +348,13 @@ async function authenticate(username, password) {
   const cleanUsername = username.trim().toLowerCase();
 
   // 1. Kiểm tra tài khoản Master Admin cục bộ trước (đảm bảo Admin không bao giờ bị lockout)
-  const localAdmin = users.find(u => u.username.toLowerCase() === cleanUsername && u.role === 'admin');
+  const localAdmin = users.find(u => u.username.toLowerCase() === cleanUsername && normalizeRole(u.role) === 'admin');
   if (localAdmin && localAdmin.password === password) {
+    // Admin phụ (không phải tài khoản gốc) vẫn bị khóa / hết hạn như bình thường
+    if (!isRootAccount(localAdmin)) {
+      if (localAdmin.active === false) return { error: 'Tài khoản của bạn đang bị tạm khóa. Vui lòng liên hệ Admin!' };
+      if (isUserExpired(localAdmin)) return { error: `Tài khoản đã hết hạn sử dụng vào ngày ${localAdmin.expiresAt}!` };
+    }
     const token = 'token_' + crypto.randomBytes(24).toString('hex');
     const sessionData = {
       token,
@@ -368,7 +394,7 @@ async function authenticate(username, password) {
               userId: u.id || ('usr_' + u.username),
               username: u.username,
               name: u.name || u.username,
-              role: u.role || 'user',
+              role: normalizeRole(u.role),
               maxStreams: parseInt(u.maxStreams) || 1,
               allowedServers: u.allowedServers || ['all'],
               expiresAt: u.expiresAt || null,
@@ -428,7 +454,7 @@ async function authenticate(username, password) {
             userId: 'usr_' + found.username,
             username: found.username,
             name: found.name || found.username,
-            role: found.role || 'user',
+            role: normalizeRole(found.role),
             maxStreams: found.maxStreams || 1,
             allowedServers: found.allowedServers || ['all'],
             expiresAt: found.expiresAt || null,
@@ -478,7 +504,7 @@ async function authenticate(username, password) {
     userId: user.id,
     username: user.username,
     name: user.name || user.username,
-    role: user.role || 'user',
+    role: normalizeRole(user.role),
     maxStreams: parseInt(user.maxStreams) || 1,
     allowedServers: user.allowedServers || ['all'],
     expiresAt: user.expiresAt || null,
@@ -493,7 +519,7 @@ async function authenticate(username, password) {
       id: user.id,
       username: user.username,
       name: user.name || user.username,
-      role: user.role || 'user',
+      role: normalizeRole(user.role),
       maxStreams: parseInt(user.maxStreams) || 1,
       allowedServers: user.allowedServers || ['all'],
       expiresAt: user.expiresAt || null
@@ -509,14 +535,36 @@ function getUserByToken(token) {
     activeSessions.delete(token);
     return null;
   }
+  // Lấy quyền MỚI NHẤT từ danh sách tài khoản (không dùng quyền "đóng băng" lúc đăng nhập):
+  // vừa cấp admin trên Sheet/UI là có hiệu lực ngay, vừa hạ quyền là mất quyền ngay, không cần đăng nhập lại.
+  const rec = users.find(x => x && String(x.username || '').toLowerCase() === String(s.username || '').toLowerCase());
+  if (rec) {
+    const root = isRootAccount(rec);
+    if (!root && (rec.active === false || isUserExpired(rec))) {
+      activeSessions.delete(token);
+      return null;
+    }
+    s.role = root ? 'admin' : normalizeRole(rec.role);
+    s.name = rec.name || s.name;
+    s.expiresAt = rec.expiresAt || null;
+    if (s.role === 'admin') {
+      s.maxStreams = 999;
+      s.allowedServers = ['all'];
+    } else {
+      s.maxStreams = parseInt(rec.maxStreams) || 1;
+      s.allowedServers = rec.allowedServers || ['all'];
+    }
+  } else {
+    s.role = isRootAccount(s) ? 'admin' : normalizeRole(s.role);
+  }
   return { ...s, id: s.userId || s.id };
 }
 
-// Thu hồi phiên của khách đã bị khóa / xóa / hết hạn trên Sheet (không đụng tới admin)
+// Thu hồi phiên của tài khoản đã bị khóa / xóa / hết hạn (kể cả admin phụ; chỉ chừa tài khoản gốc)
 function revokeInvalidSessions() {
   let revoked = 0;
   for (const [token, s] of Array.from(activeSessions.entries())) {
-    if (s.role === 'admin') continue;
+    if (isRootAccount(s)) continue;
     const u = users.find(x => x.username.toLowerCase() === String(s.username).toLowerCase());
     if (!u || u.active === false || isUserExpired(u)) {
       activeSessions.delete(token);
@@ -564,7 +612,7 @@ function listUsers(includeSensitive = false) {
       id: u.id,
       username: u.username,
       name: u.name || u.username,
-      role: u.role || 'user',
+      role: normalizeRole(u.role),
       maxStreams: parseInt(u.maxStreams) || 1,
       allowedServers: u.allowedServers || ['all'],
       expiresAt: u.expiresAt || null,
@@ -595,7 +643,7 @@ function upsertUser(userData) {
     if (userData.expiresAt !== undefined) user.expiresAt = userData.expiresAt;
     if (userData.allowedServers !== undefined) user.allowedServers = userData.allowedServers;
     if (userData.active !== undefined) user.active = !!userData.active;
-    if (userData.role !== undefined) user.role = userData.role;
+    if (userData.role !== undefined) user.role = isRootAccount(user) ? 'admin' : normalizeRole(userData.role);
     if (userData.notes !== undefined) user.notes = userData.notes;
     user.updatedAt = new Date().toISOString();
   } else {
@@ -607,7 +655,7 @@ function upsertUser(userData) {
       username: cleanUsername,
       password: userData.password,
       name: userData.name || cleanUsername,
-      role: userData.role || 'user',
+      role: normalizeRole(userData.role),
       maxStreams: parseInt(userData.maxStreams) || 1,
       allowedServers: userData.allowedServers || ['all'],
       expiresAt: userData.expiresAt || null,
@@ -627,7 +675,10 @@ function upsertUser(userData) {
 function deleteUser(userId) {
   const index = users.findIndex(u => u.id === userId);
   if (index === -1) return { error: 'Không tìm thấy người dùng!' };
-  if (users[index].role === 'admin' && users.filter(u => u.role === 'admin').length <= 1) {
+  if (isRootAccount(users[index])) {
+    return { error: 'Không thể xóa tài khoản Admin gốc của hệ thống!' };
+  }
+  if (normalizeRole(users[index].role) === 'admin' && users.filter(u => normalizeRole(u.role) === 'admin').length <= 1) {
     return { error: 'Không thể xóa tài khoản Admin duy nhất của hệ thống!' };
   }
   const deleted = users.splice(index, 1);
@@ -678,7 +729,7 @@ function syncFromGoogleSheet(sheetRows, secretKey) {
       existingUser.expiresAt = expiresAt;
       existingUser.allowedServers = allowed;
       existingUser.active = active;
-      if (row.role) existingUser.role = String(row.role).trim().toLowerCase();
+      if (row.role) existingUser.role = isRootAccount(existingUser) ? 'admin' : normalizeRole(row.role);
       if (row.notes !== undefined) existingUser.notes = String(row.notes).trim();
       existingUser.updatedAt = new Date().toISOString();
       updated++;
@@ -688,7 +739,7 @@ function syncFromGoogleSheet(sheetRows, secretKey) {
         username: cleanUsername,
         password: String(row.password || '123456').trim(),
         name: String(row.name || cleanUsername).trim(),
-        role: String(row.role || 'user').trim().toLowerCase(),
+        role: cleanUsername === 'admin' ? 'admin' : normalizeRole(row.role),
         maxStreams: maxStreams,
         allowedServers: allowed,
         expiresAt: expiresAt,
@@ -705,7 +756,7 @@ function syncFromGoogleSheet(sheetRows, secretKey) {
   if (sheetConfig.googleSheetScriptUrl && sheetRows.length > 0) {
     const inSheet = new Set(sheetRows.filter(r => r && r.username).map(r => String(r.username).trim().toLowerCase()));
     users.forEach(u => {
-      if (u.role !== 'admin' && !inSheet.has(String(u.username).toLowerCase()) && u.active !== false) {
+      if (!isRootAccount(u) && !inSheet.has(String(u.username).toLowerCase()) && u.active !== false) {
         u.active = false;
         u.updatedAt = new Date().toISOString();
       }
@@ -821,6 +872,8 @@ module.exports = {
   fetchUsersDirectFromSheet,
   testSheetConnection,
   isUserExpired,
+  normalizeRole,
+  fetchWithRedirect,
   getSheetConfig: () => sheetConfig,
   updateSheetConfig: (newCfg) => {
     sheetConfig = { ...sheetConfig, ...newCfg };

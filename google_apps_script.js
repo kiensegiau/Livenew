@@ -23,8 +23,68 @@
 const DEFAULT_CONFIG = {
   SYNC_SECRET: "DOI_SECRET_NAY_GIONG_CLUSTER_SECRET", // Secret Key bảo mật
   NODES_SHEET_NAME: "DANH_SACH_VPS", // Tab danh sách VPS: id | tên | ip | port | vai trò (Master/Worker) | trạng thái (Active/Inactive)
+  HISTORY_SHEET_NAME: "LICH_SU_LUONG", // Tab lịch sử luồng (VPS Master ghi luồng đang chạy + cập nhật trạng thái khi kết thúc/dừng)
   SHEET_NAME: "DANH_SACH_KHACH_HANG"     // Tên sheet chứa tài khoản
 };
+
+const HISTORY_HEADER = ["Kết thúc", "Máy chủ", "ID", "Tên luồng", "Tài khoản", "Stream Key", "Chế độ", "Nguồn video", "Bắt đầu live", "Thời lượng", "Trạng thái", "Chi tiết lỗi", "Link YouTube", "UID"];
+
+// Tab chứa tài khoản khách: nếu chưa có tab đúng tên thì lấy tab đầu tiên KHÔNG PHẢI tab danh sách VPS / lịch sử (tránh đọc nhầm/đổi tên nhầm).
+function pickFirstNonNodesSheet(ss) {
+  const found = ss.getSheets().filter(function (s) { const n = s.getName(); return n !== DEFAULT_CONFIG.NODES_SHEET_NAME && n !== DEFAULT_CONFIG.HISTORY_SHEET_NAME; })[0];
+  return found || ss.insertSheet(DEFAULT_CONFIG.SHEET_NAME);
+}
+
+// Ghi lịch sử vào tab LICH_SU_LUONG theo UID (mỗi phiên live = 1 dòng):
+//  - UID chưa có → thêm dòng mới (VD: "Đang live")
+//  - UID đã có  → GHI ĐÈ đúng dòng đó (VD: "Đang live" → "Đã dừng"/"Hoàn thành"/"Lỗi") → không nhân đôi
+function appendHistoryRows(rows) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sh = ss.getSheetByName(DEFAULT_CONFIG.HISTORY_SHEET_NAME);
+    if (!sh) sh = ss.insertSheet(DEFAULT_CONFIG.HISTORY_SHEET_NAME);
+    // Luôn đảm bảo dòng tiêu đề đúng (bản cũ có cột "Kết quả" → đổi thành "Trạng thái")
+    sh.getRange(1, 1, 1, HISTORY_HEADER.length).setValues([HISTORY_HEADER]).setFontWeight("bold");
+    if (sh.getFrozenRows() < 1) sh.setFrozenRows(1);
+    const uidCol = HISTORY_HEADER.length;
+    const last = sh.getLastRow();
+    const rowOf = {}; // uid → số dòng trên sheet
+    if (last > 1) {
+      const from = Math.max(2, last - 20000 + 1);
+      sh.getRange(from, uidCol, last - from + 1, 1).getValues().forEach(function (r, i) { if (r[0]) rowOf[String(r[0])] = from + i; });
+    }
+    const toAdd = [];
+    const addIdx = {}; // uid → vị trí trong toAdd (cùng 1 lô có 2 bản của 1 UID thì lấy bản sau)
+    let updated = 0;
+    (rows || []).forEach(function (r) {
+      if (!Array.isArray(r)) return;
+      const row = HISTORY_HEADER.map(function (_, i) { return String(r[i] === undefined || r[i] === null ? "" : r[i]).slice(0, 500); });
+      const uid = row[uidCol - 1];
+      if (!uid) return;
+      if (rowOf[uid]) {
+        const range = sh.getRange(rowOf[uid], 1, 1, HISTORY_HEADER.length);
+        range.setNumberFormat("@");
+        range.setValues([row]);
+        updated++;
+      } else if (addIdx[uid] !== undefined) {
+        toAdd[addIdx[uid]] = row;
+      } else {
+        addIdx[uid] = toAdd.length;
+        toAdd.push(row);
+      }
+    });
+    if (toAdd.length) {
+      const range = sh.getRange(sh.getLastRow() + 1, 1, toAdd.length, HISTORY_HEADER.length);
+      range.setNumberFormat("@"); // giữ nguyên văn bản (không tự đổi giờ/thời lượng/key thành số)
+      range.setValues(toAdd);
+    }
+    return { ok: true, added: toAdd.length, updated: updated };
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
@@ -44,7 +104,7 @@ function seedSampleData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(DEFAULT_CONFIG.SHEET_NAME);
   if (!sheet) {
-    sheet = ss.getSheets()[0];
+    sheet = pickFirstNonNodesSheet(ss);
     sheet.setName(DEFAULT_CONFIG.SHEET_NAME);
   }
   if (sheet.getLastRow() > 1) {
@@ -96,7 +156,7 @@ function getSheetUserData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(DEFAULT_CONFIG.SHEET_NAME);
   if (!sheet) {
-    sheet = ss.getSheets()[0];
+    sheet = pickFirstNonNodesSheet(ss);
   }
 
   const data = sheet.getDataRange().getValues();
@@ -134,7 +194,7 @@ function getSheetUserData() {
 
     const allowedServers = String(row[5] || 'All').trim();
     const status = String(row[6] || 'Active').trim();
-    const role = String(row[7] || (username.toLowerCase() === 'admin' ? 'admin' : 'user')).trim();
+    const role = String(row[7] || (username.toLowerCase() === 'admin' ? 'admin' : 'user')).trim().toLowerCase();
     const notes = String(row[8] || '').trim();
 
     usersList.push({
@@ -184,7 +244,7 @@ function doGet(e) {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(DEFAULT_CONFIG.SHEET_NAME);
     if (!sheet) {
-      sheet = ss.getSheets()[0];
+      sheet = pickFirstNonNodesSheet(ss);
       sheet.setName(DEFAULT_CONFIG.SHEET_NAME);
     }
     const header = ["Username", "Password", "Tên Khách Hàng", "Số Luồng Tối Đa", "Ngày Hết Hạn", "Server Được Dùng", "Trạng Thái", "Quyền Hạn", "Ghi Chú"];
@@ -353,6 +413,15 @@ function doGet(e) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
+  // 2c. GHI LỊCH SỬ LUỒNG (cần đúng secret): rows = JSON mảng các dòng theo HISTORY_HEADER
+  if (action === "appendHistory") {
+    let rowsH = [];
+    try { rowsH = JSON.parse(params.rows || "[]"); } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({ error: "rows không phải JSON hợp lệ" })).setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify(appendHistoryRows(rowsH))).setMimeType(ContentService.MimeType.JSON);
+  }
+
   if (action === "getUsers") {
     const users = getSheetUserData();
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -362,6 +431,120 @@ function doGet(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  // 2d. FILE DRIVE HẾT LƯỢT TẢI: tạo bản sao tạm (có lượt tải mới) / xóa bản sao tạm (cần đúng secret)
+  if (action === "copyDriveFile" || action === "deleteDriveCopy") {
+    let resultC;
+    try { resultC = action === "copyDriveFile" ? copyDriveFile(params.id) : deleteDriveCopy(params.id); }
+    catch (err) { resultC = { error: String(err && err.message || err) }; }
+    return ContentService.createTextOutput(JSON.stringify(resultC)).setMimeType(ContentService.MimeType.JSON);
+  }
+
   return ContentService.createTextOutput(JSON.stringify({ error: "Hành động không hợp lệ" }))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ====================================================================
+//  TỰ TẠO BẢN SAO KHI FILE GOOGLE DRIVE "HẾT LƯỢT TẢI" (Quota exceeded)
+//  - VPS gặp lỗi hết lượt tải → gọi copyDriveFile → Script tạo bản sao trong thư mục LIVE_BAN_SAO_TAM (Drive của tài khoản chạy Script),
+//    bật chia sẻ "Bất kỳ ai có liên kết" → VPS tải bản sao → gọi deleteDriveCopy để xóa.
+//  - deleteDriveCopy CHỈ xóa file có đánh dấu bản sao tạm + nằm trong thư mục tạm (không bao giờ xóa file gốc).
+//  - Bản sao tạm quá 6 giờ (VPS lỗi giữa chừng) tự xóa ở lần tạo bản sao kế tiếp.
+//  - Lần đầu: chạy hàm capQuyenDrive() trong trình soạn thảo để cấp quyền Drive, rồi Triển khai → Phiên bản mới.
+//    ⚠️ CẤP QUYỀN XONG MỚI TRIỂN KHAI: triển khai khi chưa cấp quyền mới thì Web App (đăng nhập, lịch sử...) có thể lỗi.
+//  - Bản sao được XÓA VĨNH VIỄN (Drive REST API bằng quyền của Script); chỉ khi lỗi mới vào Thùng rác và được dọn lại lần sau.
+//    capQuyenDrive() báo "Chỉ cho được vào Thùng rác" → bật Dịch vụ nâng cao "Drive API".
+// ====================================================================
+const COPY_MARK = "livenew-temp-copy";
+const COPY_FOLDER = "LIVE_BAN_SAO_TAM";
+const COPY_MAX_AGE_MS = 6 * 3600 * 1000;
+
+function capQuyenDrive() {
+  // Chạy 1 lần trong trình soạn thảo để Google hỏi cấp quyền Drive cho Script
+  const folder = getCopyFolder_();
+  Logger.log("Đã có quyền Drive. Thư mục bản sao tạm: " + folder.getName());
+  // Tự kiểm tra xóa vĩnh viễn bằng 1 file thử nhỏ
+  const t = folder.createFile("[TAM] kiem-tra-xoa.txt", "test");
+  t.setDescription(COPY_MARK);
+  const kq = removeCopy_(t);
+  Logger.log(kq === "deleted"
+    ? "✅ XÓA VĨNH VIỄN hoạt động: bản sao tạm sẽ không nằm trong Thùng rác."
+    : "⚠️ Chỉ cho được vào Thùng rác. Bật Dịch vụ (+) → Drive API rồi chạy lại hàm này.");
+}
+
+function getCopyFolder_() {
+  const it = DriveApp.getFoldersByName(COPY_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(COPY_FOLDER);
+}
+
+function isTempCopy_(f) {
+  if (f.getDescription() !== COPY_MARK) return false;
+  const parents = f.getParents();
+  while (parents.hasNext()) { if (parents.next().getName() === COPY_FOLDER) return true; }
+  return false;
+}
+
+function removeCopy_(f) {
+  const id = f.getId();
+  // 1) Dịch vụ nâng cao Drive API (nếu đã bật)
+  try {
+    if (typeof Drive !== "undefined" && Drive.Files && Drive.Files.remove) { Drive.Files.remove(id); return "deleted"; }
+  } catch (err) {}
+  // 2) Gọi thẳng Drive REST API bằng quyền của chính Script → XÓA VĨNH VIỄN, không cần bật dịch vụ nâng cao
+  try {
+    if (typeof UrlFetchApp !== "undefined" && typeof ScriptApp !== "undefined") {
+      const r = UrlFetchApp.fetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(id) + "?supportsAllDrives=true", {
+        method: "delete",
+        headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true
+      });
+      const code = r.getResponseCode();
+      if (code === 204 || code === 200) return "deleted";
+    }
+  } catch (err) {}
+  // 3) Cuối cùng: cho vào Thùng rác (lần dọn sau sẽ thử xóa vĩnh viễn lại)
+  if (!f.isTrashed()) f.setTrashed(true);
+  return "trashed";
+}
+
+function cleanupOldCopies_() {
+  const it = getCopyFolder_().getFiles();
+  const now = Date.now();
+  let n = 0;
+  while (it.hasNext()) {
+    const f = it.next();
+    if (isTempCopy_(f) && now - f.getDateCreated().getTime() > COPY_MAX_AGE_MS) { removeCopy_(f); n++; }
+  }
+  // Bản sao tạm còn kẹt trong Thùng rác (lần trước chưa xóa vĩnh viễn được) → thử xóa vĩnh viễn lại
+  try {
+    const tr = DriveApp.searchFiles("trashed = true and title contains '[TAM]'");
+    while (tr.hasNext()) {
+      const f = tr.next();
+      if (isTempCopy_(f) && removeCopy_(f) === "deleted") n++;
+    }
+  } catch (err) {}
+  return n;
+}
+
+function copyDriveFile(id) {
+  id = String(id || "");
+  if (!/^[A-Za-z0-9_-]{10,}$/.test(id)) return { error: "ID file Drive không hợp lệ" };
+  try { cleanupOldCopies_(); } catch (err) {}
+  let src;
+  try { src = DriveApp.getFileById(id); }
+  catch (err) { return { error: "Script không mở được file gốc (file phải chia sẻ 'Bất kỳ ai có liên kết' hoặc chia sẻ cho tài khoản chạy Script): " + err.message }; }
+  const copy = src.makeCopy("[TAM] " + src.getName(), getCopyFolder_());
+  copy.setDescription(COPY_MARK);
+  try { copy.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
+  catch (err) { removeCopy_(copy); return { error: "Không bật được chia sẻ cho bản sao: " + err.message }; }
+  return { ok: true, copyId: copy.getId(), name: copy.getName(), size: copy.getSize() };
+}
+
+function deleteDriveCopy(id) {
+  id = String(id || "");
+  if (!/^[A-Za-z0-9_-]{10,}$/.test(id)) return { error: "ID file Drive không hợp lệ" };
+  let f;
+  try { f = DriveApp.getFileById(id); } catch (err) { return { ok: true, note: "File không còn" }; }
+  if (!isTempCopy_(f)) return { error: "Từ chối: chỉ được xóa bản sao tạm do hệ thống tạo" };
+  if (f.isTrashed()) { const kq = removeCopy_(f); return { ok: true, result: kq, note: kq === "deleted" ? "Đã xóa vĩnh viễn khỏi Thùng rác" : "Đã nằm trong Thùng rác" }; }
+  return { ok: true, result: removeCopy_(f) };
 }

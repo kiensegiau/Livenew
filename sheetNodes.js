@@ -128,6 +128,7 @@ function fetchText(urlStr, redirects = 5) {
 function init({ clusterManager, userManager, localNodeId, notify }) {
   const state = { enabled: false, lastOk: null, lastError: null, lastChange: null, warnings: [], nodes: 0 };
   const cfgUrl = () => {
+    if (process.env.SHEET_NODES === '0') return ''; // tắt hẳn đồng bộ danh sách VPS từ Sheet
     if (process.env.NODES_SHEET_URL) return process.env.NODES_SHEET_URL;
     const sc = (userManager && userManager.getSheetConfig && userManager.getSheetConfig()) || {};
     if (sc.nodesSheetUrl) return sc.nodesSheetUrl;

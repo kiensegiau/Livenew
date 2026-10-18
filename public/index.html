@@ -1874,7 +1874,8 @@
 </div>
 
 <!-- Cyber-Shield Premium Stream Config Modal Overlay -->
-<div class="modal-overlay hidden" id="configModal" onclick="closeConfigModal(event)">
+<!-- Bấm nhầm ra ngoài KHÔNG đóng bảng (tránh mất dữ liệu đang nhập) - chỉ đóng bằng nút × hoặc phím Esc -->
+<div class="modal-overlay hidden" id="configModal">
   <div class="modal-content-card" onclick="event.stopPropagation()">
     <button class="modal-close-x" onclick="closeConfigModal(event)" title="Đóng cửa sổ">×</button>
     <div class="card-header-area" style="border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 14px; margin-bottom: 20px;">
@@ -2210,12 +2211,64 @@
       </div>
     </div>
 
+    <!-- KHUNG APPS SCRIPT RIÊNG TẠO BẢN SAO KHI DRIVE HẾT LƯỢT TẢI (nhiều link = dự phòng) -->
+    <div id="driveCopyBox" style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.15rem;">🗂️</span>
+          <span style="font-weight: 700; font-size: 0.88rem; color: #38bdf8; letter-spacing: 0.5px;">APPS SCRIPT TẠO BẢN SAO KHI DRIVE HẾT LƯỢT TẢI</span>
+          <span id="driveCopyBadge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(156,163,175,0.15); color: #9ca3af; font-weight: 600;">⚪ Chưa cài</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="btnCopyDriveScript" onclick="copyDriveCopyScript()" style="font-size: 0.75rem; padding: 4px 10px; color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); border-radius: 6px; cursor: pointer;">
+          📜 Sao chép code Apps Script tạo bản sao
+        </button>
+      </div>
+      <div style="font-size: 0.74rem; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5;">
+        Mỗi dòng 1 link Web App (<code>https://script.google.com/macros/s/.../exec</code>). Nên dùng nhiều Gmail khác nhau để dự phòng: máy chủ chia lần lượt, link nào lỗi tự chuyển link kế tiếp. Bản sao bị xóa vĩnh viễn ngay sau khi tải xong.
+      </div>
+      <textarea id="driveCopyUrlsInput" rows="3" placeholder="https://script.google.com/macros/s/AAAA.../exec&#10;https://script.google.com/macros/s/BBBB.../exec" style="width: 100%; font-size: 0.8rem; padding: 8px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; resize: vertical; box-sizing: border-box; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); outline: none;" onfocus="this.style.borderColor='rgba(56,189,248,0.6)'" onblur="this.style.borderColor=''"></textarea>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+        <button class="btn btn-sm" id="btnSaveDriveCopy" onclick="saveDriveCopyUI()" style="background: #0284c7; color: #fff; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; white-space: nowrap;">💾 LƯU & KIỂM TRA</button>
+        <button class="btn btn-sm" id="btnCheckDriveCopy" onclick="checkDriveCopyUI()" style="background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.4); color: #bae6fd; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;">⚡ KIỂM TRA</button>
+      </div>
+      <div id="driveCopyResult" style="margin-top: 8px; font-size: 0.76rem; line-height: 1.6;"></div>
+    </div>
+
+    <!-- KHUNG KIỂM TRA SÂU HỆ THỐNG (chỉ đọc + chạy thử, không đụng luồng đang phát) -->
+    <div id="diagBox" style="background: rgba(52, 211, 153, 0.05); border: 1px solid rgba(52, 211, 153, 0.25); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.15rem;">🩺</span>
+          <span style="font-weight: 700; font-size: 0.88rem; color: #34d399; letter-spacing: 0.5px;">KIỂM TRA SÂU HỆ THỐNG</span>
+          <span id="diagBadge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(156,163,175,0.15); color: #9ca3af; font-weight: 600;">⚪ Chưa chạy</span>
+        </div>
+        <span id="diagTokenState" style="font-size: 0.72rem; color: var(--text-secondary);"></span>
+      </div>
+      <div style="font-size: 0.74rem; color: var(--text-secondary); margin-bottom: 8px; line-height: 1.5;">
+        <b>Kiểm tra nhanh</b>: đọc trạng thái mọi máy trong cụm (phiên bản code, tài nguyên, FFmpeg, luồng, Sheet, Apps Script, bảo mật...). <b>Tự kiểm tra đầy đủ</b> (~30-90s): chạy thử thật FFmpeg đúng kiểu phát A+B, ổ đĩa, mạng tới YouTube/Google/Telegram, secret cụm — <u>không</u> đụng tới luồng đang phát.
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <input id="diagDriveUrl" type="text" placeholder="(Tùy chọn) link Drive để tải thử" style="flex: 1; min-width: 220px; font-size: 0.8rem; padding: 8px 12px; border-radius: 6px; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); outline: none;">
+        <label style="font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; white-space: nowrap; cursor: pointer;"><input type="checkbox" id="diagCopyTest"> thử tạo bản sao</label>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+        <button class="btn btn-sm" id="btnDiagQuick" onclick="runDiagQuick()" style="background: #059669; color: #fff; font-weight: 600; padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; white-space: nowrap;">⚡ KIỂM TRA NHANH</button>
+        <button class="btn btn-sm" id="btnDiagSelftest" onclick="runDiagSelftest()" style="background: rgba(52,211,153,0.15); border: 1px solid rgba(52,211,153,0.4); color: #a7f3d0; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;">🧪 TỰ KIỂM TRA ĐẦY ĐỦ</button>
+        <button class="btn btn-sm" id="btnDiagToken" onclick="createDiagToken()" style="background: rgba(129,140,248,0.15); border: 1px solid rgba(129,140,248,0.4); color: #c7d2fe; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;">🔑 TẠO MÃ KIỂM TRA TỪ XA (24H)</button>
+        <button class="btn btn-sm" id="btnDiagRevoke" onclick="revokeDiagToken()" style="background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.35); color: #fca5a5; font-weight: 600; padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;">⛔ THU HỒI MÃ</button>
+      </div>
+      <div id="diagTokenOut" style="margin-top: 8px; font-size: 0.76rem;"></div>
+      <div id="diagResult" style="margin-top: 8px; font-size: 0.76rem; line-height: 1.6;"></div>
+    </div>
+
     <!-- Bảng danh sách khách hàng -->
+
     <div style="overflow-x: auto; background: rgba(0,0,0,0.25); border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
       <table style="width: 100%; border-collapse: collapse; text-align: left;">
         <thead>
-          <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; color: var(--text-secondary); background: rgba(255,255,255,0.02);">
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); font-size: 0.75rem; color: var(--text-secondary); background: rgba(255,255,255,0.02); white-space: nowrap;">
             <th style="padding: 10px;">Username</th>
+            <th style="padding: 10px;">Quyền</th>
             <th style="padding: 10px;">Tên Khách Hàng</th>
             <th style="padding: 10px; text-align: center;">Giới Hạn Luồng</th>
             <th style="padding: 10px;">Ngày Hết Hạn</th>
@@ -2226,7 +2279,7 @@
           </tr>
         </thead>
         <tbody id="usersTableBody">
-          <tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-secondary);">⏳ Đang tải...</td></tr>
+          <tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text-secondary);">⏳ Đang tải...</td></tr>
         </tbody>
       </table>
     </div>
@@ -2286,6 +2339,17 @@
           <option value="all">🌐 Tất cả máy chủ trong cụm</option>
         </select>
       </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 14px;">
+      <label for="editRole">Quyền hạn</label>
+      <div class="input-wrapper">
+        <select id="editRole" style="width: 100%; background: var(--input-bg); color: var(--text-primary); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 0.85rem;">
+          <option value="user">👤 Khách hàng (chỉ thấy luồng của mình)</option>
+          <option value="admin">🛡️ Admin (xem &amp; quản lý toàn bộ như admin gốc)</option>
+        </select>
+      </div>
+      <div id="editRoleHint" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">Đang dùng Google Sheet thì sửa cột H (Quyền Hạn) trên Sheet: lần đồng bộ sau Sheet sẽ ghi đè.</div>
     </div>
 
     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 20px;">
@@ -2933,6 +2997,13 @@ function closeConfigModal(event) {
   }
 }
 
+// Esc = đóng bảng cấu hình luồng (thay cho bấm ra ngoài, vốn hay bấm nhầm)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const modal = document.getElementById('configModal');
+  if (modal && !modal.classList.contains('hidden')) closeConfigModal();
+});
+
 // ── Lịch sử luồng (Admin: toàn bộ | Khách: chỉ của mình — server tự lọc) ──
 let historyData = [];
 
@@ -3381,8 +3452,10 @@ async function startStream() {
         if (data.notice) {
           setTimeout(() => showToast(data.notice, 'info'), 2500);
         }
-        const nameInput = document.getElementById('streamName');
-        if (nameInput) nameInput.value = '';
+        // Tạo xong thì làm trống form (và quên key/link đã nhớ) để nhập luồng kế tiếp không bị lẫn
+        cancelEditSilent();
+        try { localStorage.removeItem('yt_stream_key'); localStorage.removeItem('yt_video_path'); } catch (_) {}
+        try { adjustScheduleTime(5, true); } catch (_) {}
       }
       closeConfigModal();
     }
@@ -4665,6 +4738,7 @@ async function fetchUserProfile() {
     const res = await authFetch('/api/me');
     if (res.ok) {
       const data = await res.json();
+      try { if (data.user) localStorage.setItem('vps_user_profile', JSON.stringify(data.user)); } catch (_) {}
       updateUserProfileUI(data.user, data.activeStreamsCount);
     }
   } catch (_) {}
@@ -4693,6 +4767,7 @@ function openUserManagerModal() {
     loadClusterAdminUI();
     loadSheetConfigUI();
     loadUsersList();
+    loadDiagTokenInfo();
   }
 }
 
@@ -4700,6 +4775,104 @@ function closeUserManagerModal(e) {
   if (e && e.target !== e.currentTarget && !e.target.classList.contains('modal-close-x')) return;
   const modal = document.getElementById('userManagerModal');
   if (modal) modal.classList.add('hidden');
+}
+
+// ── Kiểm tra sâu hệ thống (/api/diag) ──
+const DIAG_LABELS = {
+  version: 'Phiên bản code', node: 'Máy chủ', resources: 'Tài nguyên', ffmpeg: 'FFmpeg', folders: 'Thư mục', streams: 'Luồng',
+  cluster: 'Cụm máy', security: 'Bảo mật', users: 'Tài khoản', sheet: 'Google Sheet', driveCopy: 'Apps Script bản sao',
+  telegram: 'Telegram', history: 'Lịch sử', cleanup: 'Dọn cuối ngày', failover: 'Tự chuyển luồng', recentErrors: 'Lỗi gần đây',
+  ffmpegEncode: 'FFmpeg mã hóa', ffmpegTeeFifo: 'Phát A+B (tee/fifo)', disk: 'Ổ đĩa', network: 'Mạng ra ngoài', clusterAuth: 'Secret & code cụm',
+  driveCopyScripts: 'Apps Script bản sao', driveDownload: 'Tải thử Drive', driveCopyFlow: 'Tạo→tải→xóa bản sao'
+};
+const DIAG_ICON = { ok: '✅', warn: '⚠️', fail: '❌' };
+function setDiagBadge(overall, text) {
+  const b = document.getElementById('diagBadge');
+  if (!b) return;
+  const st = { ok: ['rgba(52,211,153,0.15)', '#34d399', '🟢'], warn: ['rgba(245,158,11,0.15)', '#fbbf24', '🟡'], fail: ['rgba(239,68,68,0.15)', '#f87171', '🔴'], run: ['rgba(56,189,248,0.15)', '#38bdf8', '⏳'] }[overall] || ['rgba(156,163,175,0.15)', '#9ca3af', '⚪'];
+  b.style.background = st[0]; b.style.color = st[1]; b.textContent = `${st[2]} ${text}`;
+}
+function renderDiagNode(r, key) {
+  if (!r) return '';
+  if (r.error && !r[key]) return `<div style="margin-top: 8px; padding: 8px 12px; border-radius: 8px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5;">❌ <b>${escapeHtml(r.node || '?')}</b>: ${escapeHtml(r.error)}</div>`;
+  const items = r[key] || {};
+  const s = r.summary || {};
+  const rows = Object.entries(items).map(([k, c]) => `
+    <tr style="border-top: 1px solid rgba(255,255,255,0.05);">
+      <td style="padding: 6px 10px; white-space: nowrap;">${DIAG_ICON[c.status] || '•'} <b>${escapeHtml(DIAG_LABELS[k] || k)}</b></td>
+      <td style="padding: 6px 10px; color: ${c.status === 'fail' ? '#fca5a5' : c.status === 'warn' ? '#fde68a' : 'var(--text-secondary)'}; word-break: break-word;">${escapeHtml(c.detail || '')}</td>
+    </tr>`).join('');
+  return `<div style="margin-top: 10px; background: rgba(0,0,0,0.25); border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); overflow: hidden;">
+    <div style="padding: 8px 12px; background: rgba(255,255,255,0.03); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+      <span style="font-weight: 700;">${DIAG_ICON[r.overall] || ''} Máy ${escapeHtml(r.node || '?')}</span>
+      <span style="color: var(--text-secondary);">✅ ${s.ok || 0} · ⚠️ ${s.warn || 0} · ❌ ${s.fail || 0}</span>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">${rows}</table>
+  </div>`;
+}
+function renderDiag(data, key) {
+  const nodes = [data, ...(data.peers || [])];
+  const worst = nodes.some(n => n.overall === 'fail' || (n.error && !n[key])) ? 'fail' : nodes.some(n => n.overall === 'warn') ? 'warn' : 'ok';
+  setDiagBadge(worst, `${nodes.length} máy · ${worst === 'ok' ? 'Tốt' : worst === 'warn' ? 'Có cảnh báo' : 'Có lỗi'}`);
+  document.getElementById('diagResult').innerHTML = `<div style="color: var(--text-secondary);">Lúc ${new Date(data.time || Date.now()).toLocaleString('vi-VN')}</div>` + nodes.map(n => renderDiagNode(n, key)).join('');
+}
+async function runDiagQuick() {
+  const btn = document.getElementById('btnDiagQuick');
+  btn.disabled = true; setDiagBadge('run', 'Đang kiểm tra...');
+  try {
+    const res = await authFetch('/api/diag?cluster=1');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderDiag(data, 'checks');
+  } catch (e) { setDiagBadge('fail', 'Lỗi'); document.getElementById('diagResult').innerHTML = `<span style="color:#f87171;">❌ ${escapeHtml(e.message)}</span>`; }
+  finally { btn.disabled = false; }
+}
+async function runDiagSelftest() {
+  const btn = document.getElementById('btnDiagSelftest');
+  const driveUrl = document.getElementById('diagDriveUrl').value.trim();
+  const driveCopyTest = document.getElementById('diagCopyTest').checked;
+  if (driveCopyTest && !driveUrl) { showToast('Nhập link Drive để thử tạo bản sao', 'error'); return; }
+  btn.disabled = true; setDiagBadge('run', 'Đang chạy thử (30-90s)...');
+  document.getElementById('diagResult').innerHTML = '<span style="color: var(--text-secondary);">⏳ Đang chạy thử FFmpeg, ổ đĩa, mạng trên mọi máy... vui lòng đợi.</span>';
+  try {
+    const res = await authFetch('/api/diag/selftest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cluster: true, driveUrl, driveCopyTest }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    renderDiag(data, 'tests');
+  } catch (e) { setDiagBadge('fail', 'Lỗi'); document.getElementById('diagResult').innerHTML = `<span style="color:#f87171;">❌ ${escapeHtml(e.message)}</span>`; }
+  finally { btn.disabled = false; }
+}
+async function loadDiagTokenInfo() {
+  const el = document.getElementById('diagTokenState');
+  if (!el) return;
+  try {
+    const res = await authFetch('/api/diag/token');
+    const d = await res.json();
+    el.textContent = d.active ? `🔑 Mã từ xa còn hạn tới ${new Date(d.expiresAt).toLocaleString('vi-VN')}` : '🔒 Không có mã kiểm tra từ xa';
+  } catch (_) { el.textContent = ''; }
+}
+async function createDiagToken() {
+  if (!confirm('Tạo mã kiểm tra từ xa có hạn 24 giờ?\nNgười có mã chỉ XEM được báo cáo và chạy tự kiểm tra, không bật/tắt/sửa được luồng hay tài khoản. Tạo mã mới sẽ vô hiệu mã cũ.')) return;
+  try {
+    const res = await authFetch('/api/diag/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ hours: 24 }) });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+    document.getElementById('diagTokenOut').innerHTML = `<div style="padding: 8px 12px; border-radius: 8px; background: rgba(129,140,248,0.08); border: 1px solid rgba(129,140,248,0.3);">
+      Mã (chỉ hiện 1 lần, hết hạn ${new Date(d.expiresAt).toLocaleString('vi-VN')}):<br>
+      <code id="diagTokenValue" style="font-family: 'JetBrains Mono', monospace; color: #c7d2fe; word-break: break-all;">${escapeHtml(d.token)}</code>
+      <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('diagTokenValue').textContent).then(() => showToast('Đã sao chép mã', 'success'))" style="margin-left: 6px; font-size: 0.72rem; padding: 2px 8px; border: 1px solid rgba(129,140,248,0.4); border-radius: 6px; color: #c7d2fe; cursor: pointer;">📋 Sao chép</button>
+    </div>`;
+    loadDiagTokenInfo();
+  } catch (e) { showToast('Không tạo được mã: ' + e.message, 'error'); }
+}
+async function revokeDiagToken() {
+  try {
+    const res = await authFetch('/api/diag/token/revoke', { method: 'POST' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    document.getElementById('diagTokenOut').innerHTML = '';
+    showToast('Đã thu hồi mã kiểm tra từ xa', 'success');
+    loadDiagTokenInfo();
+  } catch (e) { showToast('Không thu hồi được: ' + e.message, 'error'); }
 }
 
 // ── Quản lý Máy chủ (Cluster): xem, thêm, xóa ──
@@ -4820,7 +4993,90 @@ async function loadSheetConfigUI() {
     if (cfg.syncSecret && secInp) {
       secInp.value = cfg.syncSecret;
     }
+    renderDriveCopyConfig(cfg.driveCopyUrls || []);
   } catch (_) {}
+}
+
+// ── Apps Script riêng tạo bản sao khi Drive hết lượt tải ──
+function renderDriveCopyConfig(urls) {
+  const inp = document.getElementById('driveCopyUrlsInput');
+  const badge = document.getElementById('driveCopyBadge');
+  if (inp && document.activeElement !== inp) inp.value = (urls || []).join('\n');
+  if (badge) {
+    const n = (urls || []).length;
+    badge.textContent = n ? `🟢 ${n} link` : '⚪ Chưa cài (dùng link Sheet nếu có)';
+    badge.style.background = n ? 'rgba(56,189,248,0.15)' : 'rgba(156,163,175,0.15)';
+    badge.style.color = n ? '#7dd3fc' : '#9ca3af';
+  }
+}
+
+function renderDriveCopyResults(results, extra) {
+  const box = document.getElementById('driveCopyResult');
+  if (!box) return;
+  if (!results || !results.length) { box.innerHTML = extra || '<span style="color: var(--text-muted);">Chưa có link nào.</span>'; return; }
+  const okN = results.filter(r => r.ok).length;
+  box.innerHTML = results.map(r => `<div>${r.ok ? '✅' : '❌'} <b>${escapeHtml(r.label || '')}</b> <span style="color: var(--text-muted);">${escapeHtml((r.url || '').replace(/^https:\/\/script\.google\.com\/macros\/s\//, '…/s/'))}</span>${r.ok ? ` — OK (${r.ms} ms)` : ` — <span style="color: #f87171;">${escapeHtml(r.error || 'Lỗi')}</span>`}</div>`).join('')
+    + `<div style="margin-top: 4px; font-weight: 600; color: ${okN ? '#34d399' : '#f87171'};">${okN}/${results.length} link sẵn sàng</div>` + (extra || '');
+}
+
+function readDriveCopyInput() {
+  const inp = document.getElementById('driveCopyUrlsInput');
+  return (inp ? inp.value : '').split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+}
+
+async function saveDriveCopyUI() {
+  const btn = document.getElementById('btnSaveDriveCopy');
+  const urls = readDriveCopyInput();
+  const bad = urls.filter(u => !/^https:\/\/script\.google\.com\/.+\/exec/.test(u));
+  if (bad.length && !confirm(`Có ${bad.length} link không giống link Web App (…/exec). Vẫn lưu?`)) return;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang lưu & kiểm tra...'; }
+  try {
+    const res = await authFetch('/api/drive-copy/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls }) });
+    const data = await res.json();
+    if (!res.ok || !data.ok) { showToast(data.error || 'Lỗi lưu cấu hình!', 'error'); return; }
+    renderDriveCopyConfig(data.urls);
+    const inp = document.getElementById('driveCopyUrlsInput');
+    if (inp) inp.value = data.urls.join('\n');
+    renderDriveCopyResults(data.results, data.envOverride ? '<div style="color: #fbbf24;">⚠️ VPS đang đặt biến DRIVE_COPY_URLS → danh sách trong biến được ưu tiên.</div>' : '');
+    const okN = (data.results || []).filter(r => r.ok).length;
+    showToast(data.urls.length ? `Đã lưu ${data.urls.length} link (${okN} sẵn sàng)` : 'Đã xóa danh sách link tạo bản sao', okN || !data.urls.length ? 'success' : 'error');
+  } catch (e) {
+    showToast('Lỗi kết nối: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 LƯU & KIỂM TRA'; }
+  }
+}
+
+async function checkDriveCopyUI() {
+  const btn = document.getElementById('btnCheckDriveCopy');
+  const urls = readDriveCopyInput();
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang kiểm tra...'; }
+  try {
+    const res = await authFetch('/api/drive-copy/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls }) });
+    const data = await res.json();
+    if (!res.ok || !data.ok) { showToast(data.error || 'Lỗi kiểm tra!', 'error'); return; }
+    renderDriveCopyResults(data.results, urls.length ? '' : '<div style="color: var(--text-muted);">Ô trống → đã kiểm tra link đang dùng (link Google Sheet nếu chưa cài link riêng).</div>');
+  } catch (e) {
+    showToast('Lỗi kết nối: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ KIỂM TRA'; }
+  }
+}
+
+async function copyDriveCopyScript() {
+  try {
+    const res = await authFetch('/api/drive-copy/script');
+    const data = await res.json();
+    if (!res.ok || !data.code) { showToast(data.error || 'Không lấy được code!', 'error'); return; }
+    try {
+      await navigator.clipboard.writeText(data.code);
+      showToast('📋 Đã sao chép code (đã điền sẵn secret). Vào script.google.com → Dự án mới → dán → chạy capQuyenDrive → Triển khai Ứng dụng web (Bất kỳ ai).', 'success');
+    } catch (_) {
+      prompt('Sao chép code dưới đây rồi dán vào script.google.com:', data.code);
+    }
+  } catch (e) {
+    showToast('Lỗi kết nối: ' + e.message, 'error');
+  }
 }
 
 async function saveSheetConfigUI() {
@@ -5046,7 +5302,7 @@ function renderUsersTable(users) {
   const tbody = document.getElementById('usersTableBody');
   if (!tbody) return;
   if (!users || users.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 20px; color: var(--text-secondary);">Chưa có tài khoản khách hàng nào. Nhấn "Thêm Khách Hàng" hoặc đồng bộ từ Google Sheet!</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 20px; color: var(--text-secondary);">Chưa có tài khoản khách hàng nào. Nhấn "Thêm Khách Hàng" hoặc đồng bộ từ Google Sheet!</td></tr>';
     return;
   }
 
@@ -5056,19 +5312,25 @@ function renderUsersTable(users) {
       : '<span style="color: #ef4444; background: rgba(239,68,68,0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; white-space: nowrap;">Bị khóa 🛑</span>';
 
     const serverBadge = (u.allowedServers || ['all']).join(', ').toUpperCase();
+    const isAdminRow = u.role === 'admin';
+    const isRootRow = u.id === 'admin_root' || String(u.username).toLowerCase() === 'admin';
+    const roleBadge = isAdminRow
+      ? `<span style="color: #fbbf24; background: rgba(251,191,36,0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700; white-space: nowrap;">🛡️ ${isRootRow ? 'ADMIN GỐC' : 'ADMIN'}</span>`
+      : '<span style="color: #93c5fd; background: rgba(147,197,253,0.12); padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; white-space: nowrap;">👤 Khách</span>';
 
     return `
       <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem;">
         <td style="padding: 10px; font-weight: 600; color: #818cf8;">${escapeHtml(u.username)}</td>
+        <td style="padding: 10px;">${roleBadge}</td>
         <td style="padding: 10px; color: var(--text-primary);">${escapeHtml(u.name || u.username)}</td>
-        <td style="padding: 10px; font-weight: 700; color: #34d399; text-align: center;">${u.maxStreams || 1} luồng</td>
-        <td style="padding: 10px; color: var(--text-secondary);">${u.expiresAt || 'Vĩnh viễn'}</td>
-        <td style="padding: 10px; color: var(--text-secondary);"><span style="background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${serverBadge}</span></td>
+        <td style="padding: 10px; font-weight: 700; color: #34d399; text-align: center; white-space: nowrap;">${isAdminRow ? 'Không giới hạn' : (u.maxStreams || 1) + ' luồng'}</td>
+        <td style="padding: 10px; color: var(--text-secondary); white-space: nowrap;">${u.expiresAt || 'Vĩnh viễn'}</td>
+        <td style="padding: 10px; color: var(--text-secondary);"><span style="background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${isAdminRow ? 'ALL' : serverBadge}</span></td>
         <td style="padding: 10px;">${statusBadge}</td>
         <td style="padding: 10px; color: var(--text-muted); font-size: 0.75rem;">${escapeHtml(u.notes || '')}</td>
-        <td style="padding: 10px; text-align: right;">
+        <td style="padding: 10px; text-align: right; white-space: nowrap;">
           <button class="btn btn-ghost btn-sm" onclick="editUser('${u.id}')" style="padding: 4px 8px; font-size: 0.72rem; margin-right: 4px;">✏️ Sửa</button>
-          ${u.role !== 'admin' ? `<button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}', '${u.username}')" style="padding: 4px 8px; font-size: 0.72rem; color: #f87171;">🗑️ Xóa</button>` : ''}
+          ${!isRootRow ? `<button class="btn btn-ghost btn-sm" onclick="deleteUser('${u.id}', '${u.username}')" style="padding: 4px 8px; font-size: 0.72rem; color: #f87171;">🗑️ Xóa</button>` : ''}
         </td>
       </tr>
     `;
@@ -5086,6 +5348,7 @@ function openAddUserModal() {
   document.getElementById('editExpiresAt').value = '';
   document.getElementById('editAllowedServers').value = 'all';
   document.getElementById('editActive').checked = true;
+  setRoleField('user', false);
 
   const modal = document.getElementById('userEditModal');
   if (modal) modal.classList.remove('hidden');
@@ -5105,9 +5368,21 @@ function editUser(userId) {
   document.getElementById('editExpiresAt').value = user.expiresAt || '';
   document.getElementById('editAllowedServers').value = (user.allowedServers && user.allowedServers[0]) || 'all';
   document.getElementById('editActive').checked = user.active !== false;
+  setRoleField(user.role === 'admin' ? 'admin' : 'user', user.id === 'admin_root' || String(user.username).toLowerCase() === 'admin');
 
   const modal = document.getElementById('userEditModal');
   if (modal) modal.classList.remove('hidden');
+}
+
+// Ô Quyền hạn: admin gốc luôn là admin (khóa ô chọn)
+function setRoleField(role, locked) {
+  const sel = document.getElementById('editRole');
+  if (!sel) return;
+  sel.value = role;
+  sel.disabled = !!locked;
+  sel.title = locked ? 'Admin gốc luôn là Admin' : '';
+  sel.style.opacity = locked ? '0.55' : '';
+  sel.style.cursor = locked ? 'not-allowed' : '';
 }
 
 function closeUserEditModal(e) {
@@ -5144,6 +5419,8 @@ async function saveUserSubmit() {
     active
   };
   if (password) payload.password = password;
+  const roleSel = document.getElementById('editRole');
+  if (roleSel && !roleSel.disabled) payload.role = roleSel.value;
 
   const btn = document.getElementById('btnSaveUser');
   btn.disabled = true;

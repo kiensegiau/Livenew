@@ -107,6 +107,13 @@ try {
 } catch (e) { console.error('Lỗi đọc config:', e.message); }
 
 let bot = null;
+
+// === Chỉ VPS chính (Master) gửi thông báo; Worker chuyển tiếp về Master ===
+let notifyRouter = null; // (channel, text) => true nếu đã chuyển tiếp
+let nodeRoleFn = null;   // () => true nếu máy này là Master
+function setNotifyRouter(fn) { notifyRouter = fn; }
+function setNodeRole(fn) { nodeRoleFn = fn; }
+function isMasterNode() { return nodeRoleFn ? !!nodeRoleFn() : true; }
 const activeProgressMessages = new Map();
 const userStates = new Map(); // Lưu trạng thái nhập liệu của người dùng
 
@@ -117,6 +124,11 @@ function saveConfig() {
 }
 
 function sendToZalo(text) {
+  try { if (notifyRouter && notifyRouter('zalo', text)) return; } catch (e) {}
+  sendToZaloLocal(text);
+}
+
+function sendToZaloLocal(text) {
   if (!config.zalo || !config.zalo.enabled || !config.zalo.serverUrl) return;
 
   const urlStr = config.zalo.serverUrl;
@@ -358,7 +370,9 @@ function initBot(actions) {
               method: 'GET',
               timeout: 5000,
               headers: {
-                'User-Agent': 'CyberShieldSecureAgent/1.0'
+                'User-Agent': 'CyberShieldSecureAgent/1.0',
+                // Xác thực bằng secret cụm (User-Agent không còn được tin là admin)
+                'X-Cluster-Secret': (() => { try { return require('./userManager').getSheetConfig().syncSecret || ''; } catch (_) { return ''; } })()
               }
             };
 
@@ -549,7 +563,18 @@ function initBot(actions) {
   }
 
   try {
-    bot = new TelegramBot(config.token, { polling: true });
+    // Worker chỉ GỬI, chỉ Master mới nhận lệnh (polling) -> tránh lỗi 409 Conflict
+    bot = new TelegramBot(config.token, { polling: false });
+    const syncPolling = () => {
+      try {
+        const want = isMasterNode();
+        const running = typeof bot.isPolling === 'function' ? bot.isPolling() : false;
+        if (want && !running) { console.log('[Telegram Bot] ▶️ Máy này là Master → bật nhận lệnh (polling)'); bot.startPolling().catch(e => console.error('[Telegram Bot] startPolling lỗi:', e.message)); }
+        else if (!want && running) { console.log('[Telegram Bot] ⏸️ Máy này không phải Master → tắt nhận lệnh, chỉ gửi'); bot.stopPolling().catch(() => {}); }
+      } catch (e) {}
+    };
+    syncPolling();
+    setInterval(syncPolling, 5000);
     console.log('\n[Telegram Bot] 🤖 Bot đang chạy...');
 
     bot.setMyCommands([
@@ -571,6 +596,7 @@ function initBot(actions) {
 
   // Hàm gửi báo cáo định kỳ
   const sendPeriodicReport = async () => {
+    if (!isMasterNode()) return; // Chỉ Master gửi báo cáo định kỳ cho cả cụm
     try {
       // Ưu tiên báo cáo TỔNG QUÁT cả cụm (giống web); lỗi/không có dữ liệu thì rơi về báo cáo cục bộ cũ bên dưới
       if (typeof actions.getClusterOverview === 'function') {
@@ -1235,6 +1261,11 @@ function generateCalendar(year, month) {
 }
 
 function broadcast(message) {
+  try { if (notifyRouter && notifyRouter('telegram', message)) return; } catch (e) {}
+  broadcastLocal(message);
+}
+
+function broadcastLocal(message) {
   if (bot && config.adminIds && config.adminIds.length > 0) {
     console.log(`[System] 📢 Đang gửi báo cáo tới ${config.adminIds.length} quản trị viên...`);
     config.adminIds.forEach(id => {
@@ -1354,6 +1385,7 @@ function handleWizard(chatId, text, state, actions) {
 
 function updateProgress(streamId, pct, text) {
   if (!bot || !config.adminIds) return;
+  if (!isMasterNode()) return; // Worker không gửi tiến độ riêng, tránh trùng với Master
   try {
     let current = activeProgressMessages.get(streamId);
     if (!current) {
@@ -1506,4 +1538,4 @@ function saveEditChanges(chatId, state, actions) {
   }
 }
 
-module.exports = { initBot, broadcast, updateProgress, sendToZalo, formatClusterReport, formatClusterNodesCompact, formatRemoteStreamsCompact };
+module.exports = { initBot, broadcast, broadcastLocal, updateProgress, sendToZalo, sendToZaloLocal, setNotifyRouter, setNodeRole, formatClusterReport, formatClusterNodesCompact, formatRemoteStreamsCompact };

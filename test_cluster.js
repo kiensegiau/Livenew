@@ -462,6 +462,42 @@ async function run() {
     assert('Restart luồng không tồn tại → lỗi', !!rs.data?.error, JSON.stringify(rs.data));
   }
 
+  console.log(Y('\n[ 3b ] Chỉ Master gửi thông báo: Worker chuyển tiếp về Master'));
+  {
+    const noSecret = await call('vps1', 'POST', '/api/cluster/notify', { channel: 'telegram', text: 'x' }, { 'X-Cluster-Secret': null });
+    assert('Notify không secret → 401/403', noSecret.status === 401 || noSecret.status === 403, `status=${noSecret.status}`);
+    const bad = await call('vps1', 'POST', '/api/cluster/notify', { channel: 'sms', text: 'x' });
+    assert('Notify channel sai → 400', bad.status === 400, `status=${bad.status}`);
+    const okn = await call('vps1', 'POST', '/api/cluster/notify', { channel: 'telegram', text: 'ping-test', from: 'vps2' });
+    assert('Notify có secret → 200', okn.status === 200, `status=${okn.status}`);
+    assert('Master log đã nhận thông báo', !!(await waitFor(async () => /\[Notify\] 📨 Nhận thông báo từ/.test((logs.vps1 || []).join('')), 5000)));
+
+    // Worker tự phát sinh thông báo (file local không tồn tại -> broadcast THẤT BẠI)
+    await call('vps2', 'POST', '/api/start', { key: 'ntf1-aaaa-bbbb-cccc-dddd', file: 'khong_ton_tai_xyz.mp4', mode: 'loop', minutes: 0, name: 'notify-test' }, { 'X-Cluster-Forwarded': '1' });
+    assert('Worker (vps2) chuyển thông báo về Master', !!(await waitFor(async () => /\[Notify\] ➡️/.test((logs.vps2 || []).join('')), 8000)), 'không thấy log [Notify] ➡️ trên vps2');
+    assert('Master nhận thông báo từ VPS 2', !!(await waitFor(async () => /Nhận thông báo từ VPS 2/.test((logs.vps1 || []).join('')), 8000)));
+    assert('Master KHÔNG tự chuyển tiếp (không có log ➡️)', !/\[Notify\] ➡️/.test((logs.vps1 || []).join('')));
+  }
+
+  console.log(Y('\n[ 3c ] Điều phối chéo: vào thẳng Worker vẫn điều khiển được máy khác'));
+  {
+    const key = 'xctl-aaaa-bbbb-cccc-dddd';
+    const r = await call('vps2', 'POST', '/api/start', startBody(key, 'vps3'));
+    assert('Vào vps2, start luồng trên vps3', !r.data?.error && r.data?.id !== undefined, JSON.stringify(r.data));
+    assert('Luồng nằm trên vps3, không nằm trên vps2', (await findByKey(key, ['vps3'])).length === 1 && (await findByKey(key, ['vps2'])).length === 0);
+    const all = await call('vps3', 'GET', '/api/streams');
+    assert('Vào vps3 thấy luồng của cả cụm (gồm luồng test)', Array.isArray(all.data) && all.data.some(s => s.key === key), `status=${all.status}`);
+    const all1 = await call('vps2', 'GET', '/api/streams');
+    assert('Vào vps2 cũng thấy luồng đó (gom từ vps3)', Array.isArray(all1.data) && all1.data.some(s => s.key === key));
+    const stop = await call('vps2', 'POST', '/api/stop', { id: r.data.id, serverId: 'vps3' });
+    assert('Vào vps2, dừng luồng trên vps3', stop.data?.ok === true, JSON.stringify(stop.data));
+    const after = (await localStreams('vps3')).find(s => s.id === r.data.id);
+    assert('Luồng trên vps3 đã stopped', after && after.status === 'stopped', `status=${after && after.status}`);
+    const r2 = await call('vps3', 'POST', '/api/start', startBody('xctl2-aaaa-bbbb-cccc-dddd', 'vps1'));
+    assert('Vào vps3, start luồng trên vps1 (Master)', !r2.data?.error && (await findByKey('xctl2-aaaa-bbbb-cccc-dddd', ['vps1'])).length === 1, JSON.stringify(r2.data));
+    if (r2.data?.id !== undefined) await call('vps3', 'POST', '/api/stop', { id: r2.data.id, serverId: 'vps1' });
+  }
+
   console.log(Y('\n[ 4 ] Cân bằng tải: nhiều luồng không chỉ định máy'));
   {
     const placed = {};

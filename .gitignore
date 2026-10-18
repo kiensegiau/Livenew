@@ -41,3 +41,5 @@ desktop-app/dist/sessions.json
 history.json
 
 cluster_failover_state.json
+sheet_history_state.json
+diag_tmp/
