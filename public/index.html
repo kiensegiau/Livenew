@@ -3467,7 +3467,7 @@ async function startStream() {
   if (editingStreamId === null) {
     btn.textContent = '🔴 KÍCH HOẠT HỆ THỐNG LIVE';
   }
-  poll();
+  poll(true);
 }
 
 // ── Edit Stream Configuration (Load details into left form) ──
@@ -3559,6 +3559,14 @@ async function stopStream(id) {
   try {
     const s = currentStreamsList.find(x => x.id === id);
     const serverId = s ? s.serverId : 'vps1';
+
+    // Phản hồi giao diện tức thì (Optimistic UI)
+    if (s) {
+      s.status = 'stopped';
+      s.lastLog = 'Đã gửi lệnh dừng luồng...';
+      applyStreamFilters();
+    }
+
     const r = await authFetch('/api/stop', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3568,7 +3576,7 @@ async function stopStream(id) {
   } catch (e) {
     showToast('Lỗi gửi lệnh dừng!', 'error');
   }
-  poll();
+  poll(true);
 }
 
 // ── Restart Stream Call ──
@@ -3576,6 +3584,14 @@ async function restartStream(id) {
   try {
     const s = currentStreamsList.find(x => x.id === id);
     const serverId = s ? s.serverId : 'vps1';
+
+    // Phản hồi giao diện tức thì (Optimistic UI)
+    if (s) {
+      s.status = 'launching';
+      s.lastLog = 'Đang gửi lệnh khởi động lại...';
+      applyStreamFilters();
+    }
+
     const r = await authFetch('/api/restart', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3587,7 +3603,7 @@ async function restartStream(id) {
   } catch (e) {
     showToast('Lỗi kết nối khởi động lại!', 'error');
   }
-  poll();
+  poll(true);
 }
 
 // ── Clear Completed Streams ──
@@ -3600,7 +3616,7 @@ async function clearDone() {
   } catch (e) {
     showToast('Lỗi dọn dẹp luồng cũ!', 'error');
   }
-  poll();
+  poll(true);
 }
 
 // ── Toggle Console Logs View ──
@@ -3720,7 +3736,7 @@ function renderStreams(list) {
       launching: 'KÍCH HOẠT ⏳', 
       reconnecting: 'THỬ LẠI 🔄', 
       downloading: 'ĐANG TẢI 📥' 
-    }[s.status] || s.status.toUpperCase();
+    }[s.status] || (s.status ? String(s.status).toUpperCase() : 'UNKNOWN');
 
     // Mode visual text
     let modeLabel = '';
@@ -4301,29 +4317,36 @@ let mockTimeStart11 = new Date(Date.now() - 39600000); // 11 tiếng trước
 let mockTimeSched14 = new Date(Date.now() + 2700000); // trong 45 phút nữa
 let mockTimeStart16 = new Date(Date.now() - 3600000); // 1 tiếng trước
 
-async function poll() {
+let isPollingStreams = false;
+async function poll(force = false) {
+  if (isPollingStreams && !force) return;
+  isPollingStreams = true;
   try {
     if (useMockData) {
       updateMockAndRender();
       return;
     }
     const r = await authFetch('/api/streams');
-    if (!r.ok) throw new Error('API offline');
+    if (!r.ok) throw new Error('API offline (' + r.status + ')');
     const list = await r.json();
     currentStreamsList = list;
     applyStreamFilters();
     updateCustomerFilterOptions();
     fetchUserProfile();
-    document.getElementById('demoBadge').style.display = 'none';
+    const demoBadge = document.getElementById('demoBadge');
+    if (demoBadge) demoBadge.style.display = 'none';
   } catch (e) {
     if (e.message === 'Unauthorized') return;
-    useMockData = true;
-    updateMockAndRender();
+    console.warn('[Poll Streams Warning]', e.message);
+    // Giữ nguyên giao diện thực và đợi lượt polling kế tiếp, không kích hoạt mock data làm đơ giao diện
+  } finally {
+    isPollingStreams = false;
   }
 }
 
 function updateMockAndRender() {
-  document.getElementById('demoBadge').style.display = 'inline-flex';
+  const demoBadge = document.getElementById('demoBadge');
+  if (demoBadge) demoBadge.style.display = 'inline-flex';
   
   // Tăng ngẫu nhiên tiến độ tải video từ Drive
   mockPercent = mockPercent + 2;
@@ -4679,7 +4702,10 @@ function applyTelemetryUI(clusterData) {
   document.getElementById('sysNetRing').style.strokeDashoffset = netOffset;
 }
 
+let isPollingSysInfo = false;
 async function pollSysInfo() {
+  if (isPollingSysInfo) return;
+  isPollingSysInfo = true;
   try {
     if (useMockData) {
       updateMockSysInfo();
@@ -4692,6 +4718,8 @@ async function pollSysInfo() {
     applyTelemetryUI(clusterData);
   } catch (e) {
     if (e.message === 'Unauthorized') return;
+  } finally {
+    isPollingSysInfo = false;
   }
 }
 
