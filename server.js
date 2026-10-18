@@ -2612,10 +2612,10 @@ const server = http.createServer(async (req, res) => {
         dlPercent: s.dlPercent !== undefined ? s.dlPercent : null,
         dlSpeed: s.dlSpeed || 0,
         youtubeUrl: s.youtubeUrl || '',
-        viewers: s.viewers !== undefined ? s.viewers : null,
-        youtubeViews: s.youtubeViews !== undefined ? s.youtubeViews : null,
-        youtubeLikes: s.youtubeLikes !== undefined ? s.youtubeLikes : null,
-        youtubeLiveStatus: s.youtubeLiveStatus || null,
+        viewers: (s.viewers !== undefined && s.viewers !== null) ? s.viewers : (youtubeViewer.getCachedStats(s.youtubeUrl) ? youtubeViewer.getCachedStats(s.youtubeUrl).viewers : null),
+        youtubeViews: (s.youtubeViews !== undefined && s.youtubeViews !== null) ? s.youtubeViews : (youtubeViewer.getCachedStats(s.youtubeUrl) ? youtubeViewer.getCachedStats(s.youtubeUrl).views : null),
+        youtubeLikes: (s.youtubeLikes !== undefined && s.youtubeLikes !== null) ? s.youtubeLikes : (youtubeViewer.getCachedStats(s.youtubeUrl) ? youtubeViewer.getCachedStats(s.youtubeUrl).likes : null),
+        youtubeLiveStatus: s.youtubeLiveStatus || (youtubeViewer.getCachedStats(s.youtubeUrl) ? (youtubeViewer.getCachedStats(s.youtubeUrl).isLive ? 'live' : 'ended') : null),
         ownerId: s.ownerId || 'admin_root',
         ownerUsername: s.ownerUsername || 'admin',
         serverId: localNodeId,
@@ -2635,11 +2635,12 @@ const server = http.createServer(async (req, res) => {
         remoteStreams.forEach(rs => {
           const isOwner = (rs.ownerId === currentUser.id || rs.ownerUsername === currentUser.username);
           if (currentUser.role === 'admin' || isOwner) {
+            const cached = youtubeViewer.getCachedStats(rs.youtubeUrl);
             list.push({
               ...rs,
-              viewers: rs.viewers !== undefined ? rs.viewers : null,
-              youtubeViews: rs.youtubeViews !== undefined ? rs.youtubeViews : null,
-              youtubeLikes: rs.youtubeLikes !== undefined ? rs.youtubeLikes : null,
+              viewers: (rs.viewers !== undefined && rs.viewers !== null) ? rs.viewers : (cached ? cached.viewers : null),
+              youtubeViews: (rs.youtubeViews !== undefined && rs.youtubeViews !== null) ? rs.youtubeViews : (cached ? cached.views : null),
+              youtubeLikes: (rs.youtubeLikes !== undefined && rs.youtubeLikes !== null) ? rs.youtubeLikes : (cached ? cached.likes : null),
               key: currentUser.role === 'admin' || isOwner ? rs.key : (String(rs.key || '').substring(0, 6) + '****'),
               keyHint: String(rs.key || '').substring(0, 6) + '****'
             });
@@ -2673,7 +2674,16 @@ async function getClusterOverview() {
     serverId: localNodeId, serverName: localName, isRemote: false
   }));
   let remote = [];
-  try { remote = await clusterManager.fetchAllRemoteStreams(); } catch (_) {}
+  try {
+    const rawRemote = await clusterManager.fetchAllRemoteStreams();
+    remote = (rawRemote || []).map(rs => {
+      const cached = youtubeViewer.getCachedStats(rs.youtubeUrl);
+      return {
+        ...rs,
+        viewers: (rs.viewers !== undefined && rs.viewers !== null) ? rs.viewers : (cached ? cached.viewers : null)
+      };
+    });
+  } catch (_) {}
   return { localNodeId, nodes, streams: localStreams.concat(remote) };
 }
 
@@ -2832,7 +2842,12 @@ server.listen(PORT, '0.0.0.0', async () => {
   // Khởi động bộ quét mắt xem Live YouTube tự động
   try {
     youtubeViewer.startYouTubePoller({
-      getStreams: () => Array.from(streams.values()),
+      getStreams: async () => {
+        const local = Array.from(streams.values());
+        let remote = [];
+        try { remote = await clusterManager.fetchAllRemoteStreams(); } catch (_) {}
+        return local.concat(remote);
+      },
       getScriptUrl: () => {
         const sc = userManager.getSheetConfig() || {};
         return sc.youtubeStatsScriptUrl || process.env.YOUTUBE_STATS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbxYgYyp4MHxYQ8HoovJwywvwgLCrpETZ71Kha6L4Pzva3nvv65p95ZXQnQvzNh1GVmiLw/exec';

@@ -151,6 +151,16 @@ async function fetchLiveStats(videoIds, { scriptUrl, apiKey } = {}) {
 }
 
 let pollerTimer = null;
+const statsCache = new Map(); // videoId -> { viewers, views, likes, isLive, title, updatedAt }
+
+/**
+ * Lấy số liệu cache của một video qua link YouTube
+ */
+function getCachedStats(url) {
+  const vid = extractYouTubeVideoId(url);
+  if (!vid) return null;
+  return statsCache.get(vid) || null;
+}
 
 /**
  * Khởi động tiến trình định kỳ cập nhật số mắt xem cho các luồng đang Live
@@ -160,8 +170,14 @@ function startYouTubePoller({ getStreams, getScriptUrl, getApiKey, intervalMs = 
 
   const poll = async () => {
     try {
-      const streams = typeof getStreams === 'function' ? getStreams() : [];
-      // Chỉ quét các luồng đang 'live' và có link YouTube
+      let streams = [];
+      if (typeof getStreams === 'function') {
+        const res = getStreams();
+        streams = (res && typeof res.then === 'function') ? await res : res;
+      }
+      if (!Array.isArray(streams)) streams = [];
+
+      // Quét tất cả luồng đang 'live' có link YouTube (kể cả luồng từ máy khác)
       const activeLiveStreams = streams.filter(s => s && s.status === 'live' && s.youtubeUrl);
       if (activeLiveStreams.length === 0) return;
 
@@ -185,6 +201,12 @@ function startYouTubePoller({ getStreams, getScriptUrl, getApiKey, intervalMs = 
       const stats = await fetchLiveStats(videoIds, { scriptUrl, apiKey });
       let updatedCount = 0;
 
+      for (const [vid, item] of Object.entries(stats)) {
+        if (item) {
+          statsCache.set(vid, { ...item, updatedAt: Date.now() });
+        }
+      }
+
       for (const [vid, streamList] of videoMap.entries()) {
         const item = stats[vid];
         if (item) {
@@ -206,11 +228,11 @@ function startYouTubePoller({ getStreams, getScriptUrl, getApiKey, intervalMs = 
     }
   };
 
-  // Chạy lần đầu sau 5 giây khi server khởi động
-  setTimeout(poll, 5000);
+  // Chạy lần đầu sau 3 giây khi server khởi động
+  setTimeout(poll, 3000);
   // Định kỳ lặp lại
   pollerTimer = setInterval(poll, Math.max(20000, intervalMs));
-  console.log(`[YouTube Viewer] 🚀 Đã kích hoạt bộ quét mắt xem tự động (Chu kỳ: ${Math.round(intervalMs / 1000)}s)`);
+  console.log(`[YouTube Viewer] 🚀 Đã kích hoạt bộ quét mắt xem tự động toàn cụm VPS (Chu kỳ: ${Math.round(intervalMs / 1000)}s)`);
 }
 
 function stopYouTubePoller() {
@@ -223,6 +245,7 @@ function stopYouTubePoller() {
 module.exports = {
   extractYouTubeVideoId,
   fetchLiveStats,
+  getCachedStats,
   startYouTubePoller,
   stopYouTubePoller
 };
