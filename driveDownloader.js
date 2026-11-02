@@ -52,7 +52,9 @@ function getDirectDownloadInfo(url, cookieString, attempt) {
     if (cookieString) options.headers['Cookie'] = cookieString;
 
     const transport = url.startsWith('http://') ? http : https;
-    transport.get(url, options, (res) => {
+    // Giới hạn thời gian chờ: trước đây không có → Google treo kết nối là luồng kẹt "Đang bắt đầu tải" mãi mãi
+    options.timeout = parseInt(process.env.DRIVE_PROBE_TIMEOUT_MS, 10) || 30000;
+    const req = transport.get(url, options, (res) => {
 
       let newCookieString = cookieString;
       if (res.headers['set-cookie']) {
@@ -60,6 +62,8 @@ function getDirectDownloadInfo(url, cookieString, attempt) {
       }
 
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        // Bỏ thân phản hồi chuyển hướng để trả socket về pool (trước đây bị giữ → rò rỉ socket, lâu ngày hết 64 socket → treo)
+        res.resume();
         let redirectUrl = res.headers.location;
         const confirmTokenMatch = newCookieString.match(/download_warning_[^=]+=([^;]+)/);
         if (confirmTokenMatch && !redirectUrl.includes('confirm=')) {
@@ -107,6 +111,8 @@ function getDirectDownloadInfo(url, cookieString, attempt) {
       if (res.statusCode === 200) {
         let totalBytes = parseInt(res.headers['content-length'], 10) || 0;
         resolve({ directUrl: url, cookie: newCookieString, totalBytes });
+        // Đây là chính nội dung file (chỉ cần header lấy dung lượng) → hủy ngay để không giữ socket (trước đây rò rỉ mỗi lần tải)
+        res.destroy();
         return;
       }
 
@@ -123,6 +129,9 @@ function getDirectDownloadInfo(url, cookieString, attempt) {
       res.resume();
       reject(new Error(`Bị từ chối quyền truy cập (Code: ${res.statusCode}). File Drive có bật chế độ Chia Sẻ không?`));
     }).on('error', reject);
+    req.on('timeout', () => {
+      req.destroy(new Error(`Google Drive không phản hồi sau ${Math.round(options.timeout / 1000)} giây (kết nối bị treo).`));
+    });
   });
 }
 
@@ -413,5 +422,7 @@ module.exports = {
   downloadGoogleDriveFile,
   extractDriveId,
   QUOTA_RE,
-  downloadChunk
+  downloadChunk,
+  getDirectDownloadInfo, // dùng cho test
+  _agents: { httpsAgent, httpAgent } // dùng cho test rò rỉ socket
 };
