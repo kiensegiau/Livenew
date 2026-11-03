@@ -219,9 +219,34 @@ function downloadChunk(directUrl, cookie, start, end, chunkPath, threadId, onPro
       resetProgressTimeout();
 
       req = transport.get(directUrl, options, (res) => {
-        if (res.statusCode !== 206 && res.statusCode !== 200) {
+        const ctype = String(res.headers['content-type'] || '').toLowerCase();
+        // Nếu Google trả trang HTML (hết quota / cảnh báo virus / lỗi) hoặc 403/429 ở giữa chừng khi tải chunk:
+        // tuyệt đối không ghi HTML vào file .mp4! Đọc nội dung để nhận diện lỗi hết lượt tải (DRIVE_QUOTA).
+        if (ctype.includes('text/html') || res.statusCode === 403 || res.statusCode === 429) {
+          let errBody = '';
+          res.on('data', c => { if (errBody.length < 65536) errBody += c.toString('utf8'); });
+          res.on('end', () => {
+            cleanupResources();
+            try { if (fs.existsSync(chunkPath)) fs.unlinkSync(chunkPath); } catch (_) {}
+            if (QUOTA_RE.test(errBody) || ctype.includes('text/html')) {
+              if (isDone) return;
+              isDone = true;
+              return reject(makeQuotaError());
+            }
+            handleFailure(new Error(`Mã phản hồi HTTP: ${res.statusCode}`));
+          });
+          res.on('error', (e) => { cleanupResources(); handleFailure(e); });
+          return;
+        }
+
+        // Khi yêu cầu Range (hoặc tải nối tiếp currentStart > 0), bắt buộc phản hồi phải là 206 Partial Content
+        // (chỉ chấp nhận 200 nếu tải 1 luồng từ byte 0 và Content-Length khớp expectedSize)
+        const contentLen = parseInt(res.headers['content-length'], 10) || 0;
+        const valid200 = res.statusCode === 200 && currentStart === 0 && (!expectedSize || !contentLen || contentLen === expectedSize);
+        if (res.statusCode !== 206 && !valid200) {
+          res.resume();
           cleanupResources();
-          handleFailure(new Error(`Mã phản hồi HTTP: ${res.statusCode}`));
+          handleFailure(new Error(`Mã phản hồi HTTP không hợp lệ cho Range (${rangeHeader}): ${res.statusCode}`));
           return;
         }
 
@@ -255,6 +280,18 @@ function downloadChunk(directUrl, cookie, start, end, chunkPath, threadId, onPro
 
       fileStream.on('finish', () => {
         if (isDone) return;
+        // Kiểm tra dung lượng phân đoạn thực tế trên đĩa phải khớp đúng expectedSize (tránh trường hợp kết nối đóng sớm làm thiếu dữ liệu)
+        let finalSize = 0;
+        try { finalSize = fs.statSync(chunkPath).size; } catch (_) {}
+        if (expectedSize > 0 && finalSize < expectedSize) {
+          handleFailure(new Error(`Phân đoạn chưa tải đủ dữ liệu (${finalSize}/${expectedSize} bytes)`));
+          return;
+        }
+        if (expectedSize > 0 && finalSize > expectedSize) {
+          try { fs.unlinkSync(chunkPath); } catch (_) {}
+          handleFailure(new Error(`Phân đoạn vượt kích thước mong đợi (${finalSize}/${expectedSize} bytes)`));
+          return;
+        }
         isDone = true;
         if (progressTimeout) {
           clearTimeout(progressTimeout);
@@ -338,6 +375,9 @@ function downloadGoogleDriveFile(driveUrl, destPath, onProgress) {
     const initialUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
     
     getDirectDownloadInfo(initialUrl, "", 1).then(async (info) => {
+      if (!info.totalBytes || info.totalBytes < 1024) {
+        return reject(new Error(`Không xác định được kích thước hợp lệ của file Drive (${info.totalBytes || 0} bytes).`));
+      }
       // Xác định số lượng luồng: File lớn hơn 50MB mới chia 4 luồng, file nhỏ tải 1 luồng tránh overhead
       const CONCURRENCY = info.totalBytes > 50 * 1024 * 1024 ? 4 : 1;
       const TEMP_DIR = path.join(destPath, `temp_chunks_${fileId}_${Date.now()}`);
@@ -399,6 +439,21 @@ function downloadGoogleDriveFile(driveUrl, destPath, onProgress) {
 
         // Hợp nhất các phân đoạn thành tệp video duy nhất
         await mergeFiles(chunkPaths, finalDest);
+
+        // Kiểm tra tính toàn vẹn của tệp sau khi ghép: đúng dung lượng và không phải trang HTML lỗi
+        const mergedStat = fs.statSync(finalDest);
+        if (info.totalBytes > 0 && mergedStat.size !== info.totalBytes) {
+          try { fs.unlinkSync(finalDest); } catch (_) {}
+          throw new Error(`File tải về không khớp dung lượng gốc (${mergedStat.size}/${info.totalBytes} bytes).`);
+        }
+        const headBuf = Buffer.alloc(Math.min(512, mergedStat.size));
+        const fd = fs.openSync(finalDest, 'r');
+        try { fs.readSync(fd, headBuf, 0, headBuf.length, 0); } finally { try { fs.closeSync(fd); } catch (_) {} }
+        const headStr = headBuf.toString('utf8');
+        if (/^\s*<(?:!doctype\s+html|html|head|body)\b/i.test(headStr) || QUOTA_RE.test(headStr)) {
+          try { fs.unlinkSync(finalDest); } catch (_) {}
+          throw makeQuotaError();
+        }
 
         // Dọn dẹp thư mục tạm của phân đoạn
         try { fs.rmdirSync(TEMP_DIR); } catch (_) {}

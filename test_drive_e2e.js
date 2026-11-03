@@ -5,12 +5,28 @@ const D = require(path.resolve(process.argv[2] || './driveDownloader'));
 const mk = (n, seed) => { const b = Buffer.alloc(n); for (let i = 0; i < n; i++) b[i] = (i * 31 + seed) & 255; return b; };
 const FILES = { BIG: mk(60 * 1024 * 1024, 7), SMALL: mk(1024 * 1024, 3) };
 let port;
+let truncOnce = false;
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/uc') { res.writeHead(303, { Location: `http://localhost:${port}/download?id=${u.searchParams.get('id')}` }); res.end('moved'); return; }
   if (u.pathname === '/download') {
-    const buf = u.searchParams.get('id').startsWith('BIG') ? FILES.BIG : FILES.SMALL;
+    const id = u.searchParams.get('id') || '';
+    const buf = id.startsWith('BIG') ? FILES.BIG : FILES.SMALL;
     const m = /bytes=(\d+)-(\d+)?/.exec(req.headers.range || '');
+    // Giả lập: bước probe (không có Range) vẫn trả 200 video/mp4, nhưng khi tải chunk (có Range) thì Google chạm ngưỡng quota và trả 200 text/html
+    if (id.startsWith('QUOTACHUNK') && m) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end('<html><body>Too many users have viewed or downloaded this file recently. Quota exceeded.</body></html>');
+      return;
+    }
+    if (id.startsWith('TRUNCCHUNK') && m && !truncOnce) {
+      truncOnce = true;
+      const s = +m[1], e = m[2] ? +m[2] : buf.length - 1;
+      const half = Math.floor((e - s + 1) / 2);
+      res.writeHead(206, { 'Content-Length': e - s + 1, 'Content-Type': 'video/mp4' });
+      res.end(buf.subarray(s, s + half)); // đóng kết nối sớm khi mới gửi 1/2 chunk
+      return;
+    }
     if (m) { const s = +m[1], e = m[2] ? +m[2] : buf.length - 1; res.writeHead(206, { 'Content-Length': e - s + 1, 'Content-Type': 'video/mp4' }); res.end(buf.subarray(s, e + 1)); }
     else { res.writeHead(200, { 'Content-Length': buf.length, 'Content-Type': 'video/mp4' }); res.end(buf); }
     return;
@@ -46,6 +62,20 @@ server.listen(0, '127.0.0.1', async () => {
       } catch (e) { err = `lần ${i}: ${e.message}`; break; }
     }
     ok('Cả 80 lần tải đều xong và đúng nội dung', done === 80, err || `${done}/80`);
+
+    console.log('\n[ 3 ] Probe 200 OK nhưng tải chunk bị trả 200 text/html (hết quota giữa chừng) → phải báo DRIVE_QUOTA, không lưu HTML thành .mp4');
+    let quotaErr = null;
+    try {
+      await withTimeout(D.downloadGoogleDriveFile('https://drive.google.com/file/d/QUOTACHUNK001/view', dir, () => {}), 15000);
+    } catch (e) { quotaErr = e; }
+    ok('Bắt đúng mã lỗi DRIVE_QUOTA khi chunk trả HTML', quotaErr && quotaErr.code === 'DRIVE_QUOTA', quotaErr ? `${quotaErr.code}: ${quotaErr.message.slice(0, 60)}` : 'không báo lỗi!');
+
+    console.log('\n[ 4 ] Kết nối đóng sớm làm thiếu byte ở chunk → tự phát hiện và tải bù đủ 100%');
+    const fTrunc = await withTimeout(D.downloadGoogleDriveFile('https://drive.google.com/file/d/TRUNCCHUNK001/view', dir, () => {}), 15000);
+    const gotTrunc = fs.readFileSync(fTrunc);
+    ok('Tải bù đủ dung lượng & đúng SHA-256 sau khi bị ngắt sớm', gotTrunc.length === FILES.SMALL.length && sha(gotTrunc) === sha(FILES.SMALL));
+    fs.unlinkSync(fTrunc);
+
     await new Promise(r => setTimeout(r, 300));
     ok('Không còn kết nối bị giữ', held() === 0, `đang giữ ${held()}`);
     const leftovers = fs.readdirSync(dir);

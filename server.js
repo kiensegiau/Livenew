@@ -794,6 +794,8 @@ function launchFFmpeg(id, key, file, mode, minutes) {
     if (!s) return;
     // Tiến trình cũ đã bị thay bằng tiến trình mới (sửa cấu hình / bật lại nhanh): không được đụng tới trạng thái luồng
     if (s.process !== proc) return;
+    s.process = null;
+    s.pid = null;
     s._exitCode = code;
     
     // Dọn _killTimer nếu có
@@ -804,6 +806,19 @@ function launchFFmpeg(id, key, file, mode, minutes) {
 
     // Nếu do user bấm stop → status đã là 'stopped', không làm gì thêm
     if (s.status === 'stopped') { releaseStreamFile(id, 'dừng thủ công'); return; }
+
+    // Tự cứu hộ khi file video tải về bị lỗi dữ liệu (VD: dính trang HTML hết lượt tải hoặc thiếu moov atom):
+    // xóa ngay file hỏng và tải lại từ Google Drive (kèm tự tạo bản sao nếu hết quota) thay vì lặp lại vô ích trên file hỏng.
+    if (code !== 0 && /Invalid data found when processing input|moov atom not found/i.test(`${errBuf}\n${s.lastLog || ''}`) && extractDriveId(s.originalFile) && (s._corruptRedownloadCount || 0) < 2) {
+      s._corruptRedownloadCount = (s._corruptRedownloadCount || 0) + 1;
+      console.warn(`[Stream #${id}] ⚠️ Phát hiện file video tạm bị lỗi dữ liệu (Invalid data) → xóa file lỗi và tự động tải lại từ Drive (lần ${s._corruptRedownloadCount}/2)...`);
+      releaseStreamFile(id, 'file video tạm bị lỗi dữ liệu');
+      const recoverMode = s.mode === 'scheduled' ? (s.scheduledMode || 'loop') : s.mode;
+      redownloadFromDrive(s, recoverMode);
+      const RecoverNew = streams.get(id);
+      if (RecoverNew) RecoverNew._corruptRedownloadCount = s._corruptRedownloadCount;
+      return;
+    }
 
     // Kiểm tra thời lượng đã hết chưa (nếu có giới hạn phút)
     if (s.minutes > 0 && s.firstLiveTime) {
@@ -1076,7 +1091,8 @@ function stopStream(id) {
   if (info.timer) clearTimeout(info.timer);
   info.status = 'stopped';
   const p = info.process;
-  if (p) {
+  const pAlive = p && p.exitCode === null && p.signalCode === null;
+  if (pAlive) {
     try {
       // Gửi 'q' vào stdin → ffmpeg tự đóng RTMP gracefully
       p.stdin.write('q\n');
@@ -1087,11 +1103,14 @@ function stopStream(id) {
     } catch (_) {
       try { p.kill(); } catch (_) {}
     }
+  } else {
+    info.process = null;
+    info.pid = null;
   }
 
-  // File video được giữ cho tới khi live kết thúc/dừng (xem releaseStreamFile). Nếu luồng chưa có tiến trình ffmpeg (đang chờ lịch) thì dọn ngay.
+  // File video được giữ cho tới khi live kết thúc/dừng (xem releaseStreamFile). Nếu luồng chưa có tiến trình ffmpeg đang chạy (đang chờ lịch / đang chờ kết nối lại) thì dọn ngay.
   saveStreams(); // Lưu lại trạng thái dừng
-  if (!p) releaseStreamFile(id, 'dừng khi chưa phát');
+  if (!pAlive) releaseStreamFile(id, 'dừng khi chưa phát');
 
   return true;
 }
@@ -1129,6 +1148,9 @@ function restartStream(id) {
   }
   if (s._fileReleased || (s.file && path.resolve(s.file).startsWith(path.resolve(DOWNLOAD_DIR) + path.sep) && !fs.existsSync(s.file))) return { error: 'File video tạm đã được dọn sau khi live xong. Hãy tạo luồng mới (hoặc đặt KEEP_FILES_AFTER_LIVE=1 để giữ file).' };
   
+  if (s.mode === 'scheduled') {
+    s.mode = s.scheduledMode || 'loop';
+  }
   s.status = 'launching';
   s.startTime = null;
   s.process = null;
