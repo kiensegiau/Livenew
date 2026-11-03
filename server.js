@@ -2000,6 +2000,29 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // API: Cập nhật code từ GitHub & khởi động lại (Chỉ Admin / Cluster Peer)
+  if (req.method === 'POST' && pathname === '/api/admin/update') {
+    if (currentUser.role !== 'admin') { json(res, 403, { error: 'Chỉ Admin mới có quyền cập nhật hệ thống!' }); return; }
+    try {
+      const out = execSync('git fetch origin && git reset --hard origin/main', {
+        cwd: __dirname,
+        encoding: 'utf8',
+        timeout: 30000
+      });
+      const rev = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', timeout: 5000 }).trim();
+      saveStreams();
+      flushHistory();
+      json(res, 200, { ok: true, node: localNodeId, commit: rev, output: out.trim(), restarting: true });
+      setTimeout(() => {
+        console.log(`[System] 🔄 Đã cập nhật lên commit ${rev}, tự khởi động lại qua PM2...`);
+        process.exit(1);
+      }, 600);
+    } catch (e) {
+      json(res, 500, { ok: false, error: e.message });
+    }
+    return;
+  }
+
   // API: Browse file
   if (req.method === 'POST' && pathname === '/api/browse') {
     if (currentUser.role !== 'admin') { json(res, 403, { error: 'Chi Admin moi co quyen!' }); return; }
