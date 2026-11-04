@@ -2004,11 +2004,16 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && pathname === '/api/admin/update') {
     if (currentUser.role !== 'admin') { json(res, 403, { error: 'Chỉ Admin mới có quyền cập nhật hệ thống!' }); return; }
     try {
+      const botCfgPath = path.join(__dirname, 'bot_config.json');
+      const savedBotCfg = fs.existsSync(botCfgPath) ? fs.readFileSync(botCfgPath, 'utf8') : null;
       const out = execSync('git fetch origin && git reset --hard origin/main', {
         cwd: __dirname,
         encoding: 'utf8',
         timeout: 30000
       });
+      if (savedBotCfg !== null) {
+        try { fs.writeFileSync(botCfgPath, savedBotCfg, 'utf8'); } catch (_) {}
+      }
       const rev = execSync('git rev-parse --short HEAD', { cwd: __dirname, encoding: 'utf8', timeout: 5000 }).trim();
       saveStreams();
       flushHistory();

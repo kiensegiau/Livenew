@@ -1,5 +1,7 @@
 # Hướng dẫn thêm VPS vào cụm (ghi chú để dùng sau)
 
+> 📌 **Danh sách chi tiết toàn bộ các VPS đang quản lý & các link dịch vụ:** Xem tại [`DANH_SACH_VPS.md`](./DANH_SACH_VPS.md).
+>
 > Các bước này đã được kiểm thử với VPS **giả** trên localhost (`npm test` = `node test_cluster.js`).
 > **Chưa chạy trên VPS thật** → lần đầu hãy thử với 1 VPS và 1 luồng test.
 
