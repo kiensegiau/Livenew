@@ -99,7 +99,7 @@ Máy chủ cài riêng cho khách hàng, **cách ly 100%** khỏi cụm VPS 1/VP
 - **Đăng nhập SSH:** `ssh root@13.140.208.154` (Mật khẩu `root`: `kienkaka`)
 - **Đăng nhập Web Admin:**
   - **Tài khoản:** `admin`
-  - **Mật khẩu:** `kienkaka`
+  - **Mật khẩu:** `Admin@123456`
 - **Cấu hình phần cứng:**
   - **HĐH:** Ubuntu 24.04.5 LTS (Noble Numbat)
   - **CPU:** AMD EPYC Processor (with IBPB)
@@ -138,3 +138,4 @@ pm2 status
 # Xem 50 dòng log gần nhất
 pm2 logs live-controller --lines 50
 ```
+
