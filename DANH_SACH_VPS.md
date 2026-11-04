@@ -110,7 +110,7 @@ Máy chủ cài riêng cho khách hàng, **cách ly 100%** khỏi cụm VPS 1/VP
 - **Trạng thái cách ly:**
   - `cluster_nodes.json`: Chỉ chứa duy nhất `13.140.208.154` (`VPS Chính (Master)`).
   - `bot_config.json`: Đã làm trống hoàn toàn (`polling: false`, `zalo.enabled: false`, `sentinel.enabled: false`).
-  - `sheet_config.json`: Dùng tài khoản cục bộ (`directSheetAuth: false`), `syncSecret` riêng (`9368f38294314bbcf6ffc3ebbac4892a`).
+  - `sheet_config.json`: Dùng tài khoản cục bộ (`directSheetAuth: false`), `syncSecret` riêng (`9368f38294314bbcf6ffc3ebbac4892a`), đã cài sẵn Apps Script đọc mắt xem Live YouTube (`youtubeStatsScriptUrl: https://script.google.com/macros/s/AKfycbxYgYyp4MHxYQ8HoovJwywvwgLCrpETZ71Kha6L4Pzva3nvv65p95ZXQnQvzNh1GVmiLw/exec`).
 
 ---
 
