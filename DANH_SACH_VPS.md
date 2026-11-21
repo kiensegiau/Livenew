@@ -1,20 +1,22 @@
 # 🖥️ CẨM NANG BÀN GIAO & QUẢN LÝ HỆ THỐNG VPS YOUTUBE LIVE PRO
 
-> **Mục đích tài liệu:** Đây là tài liệu chuẩn dùng để bàn giao cho nhân viên vận hành, kỹ thuật viên hoặc trợ lý AI trong các phiên làm việc sau. Tài liệu chứa đầy đủ thông tin máy chủ, tài khoản, đường dẫn dịch vụ và hướng dẫn từng bước cho cả **Cụm VPS Chính (VPS cũ)** lẫn **VPS Độc Lập cho khách thuê riêng (VPS mới)**.
+> **Mục đích tài liệu:** Đây là tài liệu chuẩn dùng để bàn giao cho nhân viên vận hành, kỹ thuật viên hoặc trợ lý AI trong các phiên làm việc sau. Tài liệu chứa đầy đủ thông tin máy chủ, tài khoản, đường dẫn dịch vụ và hướng dẫn từng bước cho cả **Cụm VPS Chính (Hệ thống công ty)** lẫn **Cụm 2 VPS Nâng Cấp Riêng Cho Khách Hàng**.
 
 ---
 
 ## 📌 PHẦN 1: PHÂN BIỆT 2 MÔ HÌNH ĐANG VẬN HÀNH
 
-Hệ thống hiện có **2 nhóm máy chủ hoàn toàn tách biệt nhau**:
+Hệ thống hiện có **2 cụm máy chủ hoàn toàn tách biệt nhau**:
 
-| Tiêu chí | **1. CỤM VPS CHÍNH (VPS 1 + VPS 2)** | **2. VPS ĐỘC LẬP CỦA KHÁCH (`13.140.208.154`)** |
+| Tiêu chí | **1. CỤM VPS CHÍNH (HỆ THỐNG CÔNG TY)** | **2. CỤM 2 VPS KHÁCH HÀNG (MỚI NÂNG CẤP)** |
 | :--- | :--- | :--- |
-| **Mục đích sử dụng** | Hệ thống chính của công ty, chạy chung nhiều tài khoản khách hàng. | Cài riêng cho 1 khách hàng thuê trọn gói 1 VPS, tách biệt 100% với cụm chính. |
-| **Số lượng máy** | **2 máy kết nối thành 1 cụm:** `vps1` (Master) + `vps2` (Worker). | **1 máy duy nhất:** Tự làm `Master` độc lập, không nối với máy nào khác. |
-| **Quản lý tài khoản** | Đồng bộ trực tiếp từ **Google Sheet** (`directSheetAuth: true`) + tạo trên Web. | Tạo/sửa/xóa **trực tiếp trên giao diện Web** (`users.json`), hoặc khách tự gắn Sheet riêng nếu muốn. |
+| **Mục đích sử dụng** | Hệ thống chính của công ty, chạy các kênh của công ty và quản lý tập trung. | Cụm máy chủ chuyên dụng bàn giao riêng cho nhóm khách hàng lớn (`uyên`, `mai anh`, `minh`...). |
+| **Số lượng máy** | **2 máy kết nối thành 1 cụm:** `vps1` (`57.129.134.155`) + `vps2` (`51.68.214.167`). | **2 máy kết nối thành 1 cụm riêng:** `vps1` (`57.129.135.140`) + `vps2` (`57.129.194.73`). |
+| **Link Web quản trị** | http://57.129.134.155:3131 | http://57.129.135.140:3131 (Giao link này cho khách) |
+| **Quản lý tài khoản** | Đồng bộ trực tiếp từ **Google Sheet** (`directSheetAuth: true`) + tạo trên Web. | Tạo/sửa/xóa **trực tiếp trên giao diện Web** (`users.json`), đã đồng bộ sẵn 5 tài khoản. |
 | **Lịch sử phát Live** | Vừa lưu trên Web (`📜 Lịch sử`), vừa tự động ghi vào tab `LICH_SU_LUONG` trên Google Sheet. | Lưu trực tiếp trên VPS (`history.json` — tối đa 5,000 phiên / 90 ngày) và xem tại nút **📜 Lịch sử** trên Web. |
-| **Thông báo Telegram/Zalo** | **Đang bật:** Báo cáo tự động về Bot Telegram & Nhóm Zalo của Admin. | **Đã tắt hoàn toàn (`bot_config.json` rỗng):** Để không báo nhầm tin của khách về máy Admin. |
+| **Thông báo Telegram** | **Bật:** Báo cáo tự động về Bot Telegram công ty & Nhóm Zalo Admin. | **Bật:** Báo cáo riêng biệt về Bot Telegram [@Sv_nghi_loc_bot](https://t.me/Sv_nghi_loc_bot). |
+| **Băng thông mạng** | **OVH 1 Gbps Unlimited** (~130 Mbps upload thực tế). | **OVH 1 Gbps Unlimited** (~100 Mbps upload mỗi máy, tổng ~200 Mbps). |
 
 ---
 
@@ -67,37 +69,47 @@ Hệ thống hiện có **2 nhóm máy chủ hoàn toàn tách biệt nhau**:
 
 ---
 
-### 2.2. VPS ĐỘC LẬP CỦA KHÁCH (KHÔNG LIÊN QUAN CỤM CHÍNH)
+### 2.2. CỤM VPS ĐỘC LẬP CHO KHÁCH (MỚI NÂNG CẤP — 2 MÁY CÂN BẰNG TẢI)
+> 📌 **Lưu ý:** Cụm 2 máy OVH này thay thế hoàn toàn cho máy cũ `13.140.208.154` (bị bên bán bóp mạng xuống 15 Mbps). Cụm mới sở hữu băng thông quốc tế không giới hạn **>1.3 Gbps mỗi máy**.
 
-#### 🔹 VPS Khách #1 (`13.140.208.154`)
-- **Mã máy (`id`):** `vps1` (Chạy đơn lẻ 1 mình làm Master độc lập)
-- **Tên hiển thị:** `VPS Chính (Master)`
-- **Địa chỉ IP:** `13.140.208.154`
+#### 🔹 VPS Khách 1 — Điều Phối Chính (Master Controller)
+- **Mã máy (`id`):** `vps1`
+- **Tên hiển thị:** `VPS 1 (Chính - Master)`
+- **Địa chỉ IP:** `57.129.135.140`
 - **Cổng Web:** `3131`
-- **Link Web Quản Trị:** http://13.140.208.154:3131
-- **Thông tin đăng nhập SSH (Quyền cao nhất của kỹ thuật):**
-  - **Lệnh SSH:** `ssh root@13.140.208.154`
-  - **User:** `root`
-  - **Mật khẩu SSH:** `kienkaka`
-- **Thông tin đăng nhập Giao diện Web (Giao cho khách):**
-  - **Link:** http://13.140.208.154:3131
-  - **Tài khoản Admin gốc:** `admin`
-  - **Mật khẩu Admin Web:** `Admin@123456`
-  - **Các tài khoản phụ đang có trên Web:**
-    - `uyên` (Quyền: `Khách`, Giới hạn: `10 luồng`, Hạn: `Vĩnh viễn`)
-    - `khach1` / Mật khẩu: `123456` (Quyền: `Khách`, Giới hạn: `5 luồng`, Hạn: `2026-12-31`)
-- **Cấu hình phần cứng:**
-  - **HĐH:** Ubuntu 24.04.5 LTS (Noble Numbat)
-  - **CPU:** `8 vCPU` — AMD EPYC Processor (with IBPB)
-  - **RAM:** `23.5 GB` (Gấp đôi VPS 1/2)
-  - **Ổ cứng (NVMe):** `289.6 GB` (Gấp 3 lần VPS 1/2 — chứa được 50–70 video nặng cùng lúc)
-  - **Node.js:** `v20.20.2`
-- **Thư mục cài đặt:** `/root/Livenew` (chạy dưới tiến trình `pm2` tên `live-controller`, đã cài `systemd startup` tự bật lại khi VPS khởi động lại).
-- **Cấu hình cách ly (`sheet_config.json` & `bot_config.json`):**
-  - `bot_config.json`: Đã làm rỗng hoàn toàn (không gửi Telegram/Zalo về máy công ty).
-  - `cluster_nodes.json`: Chỉ có duy nhất IP `13.140.208.154`.
-  - `syncSecret`: `9368f38294314bbcf6ffc3ebbac4892a`
-  - Đã gắn sẵn **Apps Script đọc mắt xem Live YouTube** (`youtubeStatsScriptUrl`).
+- **Link Web Quản Trị (Giao cho khách):** http://57.129.135.140:3131
+- **Thông tin SSH:** `ssh ubuntu@57.129.135.140` (Pass: `kienkaka2001`)
+- **Tốc độ mạng thực tế:** Upload **1,336 Mbps** (~1.3 Gbps)
+- **Phần cứng:** 6 vCPU, 11.4 GB RAM, 95.8 GB NVMe
+- **Nhiệm vụ:** Tiếp nhận toàn bộ khách đăng nhập, tự động cân bằng tải và đẩy luồng sang VPS 2 khi chọn chế độ Auto.
+
+#### 🔹 VPS Khách 2 — Máy Phụ Phân Tải (Worker Node)
+- **Mã máy (`id`):** `vps2`
+- **Tên hiển thị:** `VPS 2 (Phụ - Worker)`
+- **Địa chỉ IP:** `57.129.194.73`
+- **Cổng Web:** `3131`
+- **Thông tin SSH:** `ssh ubuntu@57.129.194.73` (Pass: `kienkaka2001`)
+- **Tốc độ mạng thực tế:** Upload **1,281 Mbps** (~1.3 Gbps)
+- **Phần cứng:** 6 vCPU, 11.4 GB RAM, 95.8 GB NVMe
+- **Nhiệm vụ:** Chia tải 50% số luồng chạy ngầm phía sau, tự động kết nối và đồng bộ với Master.
+
+#### 🤖 Bot Telegram Riêng Của Cụm Khách:
+- **Link Bot:** [t.me/Sv_nghi_loc_bot](https://t.me/Sv_nghi_loc_bot) (`@Sv_nghi_loc_bot`)
+- **Tên Bot:** `Sv Nghi Lộc`
+- **Mật khẩu kích hoạt quyền Admin:** `kienkaka`
+- **Cơ chế hoạt động:** VPS 1 (Master) làm nhiệm vụ polling nhận lệnh điều khiển và phát báo cáo định kỳ; VPS 2 (Worker) chia sẻ gửi thông báo sự cố luồng về cùng Bot.
+
+#### 🔑 Danh sách tài khoản khách hàng trên Cụm mới:
+- **`admin`** / Mật khẩu: `Admin@123456` (Quản trị viên)
+- **`uyên`** / Mật khẩu: `uyên@2026` (Khách — 15 luồng)
+- **`mai anh`** / Mật khẩu: `maianh@2026` (Khách — 10 luồng)
+- **`minh`** / Mật khẩu: `minh@2026` (Khách — 10 luồng)
+- **`khach1`** / Mật khẩu: `123456` (Khách test — 5 luồng)
+
+---
+
+#### 🔹 VPS Khách Cũ (Đã bị bóp băng thông — Lưu trữ đối chiếu)
+- **Địa chỉ IP:** `13.140.208.154` (Mạng bị kẹp trần 15.7 Mbps, chuyển luồng xong có thể hủy gia hạn).
 
 ---
 
